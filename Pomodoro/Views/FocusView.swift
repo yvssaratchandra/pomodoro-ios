@@ -42,7 +42,7 @@ struct FocusView: View {
             .sheet(item: $durationProject) { project in
                 FocusDurationSheet(store: store, project: project)
             }
-            .confirmationDialog("End this focus session?", isPresented: $confirmingEnd, titleVisibility: .visible) {
+            .alert("End this focus session?", isPresented: $confirmingEnd) {
                 Button("End and Save Work") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
                     if let timer = store.state.activeTimer { store.discardFocus(timerID: timer.id) }

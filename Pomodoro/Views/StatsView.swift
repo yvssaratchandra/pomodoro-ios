@@ -49,7 +49,7 @@ struct StatsView: View {
                 }
                 .appScreen()
             }.navigationTitle("Stats")
-            .confirmationDialog("Delete this session?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
+            .alert("Delete this session?", isPresented: $confirmingDeletion) {
                 Button("Delete Session", role: .destructive) {
                     if let session = pendingDeletion { store.deleteSession(session.id) }
                     pendingDeletion = nil
