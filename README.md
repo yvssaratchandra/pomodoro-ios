@@ -168,6 +168,6 @@ Before distribution, also check on simulator/device: largest accessibility text 
 
 ## Validation status
 
-The current portable suite has 56 core XCTest cases, verified with Swift 6.0.3 on Linux. Project checks cover native/container separation, extension embedding, signing configuration, URL scheme registration, entry points, shared-scheme XML, and deterministic generation. Swift syntax parsing and these structural checks do not type-check SwiftUI, SwiftData, or WidgetKit against an iOS SDK.
+The current portable suite has 58 core XCTest cases, verified with Swift 6.0.3 on Linux. Project checks cover native/container separation, extension embedding, signing configuration, URL scheme registration, entry points, shared-scheme XML, and deterministic generation. Swift syntax parsing and these structural checks do not type-check SwiftUI, SwiftData, or WidgetKit against an iOS SDK.
 
 The checked-in workflow provides the macOS build/test path for both schemes; a successful run for the current commit is required before treating iOS builds as verified. The container scheme also runs persistence and UI tests. Native device signing, App Group access, and widget installation remain unverified until checked on a physical iPhone.

@@ -46,6 +46,14 @@ extension View {
             }
             let container = try ModelContainer(for: AppDocument.self, configurations: config)
             loadedStore = try AppStore(container: container)
+            if testing, ProcessInfo.processInfo.environment["POMODORO_TEST_SCENARIO"] == "break-ready" {
+                let project = Project(name: "A long project name for layout checks")
+                loadedStore?.update { state in
+                    state.projects = [project]
+                    try TimerEngine.startFocus(&state, projectID: project.id, minutes: 10,
+                                               intention: "Finish the introduction", now: Date().addingTimeInterval(-601))
+                }
+            }
         } catch {
             loadError = error.localizedDescription
         }

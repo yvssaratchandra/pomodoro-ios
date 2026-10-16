@@ -256,6 +256,19 @@ final class PomodoroUITests: XCTestCase {
             app.tabBars.buttons["Settings"].tap()
             attachScreenshot("\(name) · Settings", app: app)
             app.terminate()
+            let breakApp = newApp()
+            breakApp.launchEnvironment["POMODORO_TEST_SCENARIO"] = "break-ready"
+            breakApp.launchEnvironment["POMODORO_TEST_APPEARANCE"] = appearance.lowercased()
+            if name == "Large text" { breakApp.launchEnvironment["POMODORO_TEST_DYNAMIC_TYPE"] = "accessibility2" }
+            breakApp.launch()
+            let startBreak = breakApp.buttons["Start Break"]
+            XCTAssertTrue(startBreak.waitForExistence(timeout: 5))
+            attachScreenshot("\(name) · Break ready", app: breakApp)
+            reveal(startBreak, in: breakApp)
+            startBreak.tap()
+            XCTAssertTrue(breakApp.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
+            attachScreenshot("\(name) · Break running", app: breakApp)
+            breakApp.terminate()
         }
     }
 
