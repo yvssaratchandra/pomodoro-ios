@@ -1,77 +1,84 @@
 import SwiftUI
 
+private enum FocusScreenState {
+    case empty
+    case ready(Project)
+    case focusing(ActiveTimer)
+    case breakReady(BreakOffer)
+    case onBreak(ActiveTimer)
+}
+
 struct FocusView: View {
     @Bindable var store: AppStore
     @Bindable var navigation: AppNavigation
     @State private var durationProject: Project?
+    @State private var draftNoteProject: Project?
     @State private var confirmingEnd = false
-    @State private var intentions: [UUID: String] = [:]
-    @State private var intentionTimer: ActiveTimer?
+    @State private var sessionNotes: [UUID: String] = [:]
+    @State private var noteTimer: ActiveTimer?
     @State private var breadcrumbSession: FocusSession?
     @State private var thoughtContext: ThoughtCaptureContext?
 
-    private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID } }
+    private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID && $0.status == .ongoing } }
+    private var activeProjects: [Project] { store.state.projects.filter { $0.status == .ongoing } }
     private var minutes: Int { selected?.preferredFocusMinutes ?? store.state.settings.defaultFocusMinutes }
+    private var screenState: FocusScreenState {
+        if let active = store.state.activeTimer {
+            return active.kind == .focus ? .focusing(active) : .onBreak(active)
+        }
+        if let offer = store.state.breakOffer { return .breakReady(offer) }
+        if let selected { return .ready(selected) }
+        return .empty
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    timer
-                    sessionAction
-                    if let timer = store.state.activeTimer, timer.kind == .focus {
-                        Button("Capture thought", systemImage: "text.bubble") {
-                            thoughtContext = ThoughtCaptureContext(projectID: timer.projectID, originSessionID: timer.id)
-                        }.accessibilityIdentifier("focus.captureThought")
-                    }
-                    if let projectID = store.state.breakOffer?.projectID ?? store.state.activeTimer?.projectID {
-                        Button("Review thoughts") { navigation.showThoughts(projectID: projectID) }
-                    }
-                    if let id = store.lastFinishedSessionID, let session = store.state.sessions.first(where: { $0.id == id }), store.state.activeTimer?.kind != .focus {
-                        Button("Next time…") { breadcrumbSession = session }.accessibilityIdentifier("focus.nextStep")
-                    }
-                    if let selected {
-                        BreadcrumbCard(store: store, project: selected, useAsIntention: { intentions[selected.id] = $0 })
-                    }
-                    sessionSetup
-                        .focusCard()
-                    TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                        VStack(spacing: 20) {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label("Today's goal · All projects", systemImage: "target")
-                                    .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                                GoalProgress(state: store.state, now: timeline.date)
-                            }.focusCard()
-                            if let selected {
-                                projectMetrics(selected, now: timeline.date).focusCard()
-                            }
-                        }
+                VStack(spacing: 18) {
+                    switch screenState {
+                    case .empty: emptyProjects
+                    case .ready(let project): ready(project)
+                    case .focusing(let timer), .onBreak(let timer): running(timer)
+                    case .breakReady(let offer): breakReady(offer)
                     }
                 }
                 .padding(20)
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
             }
-            .scrollDismissesKeyboard(.interactively)
             .appScreen()
-            .navigationTitle("Focus")
+            .navigationTitle(store.state.activeTimer?.kind == .focus ? "Focusing" : store.state.activeTimer != nil ? "Break" : "Focus")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $durationProject) { project in
-                FocusDurationSheet(store: store, project: project)
+            .toolbar {
+                if case .focusing(let timer) = screenState, timer.intention == nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button("Add session note", systemImage: "square.and.pencil") { noteTimer = timer }
+                                .accessibilityIdentifier("focus.intention.edit")
+                        } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More focus actions") }
+                    }
+                }
             }
-            .sheet(item: $intentionTimer) { timer in IntentionEditor(store: store, sessionID: timer.id, active: true) }
-            .sheet(item: $breadcrumbSession) { session in BreadcrumbEditor(store: store, sessionID: session.id, promote: true) }
-            .sheet(item: $thoughtContext) { context in ThoughtEditor(store: store, context: context) }
-            .alert("End this focus session?", isPresented: $confirmingEnd) {
-                Button("End and Save Work") { store.endTimer() }
+            .sheet(item: $durationProject) { FocusDurationSheet(store: store, project: $0) }
+            .sheet(item: $draftNoteProject) { project in
+                DraftSessionNoteEditor(text: Binding(
+                    get: { sessionNotes[project.id] ?? "" },
+                    set: { sessionNotes[project.id] = $0 }))
+            }
+            .sheet(item: $noteTimer) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
+            .sheet(item: $breadcrumbSession) { BreadcrumbEditor(store: store, sessionID: $0.id, promote: true) }
+            .sheet(item: $thoughtContext) { ThoughtEditor(store: store, context: $0) }
+            .alert("End focus?", isPresented: $confirmingEnd) {
+                Button("Save Session") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
                     if let timer = store.state.activeTimer { store.discardFocus(timerID: timer.id) }
                 }
                 Button("Keep Focusing", role: .cancel) { }
-            } message: { Text("Save elapsed focus time as an interrupted session, or discard this session so none of its time counts.") }
+            } message: { Text("Save the time you’ve focused, or discard this session.") }
             .onChange(of: store.state.activeTimer?.id) { _, _ in confirmingEnd = false }
             .onChange(of: navigation.focusRequestID) { _, _ in
                 durationProject = nil
+                draftNoteProject = nil
                 confirmingEnd = false
             }
             .onAppear { repairSelection() }
@@ -79,133 +86,130 @@ struct FocusView: View {
         }
     }
 
-    @ViewBuilder private var timer: some View {
-        if let active = store.state.activeTimer {
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                TimerFace(seconds: max(0, active.deadline.timeIntervalSince(timeline.date)),
-                    fraction: 1 - active.elapsed(at: timeline.date) / Double(active.plannedSeconds),
-                    title: active.kind.title, project: store.projectName(active.projectID),
-                    isBreak: active.kind != .focus, isRunning: true)
+    private var emptyProjects: some View {
+        VStack(spacing: 16) {
+            ContentUnavailableView(activeProjects.isEmpty && !store.state.projects.isEmpty ? "No Active Projects" : "Start Focusing",
+                systemImage: "timer", description: Text(activeProjects.isEmpty && !store.state.projects.isEmpty
+                    ? "Choose an active project or create a new one." : "Create a project to begin."))
+            Button("Create Project", systemImage: "plus") { navigation.showingProjectCreation = true }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+            if !store.state.projects.isEmpty {
+                Button("Manage Projects") { navigation.selectedTab = .projects }
             }
-        } else if let offer = store.state.breakOffer {
-            TimerFace(seconds: Double(offer.minutes * 60), fraction: 1,
-                title: "Ready for a \(offer.kind.title.lowercased())",
-                project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
-        } else {
-            TimerFace(seconds: Double(minutes * 60), fraction: 1, title: "Ready to focus",
-                project: selected?.name ?? "Make time for what matters", isBreak: false, isRunning: false)
         }
     }
 
-    @ViewBuilder private var sessionAction: some View {
-        if let active = store.state.activeTimer {
-            Button(role: .destructive) {
-                if active.kind == .focus { confirmingEnd = true } else { store.endTimer() }
-            } label: {
-                Label(active.kind == .focus ? "End Focus" : "End Break", systemImage: "stop.fill")
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
-            }
-            .buttonStyle(.bordered).controlSize(.large)
-            .accessibilityIdentifier("timer.end")
-        } else if let offer = store.state.breakOffer {
-            VStack(spacing: 8) {
-                Button { store.startBreak() } label: {
-                    Label("Start \(offer.kind.title)", systemImage: "cup.and.saucer.fill")
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+    private func ready(_ project: Project) -> some View {
+        VStack(spacing: 18) {
+            Menu {
+                ForEach(activeProjects) { option in
+                    Button(option.name) { navigation.selectedProjectID = option.id }
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large).tint(.teal)
-                Button("Skip Break") { store.update { $0.breakOffer = nil } }
-                    .padding(8)
+                Divider()
+                Button("New Project", systemImage: "plus") { navigation.showingProjectCreation = true }
+                Button("Manage Projects", systemImage: "folder") { navigation.selectedTab = .projects }
+            } label: {
+                HStack {
+                    Label(project.name, systemImage: "folder")
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").font(.caption)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-        } else if store.state.projects.isEmpty {
-            Button { navigation.showingProjectCreation = true } label: {
-                Label("Create Project", systemImage: "plus")
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
-            }.buttonStyle(.borderedProminent).controlSize(.large)
-        } else {
+            .accessibilityIdentifier("focus.project")
+            TimerFace(seconds: Double(minutes * 60), fraction: 1, title: "", project: "", isBreak: false, isRunning: false)
+            Button { durationProject = project } label: {
+                Label("\(minutes) min", systemImage: "clock")
+                    .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("focus.duration")
+            .accessibilityLabel("Focus duration")
+            .accessibilityValue("\(minutes) min")
             Button {
-                if let selectedID = navigation.selectedProjectID,
-                   store.startFocus(projectID: selectedID, minutes: minutes, intention: intentions[selectedID]) {
-                    intentions[selectedID] = nil
+                draftNoteProject = project
+            } label: {
+                HStack {
+                    Label(sessionNotes[project.id].flatMap { $0.isEmpty ? nil : $0 } ?? "Add session note", systemImage: "square.and.pencil")
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("focus.intention")
+            Button {
+                if store.startFocus(projectID: project.id, minutes: minutes, intention: sessionNotes[project.id]) {
+                    sessionNotes[project.id] = nil
                 }
             } label: {
                 Label("Start Focus", systemImage: "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
-            .disabled(selected?.status != .ongoing)
             .accessibilityIdentifier("focus.start")
+            if let id = store.lastFinishedSessionID,
+               let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == project.id }) {
+                Button(session.nextStep == nil ? "Add next step" : "Edit next step") { breadcrumbSession = session }
+                    .accessibilityIdentifier(project.breadcrumb == nil ? "focus.nextStep" : "focus.recentNextStep")
+            }
+            BreadcrumbCard(store: store, project: project, useAsIntention: { sessionNotes[project.id] = $0 })
         }
     }
 
-    private var sessionSetup: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(store.state.activeTimer == nil ? "Focus session" : "Next focus session", systemImage: "slider.horizontal.3")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-            if store.state.projects.isEmpty {
-                Text("Create a project to start focusing.").foregroundStyle(.secondary)
+    private func running(_ active: ActiveTimer) -> some View {
+        VStack(spacing: 18) {
+            Text(store.projectName(active.projectID)).font(.headline).multilineTextAlignment(.center)
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                TimerFace(seconds: max(0, active.deadline.timeIntervalSince(timeline.date)),
+                    fraction: 1 - active.elapsed(at: timeline.date) / Double(active.plannedSeconds),
+                    title: "", project: "",
+                    isBreak: active.kind != .focus, isRunning: true)
+            }
+            if active.kind == .focus {
+                if let note = active.intention {
+                    Button { noteTimer = active } label: {
+                        Label(note, systemImage: "square.and.pencil").lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                    }.accessibilityIdentifier("focus.intention.edit")
+                }
+                Button(role: .destructive) { confirmingEnd = true } label: {
+                    Label("End Focus", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered).controlSize(.large)
+                .accessibilityIdentifier("timer.end")
+                Button("Capture thought", systemImage: "text.bubble") {
+                    thoughtContext = ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id)
+                }.accessibilityIdentifier("focus.captureThought")
             } else {
-                if let timer = store.state.activeTimer, timer.kind == .focus {
-                    Button(timer.intention == nil ? "Add intention" : "Edit intention") { intentionTimer = timer }
-                        .accessibilityIdentifier("focus.intention.edit")
-                    if let intention = timer.intention { Text(intention).font(.subheadline) }
-                }
-                Picker(selection: $navigation.selectedProjectID) {
-                    Text("Choose a project").tag(Optional<UUID>.none)
-                    ForEach(store.state.projects) { project in
-                        Text(project.name + (project.status == .ongoing ? "" : " · \(project.status.title)"))
-                            .tag(Optional(project.id))
-                    }
-                } label: { Label("Project", systemImage: "folder") }
-                .pickerStyle(.menu)
-                .accessibilityIdentifier("focus.project")
-                Divider()
-                if let selectedID = navigation.selectedProjectID {
-                    TextField("What are you working on? (optional)", text: Binding(get: { intentions[selectedID] ?? "" }, set: { intentions[selectedID] = $0 }))
-                        .accessibilityIdentifier("focus.intention")
-                }
-                Button { durationProject = selected } label: {
-                    HStack {
-                        Label("Duration", systemImage: "clock")
-                        Spacer()
-                        Text("\(minutes) min").monospacedDigit().fontWeight(.semibold)
-                        Image(systemName: "chevron.up.chevron.down").font(.caption)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .disabled(selected == nil)
-                .accessibilityIdentifier("focus.duration")
-                .accessibilityLabel("Focus duration")
-                .accessibilityValue("\(minutes) min")
-                if let selected, selected.status != .ongoing {
-                    Text("Reopen this project in Projects to start a session.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
+                Button("End Break", systemImage: "stop.fill") { store.endTimer() }
+                    .buttonStyle(.bordered).controlSize(.large)
+                    .accessibilityIdentifier("timer.end")
+                Button("Review thoughts") { navigation.showThoughts(projectID: active.projectID) }
             }
         }
     }
 
-    private func projectMetrics(_ project: Project, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(project.name, systemImage: "folder.fill").font(.headline)
-            LabeledContent("Today") {
-                Text(DurationText.work(Statistics.total(store.state, projectID: project.id,
-                    interval: Statistics.today(now), now: now)))
-                    .font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
+    private func breakReady(_ offer: BreakOffer) -> some View {
+        VStack(spacing: 18) {
+            Text("Focus saved").font(.headline)
+            TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
+            Button { store.startBreak() } label: {
+                Label("Start Break", systemImage: "cup.and.saucer.fill")
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+            }.buttonStyle(.borderedProminent).controlSize(.large).tint(.teal)
+            Button("Skip Break") { store.update { $0.breakOffer = nil } }
+            if let id = store.lastFinishedSessionID,
+               let session = store.state.sessions.first(where: { $0.id == id }) {
+                Button(session.nextStep == nil ? "Add next step" : "Edit next step") { breadcrumbSession = session }
+                    .accessibilityIdentifier("focus.nextStep")
             }
-            LabeledContent("Daily average · 7 days") {
-                Text(DurationText.work(Statistics.dailyAverage(store.state, projectID: project.id, now: now)))
-                    .font(.system(.title3, design: .rounded).weight(.semibold)).monospacedDigit()
-            }
-            Text("Includes today and the previous six days, including days with no focus time.")
-                .font(.footnote).foregroundStyle(.secondary)
         }
     }
 
     private func repairSelection() {
-        guard selected == nil else { return }
-        navigation.selectedProjectID = store.state.projects.first(where: { $0.status == .ongoing })?.id ?? store.state.projects.first?.id
+        if selected == nil { navigation.selectedProjectID = activeProjects.first?.id }
     }
 }
 
@@ -232,8 +236,6 @@ private struct FocusDurationSheet: View {
                 }
                 .pickerStyle(.wheel)
                 .accessibilityIdentifier("focus.duration.wheel")
-                Text("Remembered for this project. Applies to your next focus session.")
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -274,13 +276,14 @@ private struct TimerFace: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ScaledMetric(relativeTo: .largeTitle) private var digitSize = 80.0
 
     private var tint: Color { isBreak ? .teal : .indigo }
     private var digits: some View {
         Text(DurationText.countdown(seconds))
-            .font(.system(size: digitSize, weight: .semibold, design: .rounded).monospacedDigit())
-            .minimumScaleFactor(0.5).lineLimit(1)
+            .font(dynamicTypeSize.isAccessibilitySize
+                ? .system(.largeTitle, design: .rounded, weight: .semibold).monospacedDigit()
+                : .system(size: 58, weight: .semibold, design: .rounded).monospacedDigit())
+            .lineLimit(1)
             .foregroundStyle(.primary)
             .contentTransition(.numericText(countsDown: true))
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: Int(ceil(seconds)))
@@ -290,11 +293,11 @@ private struct TimerFace: View {
     }
 
     var body: some View {
-        VStack(spacing: 14) {
-            Label(title, systemImage: isBreak ? "cup.and.saucer.fill" : "timer")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(tint)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(tint.opacity(0.1), in: Capsule())
+        VStack(spacing: 10) {
+            if !title.isEmpty {
+                Label(title, systemImage: isBreak ? "cup.and.saucer.fill" : "timer")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(tint)
+            }
             if dynamicTypeSize.isAccessibilitySize {
                 digits.frame(maxWidth: .infinity)
                 ProgressView(value: min(1, max(0, fraction))).tint(tint).accessibilityHidden(true)
@@ -307,26 +310,14 @@ private struct TimerFace: View {
                         .rotationEffect(.degrees(-90))
                     digits.padding(.horizontal, 16)
                 }
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 200)
                 .aspectRatio(1, contentMode: .fit)
                 .padding(6)
             }
-            Text(project).font(.headline).multilineTextAlignment(.center)
+            if !project.isEmpty { Text(project).font(.headline).multilineTextAlignment(.center) }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
-    }
-}
-
-private extension View {
-    func focusCard() -> some View {
-        self.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 22))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22)
-                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
     }
 }
 
