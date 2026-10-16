@@ -33,79 +33,73 @@ struct QuickStartSetupView: View {
 
     var body: some View {
         Form {
-            Group {
-                Section {
-                    Picker("Project", selection: $projectID) {
-                        Text("Choose a project").tag(Optional<UUID>.none)
-                        ForEach(projects) { Text($0.name).tag(Optional($0.id)) }
-                    }
-                    .accessibilityIdentifier("quickstart.project")
-                    if let project {
-                        Text("Starts \(project.preferredFocusMinutes) minutes of focus for \(project.name). Uses the project's latest duration when opened.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Choose an ongoing project to create a shortcut.").foregroundStyle(.secondary)
-                    }
-                } header: { Text("Quick start") } footer: {
-                    Text("If a timer is already running, the shortcut opens it without starting another session.")
+            #if NATIVE_INTEGRATIONS
+            Section("Home Screen widget") {
+                Text("Add the Pomodoro widget from your iPhone's widget gallery, then choose a project. The widget opens Pomodoro to start focus.")
+            }
+            #endif
+            Section("1. Choose a project") {
+                Picker("Project", selection: $projectID) {
+                    Text("Choose a project").tag(Optional<UUID>.none)
+                    ForEach(projects) { Text($0.name).tag(Optional($0.id)) }
                 }
-                #if !NATIVE_INTEGRATIONS
-                Section {
-                    Toggle("Use LiveContainer", isOn: $useLiveContainer)
-                        .accessibilityIdentifier("quickstart.useContainer")
-                } footer: {
-                    Text("Turn this off if Pomodoro is installed directly on your iPhone.")
-                }
-                #endif
-                if isContainer {
-                    Section {
-                        Text("In LiveContainer, open Pomodoro's menu, choose Add to Home Screen, then Copy Launch URL. Paste that URL below.")
-                        TextField("LiveContainer launch URL", text: $copiedLaunchURL)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            .keyboardType(.URL)
-                            .accessibilityIdentifier("quickstart.launchURL")
-                        if !copiedLaunchURL.isEmpty && launch == nil {
-                            Text("Paste Pomodoro's launch URL, including its bundle-name parameter.")
-                                .foregroundStyle(.red)
-                                .accessibilityIdentifier("quickstart.invalidURL")
-                        }
-                    } header: { Text("Connect LiveContainer") } footer: {
-                        Text("This device's launch URL stays here and is not included in backups.")
-                    }
-                }
-                Section {
-                    if let shortcutURL {
-                        Button("Copy shortcut URL") { copy(shortcutURL, message: "Shortcut URL copied.") }
-                            .accessibilityIdentifier("quickstart.copy")
-                        ShareLink("Share shortcut URL", item: shortcutURL)
-                    } else {
-                        Button("Copy shortcut URL") {}.disabled(true)
-                            .accessibilityIdentifier("quickstart.copy")
-                    }
-                    Text("In Shortcuts, create a shortcut with the Open URLs action and paste the copied URL. Add the shortcut to your Home Screen or a Shortcuts widget.")
+                .accessibilityIdentifier("quickstart.project")
+                if let project {
+                    Text("Starts \(project.preferredFocusMinutes) min of focus.")
                         .foregroundStyle(.secondary)
-                    if let copiedMessage {
-                        Text(copiedMessage).foregroundStyle(.secondary)
-                            .accessibilityIdentifier("quickstart.copied")
-                    }
-                } header: { Text("Add to Shortcuts") }
-                if isContainer, let launch {
-                    Section {
-                        Button("Copy app-launch URL") { copy(launch.launchURL, message: "App-launch URL copied.") }
-                            .accessibilityIdentifier("quickstart.fallback")
-                    } header: { Text("If quick start doesn't work") } footer: {
-                        Text("Some LiveContainer versions may only open the app. Use this fallback URL with Open URLs, then tap Start Focus in Pomodoro. Check quick start while Pomodoro is closed and while it is already open.")
+                } else {
+                    Text("Create an active project to use a shortcut.").foregroundStyle(.secondary)
+                }
+            }
+            #if !NATIVE_INTEGRATIONS
+            Section {
+                Toggle("Use LiveContainer", isOn: $useLiveContainer)
+                    .accessibilityIdentifier("quickstart.useContainer")
+                if isContainer {
+                    TextField("LiveContainer launch URL", text: $copiedLaunchURL)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .accessibilityIdentifier("quickstart.launchURL")
+                    if !copiedLaunchURL.isEmpty && launch == nil {
+                        Text("Paste the launch URL copied from Pomodoro's LiveContainer menu.")
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("quickstart.invalidURL")
                     }
                 }
-            }.listRowBackground(AppTheme.surface)
+            } header: {
+                Text("2. Connect LiveContainer")
+            } footer: {
+                if isContainer { Text("In LiveContainer, open Pomodoro's menu and choose Add to Home Screen, then Copy Launch URL.") }
+            }
+            #endif
+            Section(isContainer ? "3. Add to Shortcuts" : "2. Add to Shortcuts") {
+                if let shortcutURL {
+                    Button("Copy shortcut link") { copy(shortcutURL, message: "Shortcut link copied.") }
+                        .accessibilityIdentifier("quickstart.copy")
+                    ShareLink("Share shortcut link", item: shortcutURL)
+                    Button("Test shortcut") { UIApplication.shared.open(shortcutURL) }
+                }
+                Text("In Shortcuts, add Open URLs and paste the link. You can add that shortcut to your Home Screen.")
+                    .foregroundStyle(.secondary)
+                if shortcutURL != nil {
+                    Text("Test shortcut starts focus when no timer is running. If a timer is running, it opens that timer.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if let copiedMessage {
+                    Text(copiedMessage).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("quickstart.copied")
+                }
+            }
+            Section {
+                NavigationLink("Troubleshooting") { QuickStartTroubleshootingView(store: store) }
+            }
         }
+        .listRowBackground(AppTheme.surface)
         .appScreen()
         .scrollDismissesKeyboard(.immediately)
-        .navigationTitle("Quick-start shortcuts")
+        .navigationTitle("Widgets & shortcuts")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            if projectID == nil { projectID = projects.first?.id }
-        }
+        .onAppear { if projectID == nil { projectID = projects.first?.id } }
         .onChange(of: projectID) { _, _ in copiedMessage = nil }
         .onChange(of: copiedLaunchURL) { _, _ in copiedMessage = nil }
         .onChange(of: useLiveContainer) { _, _ in copiedMessage = nil }
@@ -114,5 +108,46 @@ struct QuickStartSetupView: View {
     private func copy(_ url: URL, message: String) {
         UIPasteboard.general.string = url.absoluteString
         copiedMessage = message
+    }
+}
+
+struct QuickStartTroubleshootingView: View {
+    let store: AppStore
+    @State private var copied = false
+    @AppStorage("quickStart.liveContainerLaunchURL") private var copiedLaunchURL = ""
+
+    private var launch: LiveContainerLaunchURL? {
+        guard let url = URL(string: copiedLaunchURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+        return try? LiveContainerLaunchURL(url)
+    }
+
+    var body: some View {
+        Form {
+            #if NATIVE_INTEGRATIONS
+            Section("Widgets") {
+                Text("Add the Pomodoro widget from your iPhone's widget gallery, then select a project.")
+            }
+            #else
+            Section("LiveContainer") {
+                Text("If the shortcut opens Pomodoro without starting focus, create a Shortcut with Open URLs using the app-launch link below. Then tap Start Focus in Pomodoro.")
+                if let launch {
+                    Button("Copy app-launch link") {
+                        UIPasteboard.general.string = launch.launchURL.absoluteString
+                        copied = true
+                    }
+                    .accessibilityIdentifier("quickstart.fallback")
+                    if copied { Text("App-launch link copied.").foregroundStyle(.secondary) }
+                }
+                Text("Check the shortcut while Pomodoro is closed and while it is open.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("About shortcut links") {
+                Text("The saved LiveContainer launch link stays on this device and is not included in backups. If you reinstall LiveContainer, copy a new launch link.")
+            }
+            #endif
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Troubleshooting")
     }
 }
