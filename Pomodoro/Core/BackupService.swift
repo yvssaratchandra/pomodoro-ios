@@ -46,6 +46,11 @@ enum BackupService {
             throw AppError.invalid("Duplicate identifiers in data.")
         }
         for project in state.projects {
+            if let note = project.breadcrumb {
+                guard try SessionText.normalize(note.text) != nil, note.updatedAt.timeIntervalSince1970.isFinite else {
+                    throw AppError.invalid("Invalid project next-step note.")
+                }
+            }
             if let minutes = project.lastFocusMinutes, !(10...60).contains(minutes) {
                 throw AppError.invalid("Invalid remembered focus duration.")
             }
@@ -56,6 +61,7 @@ enum BackupService {
                   (1...60).contains(project.longBreakMinutes) else { throw AppError.invalid("Invalid project details.") }
         }
         for session in state.sessions {
+            _ = try SessionText.normalize(session.nextStep)
             try validateIntention(session.intention)
             guard projectIDs.contains(session.projectID),
                   session.startedAt.timeIntervalSince1970.isFinite, session.endedAt.timeIntervalSince1970.isFinite,

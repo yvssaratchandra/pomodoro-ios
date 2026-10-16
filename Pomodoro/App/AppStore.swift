@@ -11,6 +11,7 @@ struct PendingSessionDeletion {
 @MainActor @Observable final class AppStore {
     private(set) var state: AppSnapshot
     var errorMessage: String?
+    private(set) var lastFinishedSessionID: UUID?
     private(set) var pendingSessionDeletion: PendingSessionDeletion?
     private let uptime: () -> TimeInterval
     private let voiceOver: () -> Bool
@@ -134,6 +135,7 @@ struct PendingSessionDeletion {
     @discardableResult
     func startFocus(projectID: UUID, minutes: Int, intention: String? = nil) -> Bool {
         if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, intention: intention, now: now()) }) {
+            lastFinishedSessionID = nil
             scheduleNotification()
             return true
         }
@@ -170,15 +172,39 @@ struct PendingSessionDeletion {
 
     func endTimer() {
         guard let active = state.activeTimer else { return }
-        if update({ TimerEngine.finish(&$0, now: now(), force: true) }) { cancelNotification(timerID: active.id) }
+        if update({ TimerEngine.finish(&$0, now: now(), force: true) }) {
+            if active.kind == .focus { lastFinishedSessionID = active.id }
+            cancelNotification(timerID: active.id)
+        }
     }
 
     func reconcile() {
         let date = now()
         guard let active = state.activeTimer, date >= active.deadline else { return }
         if update({ TimerEngine.finish(&$0, now: date) }) {
+            if active.kind == .focus { lastFinishedSessionID = active.id }
             notifications.naturalCompletion(timerID: active.id)
             if state.settings.haptics { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+        }
+    }
+
+    func saveNextStep(sessionID: UUID, text: String, promote: Bool) -> Bool {
+        update { state in
+            guard let index = state.sessions.firstIndex(where: { $0.id == sessionID }),
+                  let projectIndex = state.projects.firstIndex(where: { $0.id == state.sessions[index].projectID }) else {
+                throw AppError.invalid("This session is no longer available.")
+            }
+            let note = try SessionText.normalize(text)
+            state.sessions[index].nextStep = note
+            if promote { state.projects[projectIndex].breadcrumb = note.map { ProjectBreadcrumb(text: $0, updatedAt: now(), originSessionID: sessionID) } }
+        }
+    }
+
+    func editProjectBreadcrumb(projectID: UUID, text: String) -> Bool {
+        update { state in
+            guard let index = state.projects.firstIndex(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
+            let origin = state.projects[index].breadcrumb?.originSessionID
+            state.projects[index].breadcrumb = try SessionText.normalize(text).map { ProjectBreadcrumb(text: $0, updatedAt: now(), originSessionID: origin) }
         }
     }
 

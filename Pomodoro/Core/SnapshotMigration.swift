@@ -56,6 +56,9 @@ enum SnapshotMigration {
                 document["goalPlan"] = ["dailyRevisions": [["effectiveFrom": ["year": day.year, "month": day.month, "day": day.day], "minutes": Array(repeating: minutes, count: 7)]], "weeklyProjectRevisions": []]
                 current = 4
                 document["schemaVersion"] = current
+            case 4:
+                current = 5
+                document["schemaVersion"] = current
             default:
                 throw AppError.invalid("This data version is not supported.")
             }

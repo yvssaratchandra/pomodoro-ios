@@ -15,6 +15,7 @@ struct Project: Identifiable, Codable, Equatable {
     var shortBreakMinutes = 5
     var longBreakMinutes = 15
     var createdAt = Date()
+    var breadcrumb: ProjectBreadcrumb?
 
     var preferredFocusMinutes: Int { lastFocusMinutes ?? focusMinutes }
 }
@@ -39,6 +40,7 @@ struct FocusSession: Identifiable, Codable, Equatable {
     var plannedSeconds: Int
     var outcome: SessionOutcome
     var intention: String?
+    var nextStep: String?
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
 }
 
@@ -86,7 +88,7 @@ struct Settings: Codable, Equatable {
 }
 
 struct AppSnapshot: Codable, Equatable {
-    static let currentSchemaVersion = 4
+    static let currentSchemaVersion = 5
     var schemaVersion = AppSnapshot.currentSchemaVersion
     var projects: [Project] = []
     var sessions: [FocusSession] = []
