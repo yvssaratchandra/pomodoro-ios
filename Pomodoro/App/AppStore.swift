@@ -278,7 +278,7 @@ struct PendingDeletion {
             let projects = Set(state.projects.map(\.id))
             let thoughtIDs = Set(state.thoughts.map(\.id))
             guard pending.sessions.allSatisfy({ !existing.contains($0.id) && projects.contains($0.projectID) }),
-                  pending.thoughts.allSatisfy({ !thoughtIDs.contains($0.id) && projects.contains($0.projectID) }) else {
+                  pending.thoughts.allSatisfy({ !thoughtIDs.contains($0.id) && ($0.projectID == nil || projects.contains($0.projectID!)) }) else {
                 throw AppError.invalid("These items cannot be restored because their project or history has changed.")
             }
             state.sessions.append(contentsOf: pending.sessions)

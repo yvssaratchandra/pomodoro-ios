@@ -69,6 +69,15 @@ enum SnapshotMigration {
                 document["settings"] = settings
                 current = 7
                 document["schemaVersion"] = current
+            case 7:
+                // Existing project assignments are preserved. New standalone thoughts
+                // may omit a project; required legacy assignments must still exist.
+                guard let thoughts = document["thoughts"] as? [[String: Any]],
+                      thoughts.allSatisfy({ $0["projectID"] is String }) else {
+                    throw AppError.invalid("Invalid captured thoughts.")
+                }
+                current = 8
+                document["schemaVersion"] = current
             default:
                 throw AppError.invalid("This data version is not supported.")
             }

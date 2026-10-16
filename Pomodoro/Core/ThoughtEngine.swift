@@ -2,7 +2,7 @@ import Foundation
 
 enum ThoughtEngine {
     static func capture(_ state: inout AppSnapshot, context: ThoughtCaptureContext, text: String, now: Date) throws {
-        guard state.projects.contains(where: { $0.id == context.projectID }) else { throw AppError.invalid("This project is no longer available.") }
+        guard context.projectID == nil || state.projects.contains(where: { $0.id == context.projectID }) else { throw AppError.invalid("This project is no longer available.") }
         guard let text = try SessionText.normalize(text, limit: 500) else { throw AppError.invalid("Enter a thought before saving.") }
         state.thoughts.append(CapturedThought(projectID: context.projectID, originSessionID: context.originSessionID, createdAt: now, text: text))
     }

@@ -31,4 +31,32 @@ final class ThoughtEngineTests: XCTestCase {
         XCTAssertEqual(state.thoughts[0].completedAt, now.addingTimeInterval(3))
         XCTAssertThrowsError(try ThoughtEngine.capture(&state, context: context, text: "Missing project", now: now))
     }
+    func testStandaloneThoughtAndOptionalProjectRoundTrip() throws {
+        var state = AppSnapshot()
+        try ThoughtEngine.capture(&state, context: ThoughtCaptureContext(projectID: nil, originSessionID: nil),
+                                  text: "  Remember this  ", now: Date())
+        XCTAssertNil(state.thoughts[0].projectID)
+        XCTAssertNil(state.thoughts[0].originSessionID)
+        XCTAssertEqual(state.thoughts[0].text, "Remember this")
+        XCTAssertEqual(try BackupService.decode(BackupService.encode(state)), state)
+        XCTAssertTrue(ThoughtProjectFilter.unassigned.includes(nil))
+        XCTAssertFalse(ThoughtProjectFilter.project(UUID()).includes(nil))
+        state.thoughts[0].projectID = UUID()
+        XCTAssertThrowsError(try BackupService.encode(state))
+    }
+
+    func testV7ThoughtMigrationPreservesAssignmentAndRejectsMissingLegacyProject() throws {
+        let project = Project(name: "Research")
+        let thought = CapturedThought(projectID: project.id, originSessionID: UUID(), createdAt: Date(), text: "Source")
+        let state = AppSnapshot(projects: [project], thoughts: [thought])
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: BackupService.encode(state)) as? [String: Any])
+        json["schemaVersion"] = 7
+        let migrated = try BackupService.decode(JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(migrated, state)
+        var legacyThoughts = try XCTUnwrap(json["thoughts"] as? [[String: Any]])
+        legacyThoughts[0].removeValue(forKey: "projectID")
+        json["thoughts"] = legacyThoughts
+        XCTAssertThrowsError(try BackupService.decode(JSONSerialization.data(withJSONObject: json)))
+    }
+
 }

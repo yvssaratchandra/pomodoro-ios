@@ -43,7 +43,7 @@ enum BackupService {
         let projectIDs = Set(state.projects.map(\.id))
         guard Set(state.thoughts.map(\.id)).count == state.thoughts.count else { throw AppError.invalid("Duplicate thought identifiers.") }
         for thought in state.thoughts {
-            guard projectIDs.contains(thought.projectID), try SessionText.normalize(thought.text, limit: 500) != nil,
+            guard thought.projectID == nil || projectIDs.contains(thought.projectID!), try SessionText.normalize(thought.text, limit: 500) != nil,
                   thought.createdAt.timeIntervalSince1970.isFinite,
                   thought.completedAt == nil || (thought.completedAt!.timeIntervalSince1970.isFinite && thought.completedAt! >= thought.createdAt) else {
                 throw AppError.invalid("Invalid captured thought.")

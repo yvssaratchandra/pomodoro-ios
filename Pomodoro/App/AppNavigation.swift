@@ -16,8 +16,9 @@ enum AppInstallation {
     var selectedProjectID: UUID?
     var showingProjectCreation = false
     var message: String?
-    var thoughtProjectID: UUID?
+    var thoughtProjectFilter: ThoughtProjectFilter = .all
     var thoughtFilter = 0
+    var thoughtSearch = ""
     private(set) var focusRequestID = UUID()
     private let router: AppURLRouter
     @ObservationIgnored private var store: AppStore?
@@ -26,8 +27,9 @@ enum AppInstallation {
     init(scheme: AppURLScheme) { router = AppURLRouter(scheme: scheme) }
 
     func showThoughts(projectID: UUID?) {
-        thoughtProjectID = projectID
+        thoughtProjectFilter = projectID.map(ThoughtProjectFilter.project) ?? .all
         thoughtFilter = 0
+        thoughtSearch = ""
         selectedTab = .thoughts
     }
 
