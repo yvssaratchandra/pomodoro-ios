@@ -65,6 +65,11 @@ for name, patterns, product_type in [
         ref = add("assets", isa="PBXFileReference", lastKnownFileType="folder.assetcatalog", path="Pomodoro/Assets.xcassets", sourceTree="SOURCE_ROOT")
         children.append(ref)
         resources.append(add("assets.build", isa="PBXBuildFile", fileRef=ref))
+    elif name == "PomodoroTests":
+        ref = add("test-fixtures", isa="PBXFileReference", lastKnownFileType="folder",
+                  path="Tests/Core/Fixtures", sourceTree="SOURCE_ROOT")
+        children.append(ref)
+        resources.append(add("test-fixtures.build", isa="PBXBuildFile", fileRef=ref))
     groups.append(add(name + "group", isa="PBXGroup", children=children, name=name, sourceTree="<group>"))
     extension = "app" if name == "Pomodoro" else "xctest"
     product = add(name + "product", isa="PBXFileReference", explicitFileType="wrapper.application" if extension == "app" else "wrapper.cfbundle",

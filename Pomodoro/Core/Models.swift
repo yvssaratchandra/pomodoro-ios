@@ -38,6 +38,7 @@ struct FocusSession: Identifiable, Codable, Equatable {
     var endedAt: Date
     var plannedSeconds: Int
     var outcome: SessionOutcome
+    var intention: String?
     var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
 }
 
@@ -50,6 +51,7 @@ struct ActiveTimer: Identifiable, Codable, Equatable {
     var shortBreakMinutes: Int
     var longBreakMinutes: Int
     var longBreakInterval: Int
+    var intention: String?
     var deadline: Date { startedAt.addingTimeInterval(Double(plannedSeconds)) }
     func elapsed(at date: Date) -> TimeInterval {
         min(Double(plannedSeconds), max(0, date.timeIntervalSince(startedAt)))
@@ -76,10 +78,13 @@ struct Settings: Codable, Equatable {
     var notificationSound = true
     var haptics = true
     var appearance: Appearance = .system
+    var showProjectNameOnLockScreen = false
+    var showIntentionOnLockScreen = false
 }
 
 struct AppSnapshot: Codable, Equatable {
-    var schemaVersion = 1
+    static let currentSchemaVersion = 2
+    var schemaVersion = AppSnapshot.currentSchemaVersion
     var projects: [Project] = []
     var sessions: [FocusSession] = []
     var settings = Settings()

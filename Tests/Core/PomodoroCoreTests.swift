@@ -234,6 +234,11 @@ final class PomodoroCoreTests: XCTestCase {
 
         // Simulate an existing v1 backup produced before duration memory existed.
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json["schemaVersion"] = 1
+        var settings = try XCTUnwrap(json["settings"] as? [String: Any])
+        settings.removeValue(forKey: "showProjectNameOnLockScreen")
+        settings.removeValue(forKey: "showIntentionOnLockScreen")
+        json["settings"] = settings
         var projects = try XCTUnwrap(json["projects"] as? [[String: Any]])
         for index in projects.indices { projects[index].removeValue(forKey: "lastFocusMinutes") }
         json["projects"] = projects

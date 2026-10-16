@@ -1,6 +1,8 @@
 import Foundation
 
 enum BackupService {
+    static let currentSchemaVersion = AppSnapshot.currentSchemaVersion
+
     static func encode(_ state: AppSnapshot, forBackup: Bool = true) throws -> Data {
         if forBackup && state.activeTimer != nil { throw AppError.invalid("End the timer before exporting a backup.") }
         try validate(state)
@@ -11,18 +13,25 @@ enum BackupService {
         return try encoder.encode(state)
     }
 
-    static func decode(_ data: Data, forBackup: Bool = true) throws -> AppSnapshot {
-        guard data.count <= 50_000_000 else { throw AppError.invalid("The backup exceeds the 50 MB limit.") }
+    static func decode(_ data: Data, forBackup: Bool = true,
+                       now: Date = Date(), calendar: Calendar = .current) throws -> AppSnapshot {
+        try decodeWithMigration(data, forBackup: forBackup, now: now, calendar: calendar).state
+    }
+
+    static func decodeWithMigration(_ data: Data, forBackup: Bool = true,
+                                    now: Date = Date(), calendar: Calendar = .current) throws
+        -> (state: AppSnapshot, didMigrate: Bool) {
+        let upgraded = try SnapshotMigration.upgrade(data: data, now: now, calendar: calendar)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .deferredToDate
-        let state = try decoder.decode(AppSnapshot.self, from: data)
+        let state = try decoder.decode(AppSnapshot.self, from: upgraded)
         try validate(state)
         if forBackup && state.activeTimer != nil { throw AppError.invalid("Backups cannot contain a running timer.") }
-        return state
+        return (state, upgraded != data)
     }
 
     static func validate(_ state: AppSnapshot) throws {
-        guard state.schemaVersion == 1 else { throw AppError.invalid("This data version is not supported.") }
+        guard state.schemaVersion == currentSchemaVersion else { throw AppError.invalid("This data version is not supported.") }
         let settings = state.settings
         guard (1...1440).contains(settings.dailyGoalMinutes),
               (10...60).contains(settings.defaultFocusMinutes),
@@ -46,6 +55,7 @@ enum BackupService {
                   (1...60).contains(project.longBreakMinutes) else { throw AppError.invalid("Invalid project details.") }
         }
         for session in state.sessions {
+            try validateIntention(session.intention)
             guard projectIDs.contains(session.projectID),
                   session.startedAt.timeIntervalSince1970.isFinite, session.endedAt.timeIntervalSince1970.isFinite,
                   (600...3600).contains(session.plannedSeconds), session.plannedSeconds % 60 == 0,
@@ -55,6 +65,7 @@ enum BackupService {
             }
         }
         if let timer = state.activeTimer {
+            try validateIntention(timer.intention)
             let range = timer.kind == .focus ? 600...3600 : 60...3600
             guard projectIDs.contains(timer.projectID), range.contains(timer.plannedSeconds),
                   timer.plannedSeconds % 60 == 0, timer.startedAt.timeIntervalSince1970.isFinite,
@@ -73,6 +84,12 @@ enum BackupService {
             guard projectIDs.contains(offer.projectID), offer.kind != .focus, (1...60).contains(offer.minutes) else {
                 throw AppError.invalid("Invalid pending break.")
             }
+        }
+    }
+
+    private static func validateIntention(_ text: String?) throws {
+        if let text, text.count > 280 {
+            throw AppError.invalid("Session intentions must be 280 characters or fewer.")
         }
     }
 }

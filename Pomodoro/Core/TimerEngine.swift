@@ -33,7 +33,7 @@ enum TimerEngine {
         if !state.sessions.contains(where: { $0.id == timer.id }) {
             state.sessions.append(FocusSession(id: timer.id, projectID: timer.projectID,
                 startedAt: timer.startedAt, endedAt: end, plannedSeconds: timer.plannedSeconds,
-                outcome: completed ? .completed : .interrupted))
+                outcome: completed ? .completed : .interrupted, intention: timer.intention))
         }
         if completed {
             state.completedInCycle += 1

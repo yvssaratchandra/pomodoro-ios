@@ -307,6 +307,85 @@ import UserNotifications
         let context = ModelContext(container)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<AppDocument>()), 1)
     }
+
+    func testStartupMigratesStoredV1OnceBeforePublishingWithoutChangingRunningTimer() throws {
+        let original = try MigrationFixtures.data("v1-running")
+        let persistence = MemorySnapshotPersistence(payload: original)
+        let publisher = RecordingSnapshotPublisher()
+        var publishedAfterMigrationSave = false
+        publisher.onPublish = { state in
+            if let payload = persistence.payload {
+                publishedAfterMigrationSave = persistence.saveAttempts == 1 && payload != original
+                    && (try? BackupService.decode(payload, forBackup: false)) == state
+            }
+        }
+        let store = try AppStore(persistence: persistence, publisher: publisher,
+                                 notificationCenter: RecordingNotificationCenter())
+        XCTAssertTrue(publishedAfterMigrationSave)
+        XCTAssertEqual(publisher.states, [store.state])
+        XCTAssertEqual(store.state.schemaVersion, 2)
+        XCTAssertEqual(store.state.activeTimer?.id, UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        XCTAssertEqual(store.state.activeTimer?.deadline, Date(timeIntervalSinceReferenceDate: 770004500.875))
+        XCTAssertEqual(store.state.completedInCycle, 1)
+        XCTAssertEqual(store.state.sessions.map(\.duration), [600, 59.75])
+        XCTAssertEqual(persistence.saveAttempts, 1)
+        XCTAssertEqual(try AppStore(persistence: persistence).state, store.state)
+        XCTAssertEqual(persistence.saveAttempts, 1)
+    }
+
+    func testFailedMigrationSaveKeepsOriginalBytesAndPublishesNothing() throws {
+        let original = try MigrationFixtures.data("v1-running")
+        let persistence = MemorySnapshotPersistence(payload: original)
+        persistence.failSave = true
+        let publisher = RecordingSnapshotPublisher()
+        let activities = RecordingLiveActivityManager()
+        let notifications = RecordingNotificationCenter()
+        XCTAssertThrowsError(try AppStore(persistence: persistence, publisher: publisher,
+                                         liveActivities: activities, notificationCenter: notifications))
+        XCTAssertEqual(persistence.payload, original)
+        XCTAssertEqual(persistence.saveAttempts, 1)
+        XCTAssertTrue(publisher.states.isEmpty)
+        XCTAssertTrue(activities.states.isEmpty)
+        XCTAssertEqual(notifications.effectCount, 0)
+        persistence.failSave = false
+        let store = try AppStore(persistence: persistence)
+        XCTAssertEqual(store.state.schemaVersion, 2)
+        XCTAssertEqual(persistence.saveAttempts, 2)
+    }
+
+    func testInvalidLegacyAndFutureDocumentsAreNotSavedOrReplaced() throws {
+        let original = try MigrationFixtures.data("v1-history")
+        var malformed = try XCTUnwrap(JSONSerialization.jsonObject(with: original) as? [String: Any])
+        malformed.removeValue(forKey: "sessions")
+        var future = AppSnapshot()
+        future.schemaVersion = 999
+        let inputs = [try JSONSerialization.data(withJSONObject: malformed), try JSONEncoder().encode(future)]
+        for data in inputs {
+            let persistence = MemorySnapshotPersistence(payload: data)
+            let publisher = RecordingSnapshotPublisher()
+            XCTAssertThrowsError(try AppStore(persistence: persistence, publisher: publisher))
+            XCTAssertEqual(persistence.payload, data)
+            XCTAssertEqual(persistence.saveAttempts, 0)
+            XCTAssertTrue(publisher.states.isEmpty)
+        }
+    }
+
+    func testSwiftDataMigrationFailurePreservesV1DocumentThenRetriesAtomically() throws {
+        let container = try makeContainer()
+        let original = try MigrationFixtures.data("v1-running")
+        try SwiftDataSnapshotPersistence(container: container).save(original)
+        let failed = try SwiftDataSnapshotPersistence(container: container, saveContext: { _ in
+            throw TestStoreError.save
+        })
+        XCTAssertThrowsError(try AppStore(persistence: failed))
+        XCTAssertEqual(try failed.load(), original)
+        XCTAssertEqual(try SwiftDataSnapshotPersistence(container: container).load(), original)
+        let store = try AppStore(container: container)
+        XCTAssertEqual(store.state.schemaVersion, 2)
+        XCTAssertEqual(try AppStore(container: container).state, store.state)
+        let payload = try XCTUnwrap(SwiftDataSnapshotPersistence(container: container).load())
+        XCTAssertFalse(try BackupService.decodeWithMigration(payload, forBackup: false).didMigrate)
+    }
 }
 
 private enum TestStoreError: Error { case save, publish }

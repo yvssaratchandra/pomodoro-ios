@@ -20,6 +20,7 @@ import Observation
 
     init(persistence: any SnapshotPersistence,
          now: @escaping () -> Date = Date.init,
+         calendar: Calendar = .current,
          publisher: (any SnapshotPublishing)? = nil,
          liveActivities: (any LiveActivityManaging)? = nil,
          notificationCenter: (any TimerNotificationCenter)? = nil) throws {
@@ -29,7 +30,12 @@ import Observation
         self.liveActivities = liveActivities ?? NoOpLiveActivityManager()
         self.notificationCenter = notificationCenter ?? SystemTimerNotificationCenter()
         if let payload = try persistence.load() {
-            state = try BackupService.decode(payload, forBackup: false)
+            let decoded = try BackupService.decodeWithMigration(payload, forBackup: false,
+                                                                now: now(), calendar: calendar)
+            if decoded.didMigrate {
+                try persistence.save(BackupService.encode(decoded.state, forBackup: false))
+            }
+            state = decoded.state
         } else {
             let initialState = AppSnapshot()
             let initialPayload = try BackupService.encode(initialState, forBackup: false)
