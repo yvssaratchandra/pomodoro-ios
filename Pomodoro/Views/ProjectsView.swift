@@ -170,6 +170,8 @@ struct ProjectEditor: View {
     @Environment(AppNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @State private var draft: Project
+    @State private var focusDuration: Int
+    private let originalFocusDuration: Int
     @State private var showingTimerSettings = false
     @State private var error: String?
     private let isNew: Bool
@@ -178,10 +180,10 @@ struct ProjectEditor: View {
         self.store = store
         isNew = project == nil
         let settings = store.state.settings
-        var starting = project ?? Project(name: "", focusMinutes: settings.defaultFocusMinutes,
+        let starting = project ?? Project(name: "", focusMinutes: settings.defaultFocusMinutes,
             shortBreakMinutes: settings.defaultShortBreakMinutes, longBreakMinutes: settings.defaultLongBreakMinutes)
-        starting.focusMinutes = starting.preferredFocusMinutes
-        starting.lastFocusMinutes = nil
+        originalFocusDuration = starting.preferredFocusMinutes
+        _focusDuration = State(initialValue: starting.preferredFocusMinutes)
         _draft = State(initialValue: starting)
     }
 
@@ -211,7 +213,7 @@ struct ProjectEditor: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         draft.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if store.saveProject(draft) {
+                        if store.saveProject(draft, focusDuration: focusDuration == originalFocusDuration ? nil : focusDuration) {
                             if isNew { navigation.selectedProjectID = draft.id; navigation.selectedTab = .focus }
                             dismiss()
                         } else { error = store.errorMessage; store.errorMessage = nil }
@@ -225,7 +227,7 @@ struct ProjectEditor: View {
 
     private var timerSettings: some View {
         Group {
-            MinutePicker(title: "Focus", value: $draft.focusMinutes, range: 10...60)
+            MinutePicker(title: "Focus", value: $focusDuration, range: 10...60)
             MinutePicker(title: "Short Break", value: $draft.shortBreakMinutes, range: 1...60)
             MinutePicker(title: "Long Break", value: $draft.longBreakMinutes, range: 1...60)
         }

@@ -58,6 +58,19 @@ import UserNotifications
         XCTAssertEqual(reloaded.state.projects[1].preferredFocusMinutes, 15)
     }
 
+    func testExplicitProjectDurationCanReturnToDefaultWhileUnrelatedEditsPreservePreference() throws {
+        let project = Project(name: "Writing", focusMinutes: 25, lastFocusMinutes: 40)
+        let store = try AppStore(persistence: MemorySnapshotPersistence(payload: BackupService.encode(AppSnapshot(projects: [project]))))
+        var renamed = project
+        renamed.name = "Book"
+        XCTAssertTrue(store.saveProject(renamed))
+        XCTAssertEqual(store.state.projects[0].focusMinutes, 25)
+        XCTAssertEqual(store.state.projects[0].lastFocusMinutes, 40)
+        XCTAssertTrue(store.saveProject(renamed, focusDuration: 25))
+        XCTAssertEqual(store.state.projects[0].preferredFocusMinutes, 25)
+        XCTAssertNil(store.state.projects[0].lastFocusMinutes)
+    }
+
     func testDurationChangesLeaveRunningTimerIntactAndInvalidChangesDoNotSave() throws {
         let container = try makeContainer()
         let store = try AppStore(container: container)

@@ -114,7 +114,7 @@ struct PendingDeletion {
 
     func projectName(_ id: UUID) -> String { state.projects.first { $0.id == id }?.name ?? "Project" }
 
-    func saveProject(_ project: Project) -> Bool {
+    func saveProject(_ project: Project, focusDuration: Int? = nil) -> Bool {
         update { state in
             if let index = state.projects.firstIndex(where: { $0.id == project.id }) {
                 if state.activeTimer?.projectID == project.id && state.projects[index].status != project.status {
@@ -124,8 +124,16 @@ struct PendingDeletion {
                 // Editing a default deliberately replaces the previous session preference.
                 updated.lastFocusMinutes = project.focusMinutes == state.projects[index].focusMinutes
                     ? state.projects[index].lastFocusMinutes : nil
+                if let focusDuration {
+                    updated.focusMinutes = focusDuration
+                    updated.lastFocusMinutes = nil
+                }
                 state.projects[index] = updated
-            } else { state.projects.append(project) }
+            } else {
+                var added = project
+                if let focusDuration { added.focusMinutes = focusDuration; added.lastFocusMinutes = nil }
+                state.projects.append(added)
+            }
         }
     }
 
@@ -370,7 +378,7 @@ struct PendingDeletion {
             }
         }) else { return false }
         if let timer = state.activeTimer, timer.completionSound != oldTimer?.completionSound {
-            scheduleNotification(reportAuthorizationFailure: true)
+            scheduleNotification(reportAuthorizationFailure: timer.completionSound != .silent)
         }
         return true
     }
