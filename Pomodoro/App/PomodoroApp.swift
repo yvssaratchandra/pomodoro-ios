@@ -69,6 +69,14 @@ struct RootView: View {
     @Bindable var store: AppStore
     @State private var navigation = AppNavigation(scheme: AppInstallation.scheme)
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private var testing: Bool { ProcessInfo.processInfo.arguments.contains("--ui-testing") }
+    private var appearance: ColorScheme? {
+        if testing, let value = ProcessInfo.processInfo.environment["POMODORO_TEST_APPEARANCE"] {
+            return value == "dark" ? .dark : .light
+        }
+        return store.state.settings.appearance == .system ? nil : store.state.settings.appearance == .dark ? .dark : .light
+    }
     var body: some View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.selectedTab) {
@@ -102,7 +110,8 @@ struct RootView: View {
         .alert("Quick Start", isPresented: Binding(get: { navigation.message != nil }, set: { if !$0 { navigation.message = nil } })) {
             Button("OK", role: .cancel) { navigation.message = nil }
         } message: { Text(navigation.message ?? "") }
-        .preferredColorScheme(store.state.settings.appearance == .system ? nil : store.state.settings.appearance == .dark ? .dark : .light)
+        .preferredColorScheme(appearance)
+        .environment(\.dynamicTypeSize, testing && ProcessInfo.processInfo.environment["POMODORO_TEST_DYNAMIC_TYPE"] == "accessibility2" ? .accessibility2 : dynamicTypeSize)
         .alert("Unable to Complete Action", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }

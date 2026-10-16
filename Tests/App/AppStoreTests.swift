@@ -493,6 +493,53 @@ import UserNotifications
         XCTAssertNil(store.pendingDeletion)
     }
 
+    func testEmptyProjectDeletionProtectsContentAndPendingUndo() throws {
+        let project = Project(name: "Temporary")
+        let date = Date()
+        let thought = CapturedThought(projectID: project.id, createdAt: date, text: "Keep")
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [project], thoughts: [thought])))
+        let store = try AppStore(persistence: persistence)
+        XCTAssertFalse(store.canDeleteProject(id: project.id))
+        XCTAssertFalse(store.deleteEmptyProject(id: project.id))
+        XCTAssertTrue(store.deleteThought(id: thought.id))
+        XCTAssertFalse(store.canDeleteProject(id: project.id))
+        store.dismissUndo()
+        XCTAssertTrue(store.canDeleteProject(id: project.id))
+        XCTAssertTrue(store.deleteEmptyProject(id: project.id))
+        XCTAssertTrue(store.state.projects.isEmpty)
+    }
+
+    func testAudioEditsPersistOnActiveTimerWithoutChangingItsDeadline() throws {
+        let project = Project(name: "Writing")
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [project])))
+        let store = try AppStore(persistence: persistence, notificationCenter: RecordingNotificationCenter())
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 25))
+        let timer = try XCTUnwrap(store.state.activeTimer)
+        XCTAssertTrue(store.updateCompletionAudio(enabled: false))
+        XCTAssertEqual(store.state.activeTimer?.completionSound, .silent)
+        XCTAssertEqual(store.state.activeTimer?.deadline, timer.deadline)
+        XCTAssertEqual(store.state.activeTimer?.id, timer.id)
+        persistence.failSave = true
+        XCTAssertFalse(store.updateCompletionAudio(enabled: true))
+        XCTAssertFalse(store.state.settings.notificationSound)
+        XCTAssertEqual(store.state.activeTimer?.completionSound, .silent)
+        persistence.failSave = false
+        XCTAssertTrue(store.updateCompletionAudio(enabled: true))
+        XCTAssertEqual(store.state.activeTimer?.completionSound, .systemDefault)
+        XCTAssertEqual(try AppStore(persistence: persistence).state.activeTimer, store.state.activeTimer)
+    }
+
+    func testUnassignedThoughtDeletionCanBeUndoneWithoutProjects() throws {
+        let persistence = MemorySnapshotPersistence()
+        let store = try AppStore(persistence: persistence)
+        XCTAssertTrue(store.captureThought(context: ThoughtCaptureContext(projectID: nil, originSessionID: nil), text: "Remember"))
+        let thought = try XCTUnwrap(store.state.thoughts.first)
+        XCTAssertTrue(store.deleteThought(id: thought.id))
+        XCTAssertTrue(store.undoDeletion())
+        XCTAssertEqual(store.state.thoughts, [thought])
+        XCTAssertTrue(store.state.projects.isEmpty)
+    }
+
 }
 
 private enum TestStoreError: Error { case save, publish }

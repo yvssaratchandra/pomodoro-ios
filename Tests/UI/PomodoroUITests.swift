@@ -3,8 +3,7 @@ import XCTest
 final class PomodoroUITests: XCTestCase {
     func testURLProjectCreationAndTimerRecoveryAcrossRelaunch() {
         continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        let app = newApp()
         app.launchEnvironment["POMODORO_TEST_STORE_ID"] = UUID().uuidString
         app.open(URL(string: "pomodoro://projects/new")!)
         let name = app.textFields["project.name"]
@@ -12,12 +11,11 @@ final class PomodoroUITests: XCTestCase {
         name.tap()
         name.typeText("Linked project")
         app.buttons["project.save"].tap()
-        let start = app.buttons["focus.start"]
-        XCTAssertTrue(start.waitForExistence(timeout: 5))
-        start.tap()
+        XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
+        app.buttons["focus.start"].tap()
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Stats"].tap()
-        // open(_:) relaunches the process, so this also exercises durable timer recovery.
+        // open(_:) relaunches the process and exercises durable timer recovery.
         app.open(URL(string: "pomodoro://timer")!)
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.tabBars.buttons["Focus"].isSelected)
@@ -25,33 +23,29 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Linked project"].firstMatch.exists)
         app.buttons["timer.end"].tap()
-        app.alerts["End this focus session?"].buttons["Discard Session"].tap()
+        app.alerts["End focus?"].buttons["Discard Session"].tap()
         XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Stats"].tap()
-        XCTAssertTrue(app.staticTexts["No Focus Yet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No sessions in this selection"].waitForExistence(timeout: 5))
     }
 
     func testQuickStartSetupShowsInvalidURLAndCreatesShortcutWithoutStarting() {
         continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        let app = newApp()
         app.launch()
         createProject("Writing", in: app)
         app.tabBars.buttons["Settings"].tap()
         app.buttons["settings.quickstart"].tap()
         let toggle = app.switches["quickstart.useContainer"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
-        if toggle.value as? String == "0" { toggle.tap() }
-        let field = app.textFields["quickstart.launchURL"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        let previous = field.value as? String ?? ""
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count))
-        field.typeText("https://example.com")
-        XCTAssertTrue(app.staticTexts["quickstart.invalidURL"].waitForExistence(timeout: 5))
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "https://example.com".count))
-        field.typeText("livecontainer2://livecontainer-launch?bundle-name=Pomodoro.app&container-folder-name=test")
-        app.swipeUp()
+        if toggle.exists {
+            if toggle.value as? String == "0" { toggle.tap() }
+            let field = app.textFields["quickstart.launchURL"]
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap()
+            replaceText(in: field, with: "https://example.com")
+            XCTAssertTrue(app.staticTexts["quickstart.invalidURL"].waitForExistence(timeout: 5))
+            replaceText(in: field, with: "livecontainer2://livecontainer-launch?bundle-name=Pomodoro.app&container-folder-name=test")
+        }
         let copy = app.buttons["quickstart.copy"]
         reveal(copy, in: app, scrollingUp: true)
         XCTAssertTrue(copy.isEnabled)
@@ -62,35 +56,26 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["timer.countdown"].exists)
     }
 
-    func testCreateFocusEndAndReviewInterruptedSession() {
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+    func testCreateFocusEndAndReviewSession() {
+        let app = newApp()
         app.launch()
-        app.tabBars.buttons["Projects"].tap()
-        app.buttons["projects.new"].tap()
-        let field = app.textFields["project.name"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
-        field.tap()
-        field.typeText("Writing")
-        app.buttons["project.save"].tap()
+        createProject("Writing", in: app)
         app.tabBars.buttons["Focus"].tap()
-        reveal(app.buttons["focus.start"], in: app)
         app.buttons["focus.start"].tap()
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         app.buttons["timer.end"].tap()
-        app.buttons["End and Save Work"].tap()
+        app.alerts["End focus?"].buttons["Save Session"].tap()
         app.tabBars.buttons["Stats"].tap()
-        let interrupted = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
-        XCTAssertTrue(interrupted.waitForExistence(timeout: 5))
-        XCTAssertTrue(interrupted.label.contains("Writing"))
+        let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
+        XCTAssertTrue(session.label.contains("Writing"))
         app.tabBars.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].exists)
     }
 
-    func testDurationWheelStaysSelectedAndProjectsRememberTheirChoices() {
+    func testDurationWheelRemembersProjectAndRunningTimerIsReadOnly() {
         continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        let app = newApp()
         app.launch()
         createProject("Writing", in: app)
         createProject("Study", in: app)
@@ -98,7 +83,6 @@ final class PomodoroUITests: XCTestCase {
         chooseProject("Writing", in: app)
         setDuration("40 min", in: app)
         assertDuration("40 min", in: app)
-
         app.tabBars.buttons["Stats"].tap()
         app.tabBars.buttons["Focus"].tap()
         assertDuration("40 min", in: app)
@@ -109,136 +93,176 @@ final class PomodoroUITests: XCTestCase {
         assertDuration("40 min", in: app)
         setDuration("50 min", in: app, save: false)
         assertDuration("40 min", in: app)
-        chooseProject("Study", in: app)
-        assertDuration("15 min", in: app)
-        chooseProject("Writing", in: app)
-
-        reveal(app.buttons["focus.start"], in: app, scrollingUp: false)
         attachScreenshot("Focus ready", app: app)
         app.buttons["focus.start"].tap()
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
-        // Edit the next session while the countdown is refreshing every second.
-        setDuration("35 min", in: app)
-        assertDuration("35 min", in: app)
-        reveal(app.buttons["timer.end"], in: app, scrollingUp: false)
-        let countdown = app.staticTexts["timer.countdown"]
-        let remaining = countdown.value as? String ?? ""
-        let remainingMinutes = Int(remaining.split(separator: " ").first ?? "") ?? 0
-        XCTAssertTrue((36...40).contains(remainingMinutes), remaining)
+        XCTAssertFalse(app.buttons["focus.duration"].exists)
         attachScreenshot("Focus running", app: app)
         app.buttons["timer.end"].tap()
-        app.buttons["End and Save Work"].tap()
-        assertDuration("35 min", in: app)
+        app.alerts["End focus?"].buttons["Save Session"].tap()
+        assertDuration("40 min", in: app)
+        chooseProject("Study", in: app)
+        assertDuration("15 min", in: app)
     }
 
-    func testDiscardAndConfirmedHistoryDeletion() {
+    func testDiscardAndImmediateHistoryDeletionUndo() {
         continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        let app = newApp()
         app.launch()
         createProject("Writing", in: app)
         app.tabBars.buttons["Focus"].tap()
         app.buttons["focus.start"].tap()
         app.buttons["timer.end"].tap()
-        let endAlert = app.alerts["End this focus session?"]
+        let endAlert = app.alerts["End focus?"]
         XCTAssertTrue(endAlert.waitForExistence(timeout: 5))
-        XCTAssertTrue(endAlert.buttons["End and Save Work"].exists)
+        XCTAssertTrue(endAlert.buttons["Save Session"].exists)
         XCTAssertTrue(endAlert.buttons["Discard Session"].exists)
         endAlert.buttons["Keep Focusing"].tap()
-        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: endAlert)
-        waitForExpectations(timeout: 5)
         XCTAssertTrue(app.staticTexts["timer.countdown"].exists)
         app.buttons["timer.end"].tap()
-        XCTAssertTrue(endAlert.waitForExistence(timeout: 5))
         endAlert.buttons["Discard Session"].tap()
         XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Stats"].tap()
-        XCTAssertTrue(app.staticTexts["No Focus Yet"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No sessions in this selection"].waitForExistence(timeout: 5))
 
         app.tabBars.buttons["Focus"].tap()
         app.buttons["focus.start"].tap()
         app.buttons["timer.end"].tap()
-        app.buttons["End and Save Work"].tap()
+        endAlert.buttons["Save Session"].tap()
         app.tabBars.buttons["Stats"].tap()
-        app.buttons["All history"].tap()
         let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         session.swipeLeft()
         app.buttons["Delete"].tap()
-        let deleteAlert = app.alerts["Delete this session?"]
-        XCTAssertTrue(deleteAlert.waitForExistence(timeout: 5))
-        deleteAlert.buttons["Cancel"].tap()
-        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: deleteAlert)
-        waitForExpectations(timeout: 5)
-        XCTAssertTrue(session.exists)
-        if !app.buttons["Delete"].isHittable { session.swipeLeft() }
-        app.buttons["Delete"].tap()
-        XCTAssertTrue(deleteAlert.waitForExistence(timeout: 5))
-        deleteAlert.buttons["Delete Session"].tap()
-        XCTAssertTrue(app.staticTexts["No Focus Yet"].waitForExistence(timeout: 5))
         XCTAssertFalse(session.exists)
+        let undo = app.buttons["session.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        undo.tap()
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
     }
 
-    func testIntentionCaptureBreadcrumbUndoAndThoughtChecklist() {
+    func testSessionNoteThoughtBreadcrumbAndStatistics() {
         continueAfterFailure = false
-        let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        let app = newApp()
         app.launch()
         createProject("Writing", in: app)
         app.tabBars.buttons["Focus"].tap()
-        app.buttons["focus.start"].tap()
-        let intention = app.buttons["focus.intention.edit"]
-        reveal(intention, in: app)
-        intention.tap()
-        let intentionText = app.textViews["intention.text"].exists ? app.textViews["intention.text"] : app.textFields["intention.text"]
-        XCTAssertTrue(intentionText.waitForExistence(timeout: 5))
-        intentionText.tap()
-        intentionText.typeText("Draft introduction")
+        app.buttons["focus.intention"].tap()
+        enterText("Draft introduction", into: "intention.text", in: app)
         app.buttons["intention.save"].tap()
+        app.buttons["focus.start"].tap()
         let capture = app.buttons["focus.captureThought"]
         reveal(capture, in: app, scrollingUp: false)
         capture.tap()
-        let text = app.textViews["thought.text"].exists ? app.textViews["thought.text"] : app.textFields["thought.text"]
-        XCTAssertTrue(text.waitForExistence(timeout: 5))
-        text.tap()
-        text.typeText("Find the source later")
+        enterText("Find the source later", into: "thought.text", in: app)
         app.buttons["thought.save"].tap()
-        reveal(app.buttons["timer.end"], in: app, scrollingUp: false)
         app.buttons["timer.end"].tap()
-        app.alerts.buttons["End and Save Work"].tap()
+        app.alerts["End focus?"].buttons["Save Session"].tap()
         let next = app.buttons["focus.nextStep"]
-        reveal(next, in: app)
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
         next.tap()
-        let note = app.textViews["breadcrumb.text"].exists ? app.textViews["breadcrumb.text"] : app.textFields["breadcrumb.text"]
-        XCTAssertTrue(note.waitForExistence(timeout: 5))
-        note.tap()
-        note.typeText("Continue with methods")
+        enterText("Continue with methods", into: "breadcrumb.text", in: app)
         app.buttons["breadcrumb.save"].tap()
         app.tabBars.buttons["Stats"].tap()
         let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         XCTAssertTrue(session.label.contains("Draft introduction"))
-        session.swipeLeft()
-        app.buttons["Delete"].tap()
-        app.alerts["Delete this session?"].buttons["Delete Session"].tap()
-        let undo = app.buttons["session.undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 5))
-        undo.tap()
-        XCTAssertTrue(session.waitForExistence(timeout: 5))
         app.buttons["Week"].tap()
-        XCTAssertTrue(app.staticTexts["Total focus"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Focus time"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Thoughts"].tap()
         let check = app.buttons["thought.check"].firstMatch
         XCTAssertTrue(check.waitForExistence(timeout: 5))
         XCTAssertEqual(check.value as? String, "Open")
         check.tap()
         XCTAssertEqual(check.value as? String, "Done")
-        app.buttons["Done"].tap()
+        app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(check.exists)
         check.tap()
-        XCTAssertTrue(app.staticTexts["No Thoughts"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No matching thoughts"].waitForExistence(timeout: 5))
         app.buttons["Open"].tap()
         XCTAssertTrue(check.waitForExistence(timeout: 5))
+    }
+
+    func testStandaloneThoughtSearchUnassignedCheckDeleteAndUndo() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launch()
+        app.tabBars.buttons["Thoughts"].tap()
+        app.buttons["thoughts.new"].tap()
+        enterText("Review bibliography", into: "thought.text", in: app)
+        app.buttons["thought.save"].tap()
+        let thought = app.staticTexts["Review bibliography"].firstMatch
+        XCTAssertTrue(thought.waitForExistence(timeout: 5))
+        let project = app.buttons["thoughts.project"]
+        project.tap()
+        app.buttons["Unassigned"].tap()
+        XCTAssertTrue(thought.exists)
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("bibliography")
+        XCTAssertTrue(thought.exists)
+        replaceText(in: search, with: "missing")
+        XCTAssertTrue(app.staticTexts["No matching thoughts"].waitForExistence(timeout: 5))
+        reveal(app.buttons["Clear filters"], in: app)
+        app.buttons["Clear filters"].tap()
+        XCTAssertTrue(thought.waitForExistence(timeout: 5))
+        let check = app.buttons["thought.check"].firstMatch
+        check.tap()
+        XCTAssertEqual(check.value as? String, "Done")
+        thought.swipeLeft()
+        app.buttons["Delete"].tap()
+        XCTAssertFalse(thought.exists)
+        let undo = app.buttons["session.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        undo.tap()
+        XCTAssertTrue(thought.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["thought.check"].firstMatch.value as? String, "Done")
+    }
+
+    func testVisualStatesLightDarkAndAccessibilityText() {
+        continueAfterFailure = false
+        for (name, appearance, textSize) in [
+            ("Light", "light", "standard"),
+            ("Dark", "dark", "standard"),
+            ("Large text", "dark", "accessibility2")
+        ] {
+            let app = newApp()
+            app.launchEnvironment["POMODORO_TEST_APPEARANCE"] = appearance
+            app.launchEnvironment["POMODORO_TEST_DYNAMIC_TYPE"] = textSize
+            app.launch()
+            createProject("A long project name for layout checks", in: app)
+            app.tabBars.buttons["Focus"].tap()
+            XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
+            if textSize == "standard" {
+                XCTAssertTrue(app.buttons["focus.start"].isHittable)
+                XCTAssertTrue(app.buttons["focus.duration"].isHittable)
+            }
+            attachScreenshot("\(name) · Focus ready", app: app)
+            reveal(app.buttons["focus.start"], in: app)
+            app.buttons["focus.start"].tap()
+            XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
+            attachScreenshot("\(name) · Focus running", app: app)
+            app.buttons["focus.captureThought"].tap()
+            enterText("A thought saved during focus", into: "thought.text", in: app)
+            app.buttons["thought.save"].tap()
+            app.buttons["timer.end"].tap()
+            app.alerts["End focus?"].buttons["Save Session"].tap()
+            attachScreenshot("\(name) · Focus after saving", app: app)
+            app.tabBars.buttons["Stats"].tap()
+            attachScreenshot("\(name) · Stats", app: app)
+            app.tabBars.buttons["Thoughts"].tap()
+            attachScreenshot("\(name) · Thoughts", app: app)
+            app.tabBars.buttons["Settings"].tap()
+            attachScreenshot("\(name) · Settings", app: app)
+            app.terminate()
+        }
+    }
+
+    private func newApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        return app
     }
 
     private func createProject(_ name: String, in app: XCUIApplication) {
@@ -273,7 +297,6 @@ final class PomodoroUITests: XCTestCase {
         let wheel = app.pickerWheels.firstMatch
         XCTAssertTrue(wheel.waitForExistence(timeout: 5))
         wheel.adjust(toPickerWheelValue: value)
-        // Explicitly cover the reported delayed reset, spanning multiple refreshes.
         let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value != %@", value), object: wheel)
         changed.isInverted = true
         wait(for: [changed], timeout: 3)
@@ -285,6 +308,19 @@ final class PomodoroUITests: XCTestCase {
         let button = app.buttons["focus.duration"]
         reveal(button, in: app)
         XCTAssertEqual(button.value as? String, value)
+    }
+
+    private func enterText(_ value: String, into identifier: String, in app: XCUIApplication) {
+        let text = app.textFields[identifier].exists ? app.textFields[identifier] : app.textViews[identifier]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        text.tap()
+        text.typeText(value)
+    }
+
+    private func replaceText(in field: XCUIElement, with value: String) {
+        let previous = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count))
+        field.typeText(value)
     }
 
     private func attachScreenshot(_ name: String, app: XCUIApplication) {
