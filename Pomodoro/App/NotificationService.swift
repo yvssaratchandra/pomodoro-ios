@@ -7,6 +7,7 @@ import UserNotifications
     private var generation = 0
     private var testGeneration = 0
     private var testTask: Task<String, Error>?
+    private var scheduleTask: Task<Void, Never>?
     private var activeID: UUID?
     private var scheduled: Set<UUID> = []
     private var completed: Set<UUID> = []
@@ -31,7 +32,11 @@ import UserNotifications
         generation += 1
         let requestGeneration = generation
         activeID = timer.id
-        Task {
+        let previous = scheduleTask
+        scheduleTask = Task {
+            await previous?.value
+            guard requestGeneration == generation, isCurrent() else { return }
+            guard timer.deadline > now() else { expired(); return }
             do {
                 let granted = try await center.requestAuthorization(options: [.alert, .sound])
                 guard granted, requestGeneration == generation, isCurrent() else { return }
@@ -46,8 +51,19 @@ import UserNotifications
                 scheduled.insert(timer.id)
                 try await center.add(UNNotificationRequest(identifier: id, content: content,
                     trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, remaining), repeats: false)))
-                if !isCurrent(), !completed.contains(timer.id) { center.removePendingNotificationRequests(withIdentifiers: [id]) }
-            } catch { failed("The timer is running, but its notification could not be scheduled: \(error.localizedDescription)") }
+                if timer.deadline <= now(), !completed.contains(timer.id) {
+                    center.removePendingNotificationRequests(withIdentifiers: [id])
+                    if requestGeneration == generation, isCurrent() { expired() }
+                    return
+                }
+                if (requestGeneration != generation || !isCurrent()), !completed.contains(timer.id) {
+                    center.removePendingNotificationRequests(withIdentifiers: [id])
+                }
+            } catch {
+                if requestGeneration == generation, isCurrent() {
+                    failed("The timer is running, but its completion alert could not be updated. Try changing the sound again.")
+                }
+            }
         }
     }
 

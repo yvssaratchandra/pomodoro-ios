@@ -14,138 +14,268 @@ struct BackupDocument: FileDocument {
 
 struct SettingsView: View {
     @Bindable var store: AppStore
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    NavigationLink("Goals") { GoalsView(store: store) }
+                    NavigationLink("Timer defaults") { TimerDefaultsView(store: store) }
+                    NavigationLink("Sounds & haptics") { SoundSettingsView(store: store) }
+                    NavigationLink("Widgets & shortcuts") { QuickStartSetupView(store: store) }
+                        .accessibilityIdentifier("settings.quickstart")
+                    NavigationLink("Appearance") { AppearanceSettingsView(store: store) }
+                    #if NATIVE_INTEGRATIONS
+                    NavigationLink("Lock Screen privacy") { LockScreenPrivacyView(store: store) }
+                    #endif
+                }
+                Section {
+                    NavigationLink("Backup & restore") { BackupSettingsView(store: store) }
+                    NavigationLink("Help") { SettingsHelpView(store: store) }
+                }
+            }
+            .listRowBackground(AppTheme.surface)
+            .appScreen()
+            .navigationTitle("Settings")
+        }
+    }
+}
+
+private func settingsBinding<Value>(_ store: AppStore, _ path: WritableKeyPath<Settings, Value>) -> Binding<Value> {
+    Binding(get: { store.state.settings[keyPath: path] }, set: { value in
+        store.update { state in
+            state.settings[keyPath: path] = value
+            if path == \.longBreakInterval { state.completedInCycle = 0 }
+        }
+    })
+}
+
+private struct TimerDefaultsView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        Form {
+            Section("New projects") {
+                MinutePicker(title: "Focus", value: settingsBinding(store, \.defaultFocusMinutes), range: 10...60)
+                MinutePicker(title: "Short break", value: settingsBinding(store, \.defaultShortBreakMinutes), range: 1...60)
+                MinutePicker(title: "Long break", value: settingsBinding(store, \.defaultLongBreakMinutes), range: 1...60)
+            }
+            Section {
+                Picker("Long break after", selection: settingsBinding(store, \.longBreakInterval)) {
+                    ForEach(1...12, id: \.self) { Text("\($0) focus sessions").tag($0) }
+                }
+                .disabled(store.state.activeTimer != nil)
+                LabeledContent("Completed in cycle", value: "\(store.state.completedInCycle)")
+            } header: {
+                Text("Break cycle")
+            } footer: {
+                Text("Changing the interval resets the cycle. Breaks start manually.")
+            }
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Timer defaults")
+    }
+}
+
+private struct SoundSettingsView: View {
+    @Bindable var store: AppStore
+    private var enabled: Binding<Bool> {
+        Binding(get: { store.state.settings.notificationSound }, set: { _ = store.updateCompletionAudio(enabled: $0) })
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Completion sounds", isOn: enabled)
+                if store.state.settings.notificationSound {
+                    NavigationLink {
+                        CompletionSoundSelectionView(store: store, kind: .focus)
+                    } label: {
+                        LabeledContent("Focus sound", value: store.state.settings.completionSound(for: .focus).title)
+                    }
+                    NavigationLink {
+                        CompletionSoundSelectionView(store: store, kind: .shortBreak)
+                    } label: {
+                        LabeledContent("Break sound", value: store.state.settings.completionSound(for: .shortBreak).title)
+                    }
+                }
+                Toggle("Haptics", isOn: settingsBinding(store, \.haptics))
+            } footer: {
+                Text("Uses your iPhone's alert volume and notification settings.")
+            }
+            Section {
+                Button("Open notification settings") {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                }
+            }
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Sounds & haptics")
+    }
+}
+
+private struct CompletionSoundSelectionView: View {
+    @Bindable var store: AppStore
+    let kind: TimerKind
+    @State private var testMessage: String?
+
+    private var selection: CompletionSound {
+        kind == .focus ? store.state.settings.focusCompletionSound : store.state.settings.breakCompletionSound
+    }
+    private var supported: [CompletionSound] {
+        CompletionSound.allCases.filter { $0.filename == nil || CompletionSound.customSoundsSupported }
+    }
+    private var importedFallback: Bool {
+        !CompletionSound.customSoundsSupported && selection.filename != nil
+    }
+    private func isEffectiveSelection(_ sound: CompletionSound) -> Bool {
+        selection == sound || (importedFallback && sound == .systemDefault)
+    }
+    private var title: String { kind == .focus ? "Focus sound" : "Break sound" }
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(supported) { sound in
+                    Button {
+                        if store.updateCompletionAudio(kind: kind, sound: sound) { testMessage = nil }
+                    } label: {
+                        HStack {
+                            Text(sound.title).foregroundStyle(.primary)
+                            Spacer()
+                            if isEffectiveSelection(sound) { Image(systemName: "checkmark").accessibilityHidden(true) }
+                        }
+                    }
+                    .accessibilityAddTraits(isEffectiveSelection(sound) ? [.isSelected] : [])
+                }
+            } footer: {
+                if importedFallback {
+                    Text("An imported sound is saved. This installation uses System Default until you choose another sound.")
+                }
+            }
+            Section {
+                Button("Preview") {
+                    Task { testMessage = await store.testCompletionAlert(kind: kind) }
+                }
+                if let testMessage { Text(testMessage).font(.footnote).foregroundStyle(.secondary) }
+            }
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle(title)
+    }
+}
+
+private struct AppearanceSettingsView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        Form {
+            Picker("Appearance", selection: settingsBinding(store, \.appearance)) {
+                ForEach(Appearance.allCases) { Text($0.rawValue.capitalized).tag($0) }
+            }
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Appearance")
+    }
+}
+
+#if NATIVE_INTEGRATIONS
+private struct LockScreenPrivacyView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        Form {
+            Toggle("Show project name", isOn: settingsBinding(store, \.showProjectNameOnLockScreen))
+            Toggle("Show session note", isOn: settingsBinding(store, \.showIntentionOnLockScreen))
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Lock Screen privacy")
+    }
+}
+#endif
+
+private struct BackupSettingsView: View {
+    @Bindable var store: AppStore
     @State private var exporting = false
     @State private var importing = false
     @State private var backupDocument = BackupDocument(data: Data())
     @State private var pendingRestore: AppSnapshot?
     @State private var confirmingRestore = false
-    @State private var backupMessage: String?
-    @State private var soundTestMessage: String?
-
-    private func setting<Value>(_ path: WritableKeyPath<Settings, Value>) -> Binding<Value> {
-        Binding(get: { store.state.settings[keyPath: path] }, set: { value in
-            store.update { state in
-                state.settings[keyPath: path] = value
-                if path == \Settings.longBreakInterval { state.completedInCycle = 0 }
-            }
-        })
-    }
+    @State private var message: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Group {
-                    Section {
-                        NavigationLink("Quick-start shortcuts") { QuickStartSetupView(store: store) }
-                            .accessibilityIdentifier("settings.quickstart")
-                    }
-                    Section("Daily focus goal") {
-                        NavigationLink("Weekday goals and rest days") { DailyGoalsEditor(store: store) }
-                        Stepper("Focused days per week: \(store.state.settings.consistencyTargetDays)", value: setting(\.consistencyTargetDays), in: 1...7)
-                        Text("A focused day has at least 10 minutes of actual focus, including interrupted sessions.").font(.footnote).foregroundStyle(.secondary)
-                    }
-                    Section {
-                        MinutePicker(title: "Focus", value: setting(\.defaultFocusMinutes), range: 10...60)
-                        MinutePicker(title: "Short break", value: setting(\.defaultShortBreakMinutes), range: 1...60)
-                        MinutePicker(title: "Long break", value: setting(\.defaultLongBreakMinutes), range: 1...60)
-                    } header: { Label("New project defaults", systemImage: "timer") } footer: { Text("Existing projects keep their own durations.") }
-                    Section {
-                        Picker("Long break after", selection: setting(\.longBreakInterval)) {
-                            ForEach(1...12, id: \.self) { Text("\($0) completed sessions").tag($0) }
-                        }
-                        .disabled(store.state.activeTimer != nil)
-                        LabeledContent("Cycle progress", value: "\(store.state.completedInCycle) completed")
-                    } header: { Label("Break cycle", systemImage: "cup.and.saucer") } footer: {
-                        Text("Completed focus sessions count across projects. Changing the interval resets the cycle. Each focus and break starts manually.")
-                    }
-                    Section {
-                        Toggle("Notification sound", isOn: setting(\.notificationSound))
-                        soundPicker("Focus complete", selection: setting(\.focusCompletionSound))
-                        soundPicker("Break complete", selection: setting(\.breakCompletionSound))
-                        Button("Test focus completion alert") {
-                            Task { soundTestMessage = await store.testCompletionAlert(kind: .focus) }
-                        }
-                        Button("Test break completion alert") {
-                            Task { soundTestMessage = await store.testCompletionAlert(kind: .shortBreak) }
-                        }
-                        if let soundTestMessage { Text(soundTestMessage).font(.footnote).foregroundStyle(.secondary) }
-                        Toggle("Completion haptics", isOn: setting(\.haptics))
-                        Button("Notification Settings") {
-                            if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
-                        }
-                    } header: { Label("Alerts", systemImage: "bell") } footer: {
-                        Text("Completion sounds use your iPhone's alert volume and follow Silent mode, Focus, and notification settings. System Default uses iOS's default alert; it does not select a Messages tone. Changes apply to the next timer.")
-                        if !CompletionSound.customSoundsSupported {
-                            Text("Custom tones require the direct native installation. This build uses System Default for imported custom selections until LiveContainer sound compatibility is verified.")
-                        }
-                    }
-                    Section("Appearance") {
-                        Picker("Appearance", selection: setting(\.appearance)) {
-                            ForEach(Appearance.allCases) { Text($0.rawValue.capitalized).tag($0) }
-                        }
-                    }
-                    #if NATIVE_INTEGRATIONS
-                    Section("Lock Screen privacy") {
-                        Toggle("Show project name", isOn: setting(\.showProjectNameOnLockScreen))
-                        Toggle("Show session intention", isOn: setting(\.showIntentionOnLockScreen))
-                    }
-                    #endif
-                    Section {
-                        Button("Export Backup") {
-                            do {
-                                backupDocument = BackupDocument(data: try BackupService.encode(store.state))
-                                exporting = true
-                            } catch { store.errorMessage = error.localizedDescription }
-                        }
-                        Button("Restore Backup") { importing = true }
-                    } header: { Label("Backup", systemImage: "externaldrive") } footer: {
-                        Text("Save a backup to Files or iCloud Drive. Restoring replaces all projects, history, and settings. End the timer before exporting or restoring.")
-                    }
-                    .disabled(store.state.activeTimer != nil)
-                    Section { Text("Your data stays on this device unless you export a backup.").foregroundStyle(.secondary) }
-                }.listRowBackground(AppTheme.surface)
-            }
-            .appScreen()
-            .navigationTitle("Settings")
-            .fileExporter(isPresented: $exporting, document: backupDocument, contentType: .json,
-                defaultFilename: "Pomodoro-Backup") { result in
-                switch result {
-                case .success: backupMessage = "Backup exported."
-                case .failure(let error): store.errorMessage = error.localizedDescription
+        Form {
+            Section {
+                Button("Export backup") {
+                    do {
+                        backupDocument = BackupDocument(data: try BackupService.encode(store.state))
+                        exporting = true
+                    } catch { store.errorMessage = error.localizedDescription }
                 }
+                Button("Restore backup") { importing = true }
+            } footer: {
+                Text("End the timer before exporting or restoring. Restoring replaces all app data.")
             }
-            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-                do {
-                    let url = try result.get()
-                    let accessed = url.startAccessingSecurityScopedResource()
-                    defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                    let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                    guard size <= 50_000_000 else { throw AppError.invalid("The backup exceeds the 50 MB limit.") }
-                    pendingRestore = try BackupService.decode(Data(contentsOf: url))
-                    confirmingRestore = true
-                } catch { store.errorMessage = error.localizedDescription }
+            .disabled(store.state.activeTimer != nil)
+            if let message {
+                Section { Text(message).foregroundStyle(.secondary) }
             }
-            .confirmationDialog("Replace all app data?", isPresented: $confirmingRestore, titleVisibility: .visible) {
-                Button("Replace with Backup", role: .destructive) {
-                    if let pendingRestore, store.restore(pendingRestore) { backupMessage = "Backup restored." }
-                    pendingRestore = nil
-                }
-                Button("Cancel", role: .cancel) { pendingRestore = nil }
-            } message: {
-                Text("Restore \(pendingRestore?.projects.count ?? 0) projects and \(pendingRestore?.sessions.count ?? 0) sessions. Current data will be replaced.")
+            Section { Text("Your data stays on this device unless you export a backup.").foregroundStyle(.secondary) }
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Backup & restore")
+        .fileExporter(isPresented: $exporting, document: backupDocument, contentType: .json,
+            defaultFilename: "Pomodoro-Backup") { result in
+            switch result {
+            case .success: message = "Backup exported."
+            case .failure(let error): store.errorMessage = error.localizedDescription
             }
-            .alert("Backup", isPresented: Binding(get: { backupMessage != nil }, set: { if !$0 { backupMessage = nil } })) {
-                Button("OK") { backupMessage = nil }
-            } message: { Text(backupMessage ?? "") }
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+            do {
+                let url = try result.get()
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard size <= 50_000_000 else { throw AppError.invalid("The backup exceeds the 50 MB limit.") }
+                pendingRestore = try BackupService.decode(Data(contentsOf: url))
+                confirmingRestore = true
+            } catch { store.errorMessage = error.localizedDescription }
+        }
+        .confirmationDialog("Replace all app data?", isPresented: $confirmingRestore, titleVisibility: .visible) {
+            Button("Replace with backup", role: .destructive) {
+                if let pendingRestore, store.restore(pendingRestore) { message = "Backup restored." }
+                pendingRestore = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRestore = nil }
+        } message: {
+            Text("Restore \(pendingRestore?.projects.count ?? 0) projects and \(pendingRestore?.sessions.count ?? 0) sessions. Current data will be replaced.")
         }
     }
+}
 
-    private func soundPicker(_ title: String, selection: Binding<CompletionSound>) -> some View {
-        Picker(title, selection: selection) {
-            ForEach(CompletionSound.allCases) { sound in
-                Text(sound.title).tag(sound)
-                    .disabled(sound.filename != nil && !CompletionSound.customSoundsSupported)
+private struct SettingsHelpView: View {
+    let store: AppStore
+    var body: some View {
+        Form {
+            Section("Timers") {
+                Text("Focus and breaks start manually. A completed focus session advances the break cycle.")
+            }
+            Section("Sounds") {
+                Text("System Default uses your iPhone's default alert. It does not select a specific Messages tone. Silent mode, Focus, alert volume, and notification permissions affect playback.")
+                if !CompletionSound.customSoundsSupported {
+                    Text("This installation supports System Default and Silent. Imported custom choices are preserved in backups and play as System Default here.")
+                }
+            }
+            Section("Shortcuts") {
+                NavigationLink("Shortcut troubleshooting") { QuickStartTroubleshootingView(store: store) }
             }
         }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Help")
     }
 }

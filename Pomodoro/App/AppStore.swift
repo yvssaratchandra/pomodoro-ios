@@ -347,4 +347,26 @@ struct PendingDeletion {
         do { return try await notifications.test(sound: state.settings.completionSound(for: kind)) }
         catch { return "Unable to schedule test alert: \(error.localizedDescription)" }
     }
+
+    @discardableResult
+    func updateCompletionAudio(enabled: Bool? = nil, kind: TimerKind? = nil, sound: CompletionSound? = nil) -> Bool {
+        reconcile()
+        if let timer = state.activeTimer, timer.deadline <= now() { return false }
+        guard sound == nil || kind != nil else { return false }
+        let oldTimer = state.activeTimer
+        guard update({ state in
+            if let enabled { state.settings.notificationSound = enabled }
+            if let sound, let kind {
+                if kind == .focus { state.settings.focusCompletionSound = sound }
+                else { state.settings.breakCompletionSound = sound }
+            }
+            if let timer = state.activeTimer {
+                state.activeTimer?.completionSound = state.settings.completionSound(for: timer.kind)
+            }
+        }) else { return false }
+        if let timer = state.activeTimer, timer.completionSound != oldTimer?.completionSound {
+            scheduleNotification()
+        }
+        return true
+    }
 }
