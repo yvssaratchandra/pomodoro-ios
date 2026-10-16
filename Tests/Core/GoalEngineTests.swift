@@ -20,18 +20,24 @@ final class GoalEngineTests: XCTestCase {
         XCTAssertEqual(plan.dailyRevisions.count, 2)
         XCTAssertEqual(GoalEngine.dailyTarget(on: today, plan: plan, calendar: c), 90)
     }
-    func testWeeklyChangesBeginNextMondayAndReplacePendingRevision() throws {
+    func testWeeklyChangesApplyThisWeekAndPreserveScheduledAndPastTargets() throws {
         let c = GoalEngine.calendar(), now = Date(), id = UUID()
         let monday = GoalEngine.week(containing: now, calendar: c).start
         let next = c.date(byAdding: .day, value: 7, to: monday)!
         var plan = GoalPlan()
+        let previous = c.date(byAdding: .day, value: -7, to: monday)!
+        try GoalEngine.setWeekly(&plan, projectID: id, minutes: 60, now: previous, calendar: c)
         try GoalEngine.setWeekly(&plan, projectID: id, minutes: 120, now: now, calendar: c)
+        try GoalEngine.setWeekly(&plan, projectID: id, minutes: 300, now: now, calendar: c, effectiveWeek: next)
         try GoalEngine.setWeekly(&plan, projectID: id, minutes: 240, now: now, calendar: c)
-        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: id, weekStart: monday, plan: plan, calendar: c), 120)
-        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: id, weekStart: next, plan: plan, calendar: c), 240)
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: id, weekStart: previous, plan: plan, calendar: c), 60)
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: id, weekStart: monday, plan: plan, calendar: c), 240)
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: id, weekStart: next, plan: plan, calendar: c), 300)
         try GoalEngine.setWeekly(&plan, projectID: id, minutes: nil, now: now, calendar: c)
-        XCTAssertEqual(plan.weeklyProjectRevisions.count, 2)
-        XCTAssertNil(GoalEngine.weeklyTarget(projectID: id, weekStart: next, plan: plan, calendar: c))
+        XCTAssertEqual(plan.weeklyProjectRevisions.count, 3)
+        XCTAssertNil(GoalEngine.weeklyTarget(projectID: id, weekStart: monday, plan: plan, calendar: c))
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: id, weekStart: next, plan: plan, calendar: c), 300)
+        XCTAssertThrowsError(try GoalEngine.setWeekly(&plan, projectID: id, minutes: 90, now: now, calendar: c, effectiveWeek: previous))
     }
     func testLegacyGoalHistoryBeginsOnImportDay() throws {
         let now = Date(), c = GoalEngine.calendar()

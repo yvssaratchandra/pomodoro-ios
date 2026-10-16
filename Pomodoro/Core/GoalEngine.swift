@@ -55,13 +55,15 @@ enum GoalEngine {
         plan.dailyRevisions.append(DailyGoalRevision(effectiveFrom: day, minutes: minutes))
     }
     static func weeklyEffectiveDate(projectID: UUID, plan: GoalPlan, now: Date, calendar: Calendar = .current) -> Date {
-        let monday = week(containing: now, calendar: calendar).start
-        return plan.weeklyProjectRevisions.contains(where: { $0.projectID == projectID })
-            ? self.calendar(calendar).date(byAdding: .day, value: 7, to: monday)! : monday
+        week(containing: now, calendar: calendar).start
     }
-    static func setWeekly(_ plan: inout GoalPlan, projectID: UUID, minutes: Int?, now: Date, calendar: Calendar = .current) throws {
+    static func setWeekly(_ plan: inout GoalPlan, projectID: UUID, minutes: Int?, now: Date, calendar: Calendar = .current, effectiveWeek: Date? = nil) throws {
         guard minutes == nil || (1...10080).contains(minutes!) else { throw AppError.invalid("Weekly targets must be 1 to 10080 minutes.") }
-        let day = LocalDay(weeklyEffectiveDate(projectID: projectID, plan: plan, now: now, calendar: calendar), calendar: self.calendar(calendar))
+        let monday = week(containing: effectiveWeek ?? now, calendar: calendar).start
+        guard monday >= week(containing: now, calendar: calendar).start else {
+            throw AppError.invalid("Choose this week or a future week.")
+        }
+        let day = LocalDay(monday, calendar: self.calendar(calendar))
         plan.weeklyProjectRevisions.removeAll { $0.projectID == projectID && $0.effectiveFrom == day }
         plan.weeklyProjectRevisions.append(ProjectWeeklyGoalRevision(projectID: projectID, effectiveFrom: day, minutes: minutes))
     }

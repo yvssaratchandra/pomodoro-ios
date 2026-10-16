@@ -196,10 +196,22 @@ struct PendingDeletion {
         }
     }
 
-    func saveWeeklyGoal(projectID: UUID, minutes: Int?) -> Bool {
+    func saveWeeklyGoal(projectID: UUID, minutes: Int?, effectiveWeek: Date? = nil) -> Bool {
         update { state in
             guard state.projects.contains(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
-            try GoalEngine.setWeekly(&state.goalPlan, projectID: projectID, minutes: minutes, now: now())
+            try GoalEngine.setWeekly(&state.goalPlan, projectID: projectID, minutes: minutes, now: now(), effectiveWeek: effectiveWeek)
+        }
+    }
+
+    func cancelScheduledWeeklyGoal(projectID: UUID, effectiveWeek: Date) -> Bool {
+        update { state in
+            let c = GoalEngine.calendar()
+            let monday = GoalEngine.week(containing: effectiveWeek, calendar: c).start
+            guard monday > GoalEngine.week(containing: now(), calendar: c).start else {
+                throw AppError.invalid("Only future targets can be cancelled.")
+            }
+            let day = LocalDay(monday, calendar: c)
+            state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == projectID && $0.effectiveFrom == day }
         }
     }
 
