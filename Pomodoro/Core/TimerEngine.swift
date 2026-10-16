@@ -73,5 +73,6 @@ enum TimerEngine {
         }
         if state.breakOffer?.projectID == source { state.breakOffer?.projectID = destination }
         state.projects.removeAll { $0.id == source }
+        state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == source }
     }
 }

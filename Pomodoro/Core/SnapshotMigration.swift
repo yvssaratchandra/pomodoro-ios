@@ -48,6 +48,14 @@ enum SnapshotMigration {
                 }
                 current = 3
                 document["schemaVersion"] = current
+            case 3:
+                guard let settings = document["settings"] as? [String: Any], let minutes = settings["dailyGoalMinutes"] as? Int else {
+                    throw AppError.invalid("Invalid daily goal.")
+                }
+                let day = LocalDay(now, calendar: GoalEngine.calendar(calendar))
+                document["goalPlan"] = ["dailyRevisions": [["effectiveFrom": ["year": day.year, "month": day.month, "day": day.day], "minutes": Array(repeating: minutes, count: 7)]], "weeklyProjectRevisions": []]
+                current = 4
+                document["schemaVersion"] = current
             default:
                 throw AppError.invalid("This data version is not supported.")
             }

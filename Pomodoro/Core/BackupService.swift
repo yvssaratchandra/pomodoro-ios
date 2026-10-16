@@ -40,6 +40,7 @@ enum BackupService {
               (1...12).contains(settings.longBreakInterval),
               (0...11).contains(state.completedInCycle) else { throw AppError.invalid("Invalid timer settings.") }
         let projectIDs = Set(state.projects.map(\.id))
+        try GoalEngine.validate(state.goalPlan, projectIDs: projectIDs)
         guard projectIDs.count == state.projects.count,
               Set(state.sessions.map(\.id)).count == state.sessions.count else {
             throw AppError.invalid("Duplicate identifiers in data.")

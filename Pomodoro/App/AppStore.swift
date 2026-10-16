@@ -153,6 +153,17 @@ struct PendingSessionDeletion {
         }
     }
 
+    func saveDailyGoals(_ minutes: [Int]) -> Bool {
+        update { try GoalEngine.setDaily(&$0.goalPlan, minutes: minutes, now: now()) }
+    }
+
+    func saveWeeklyGoal(projectID: UUID, minutes: Int?) -> Bool {
+        update { state in
+            guard state.projects.contains(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
+            try GoalEngine.setWeekly(&state.goalPlan, projectID: projectID, minutes: minutes, now: now())
+        }
+    }
+
     func startBreak() {
         if update({ try TimerEngine.startBreak(&$0, now: now()) }) { scheduleNotification() }
     }
