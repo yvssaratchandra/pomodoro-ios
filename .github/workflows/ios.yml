@@ -1,0 +1,76 @@
+name: iOS build and tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record toolchain
+        run: |
+          mkdir -p build
+          xcodebuild -version | tee build/toolchain.log
+          xcodebuild -showsdks | tee -a build/toolchain.log
+          xcodebuild -list -project Pomodoro.xcodeproj | tee -a build/toolchain.log
+      - name: Test portable core
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee build/core-tests.log
+      - name: Select and boot iPhone simulator
+        run: |
+          SIMULATOR_ID=$(python3 Scripts/select_simulator.py)
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+      - name: Build and test on simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Pomodoro.xcodeproj -scheme Pomodoro \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/Tests.xcresult \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/simulator.log
+      - name: Build Release for iOS
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Pomodoro.xcodeproj -scheme Pomodoro \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build/Release \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/release.log
+      - name: Package simulator app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            build/DerivedData/Build/Products/Debug-iphonesimulator/Pomodoro.app \
+            build/Pomodoro-Simulator.zip
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pomodoro-Simulator
+          path: build/Pomodoro-Simulator.zip
+          retention-days: 14
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            build/*.log
+            build/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,75 @@
+import Foundation
+
+enum BackupService {
+    static func encode(_ state: AppSnapshot, forBackup: Bool = true) throws -> Data {
+        if forBackup && state.activeTimer != nil { throw AppError.invalid("End the timer before exporting a backup.") }
+        try validate(state)
+        let encoder = JSONEncoder()
+        // Foundation reference-date seconds preserve subsecond elapsed work exactly.
+        encoder.dateEncodingStrategy = .deferredToDate
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(state)
+    }
+
+    static func decode(_ data: Data, forBackup: Bool = true) throws -> AppSnapshot {
+        guard data.count <= 50_000_000 else { throw AppError.invalid("The backup exceeds the 50 MB limit.") }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .deferredToDate
+        let state = try decoder.decode(AppSnapshot.self, from: data)
+        try validate(state)
+        if forBackup && state.activeTimer != nil { throw AppError.invalid("Backups cannot contain a running timer.") }
+        return state
+    }
+
+    static func validate(_ state: AppSnapshot) throws {
+        guard state.schemaVersion == 1 else { throw AppError.invalid("This data version is not supported.") }
+        let settings = state.settings
+        guard (1...1440).contains(settings.dailyGoalMinutes),
+              (10...60).contains(settings.defaultFocusMinutes),
+              (1...60).contains(settings.defaultShortBreakMinutes),
+              (1...60).contains(settings.defaultLongBreakMinutes),
+              (1...12).contains(settings.longBreakInterval),
+              (0...11).contains(state.completedInCycle) else { throw AppError.invalid("Invalid timer settings.") }
+        let projectIDs = Set(state.projects.map(\.id))
+        guard projectIDs.count == state.projects.count,
+              Set(state.sessions.map(\.id)).count == state.sessions.count else {
+            throw AppError.invalid("Duplicate identifiers in data.")
+        }
+        for project in state.projects {
+            guard !project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  project.name.count <= 100, project.createdAt.timeIntervalSince1970.isFinite,
+                  (10...60).contains(project.focusMinutes),
+                  (1...60).contains(project.shortBreakMinutes),
+                  (1...60).contains(project.longBreakMinutes) else { throw AppError.invalid("Invalid project details.") }
+        }
+        for session in state.sessions {
+            guard projectIDs.contains(session.projectID),
+                  session.startedAt.timeIntervalSince1970.isFinite, session.endedAt.timeIntervalSince1970.isFinite,
+                  (600...3600).contains(session.plannedSeconds), session.plannedSeconds % 60 == 0,
+                  session.endedAt >= session.startedAt, session.duration <= Double(session.plannedSeconds),
+                  session.outcome != .completed || session.duration == Double(session.plannedSeconds) else {
+                throw AppError.invalid("Invalid focus session.")
+            }
+        }
+        if let timer = state.activeTimer {
+            let range = timer.kind == .focus ? 600...3600 : 60...3600
+            guard projectIDs.contains(timer.projectID), range.contains(timer.plannedSeconds),
+                  timer.plannedSeconds % 60 == 0, timer.startedAt.timeIntervalSince1970.isFinite,
+                  (1...12).contains(timer.longBreakInterval),
+                  !state.sessions.contains(where: { $0.id == timer.id }), state.breakOffer == nil else {
+                throw AppError.invalid("Invalid active timer.")
+            }
+            if timer.kind == .focus {
+                guard (1...60).contains(timer.shortBreakMinutes), (1...60).contains(timer.longBreakMinutes),
+                      state.projects.first(where: { $0.id == timer.projectID })?.status == .ongoing else {
+                    throw AppError.invalid("Invalid active focus session.")
+                }
+            }
+        }
+        if let offer = state.breakOffer {
+            guard projectIDs.contains(offer.projectID), offer.kind != .focus, (1...60).contains(offer.minutes) else {
+                throw AppError.invalid("Invalid pending break.")
+            }
+        }
+    }
+}

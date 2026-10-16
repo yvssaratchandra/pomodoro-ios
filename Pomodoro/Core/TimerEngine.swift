@@ -1,0 +1,63 @@
+import Foundation
+
+enum TimerEngine {
+    static func startFocus(_ state: inout AppSnapshot, projectID: UUID, minutes: Int, now: Date) throws {
+        guard state.activeTimer == nil else { throw AppError.invalid("End the current timer first.") }
+        guard (10...60).contains(minutes),
+              let project = state.projects.first(where: { $0.id == projectID }), project.status == .ongoing else {
+            throw AppError.invalid("Choose an ongoing project and a focus duration from 10 to 60 minutes.")
+        }
+        state.breakOffer = nil
+        state.activeTimer = ActiveTimer(projectID: projectID, kind: .focus, startedAt: now,
+            plannedSeconds: minutes * 60, shortBreakMinutes: project.shortBreakMinutes,
+            longBreakMinutes: project.longBreakMinutes, longBreakInterval: state.settings.longBreakInterval)
+    }
+
+    static func startBreak(_ state: inout AppSnapshot, now: Date) throws {
+        guard state.activeTimer == nil, let offer = state.breakOffer else {
+            throw AppError.invalid("No break is ready to start.")
+        }
+        state.activeTimer = ActiveTimer(projectID: offer.projectID, kind: offer.kind, startedAt: now,
+            plannedSeconds: offer.minutes * 60, shortBreakMinutes: 0, longBreakMinutes: 0,
+            longBreakInterval: state.settings.longBreakInterval)
+        state.breakOffer = nil
+    }
+
+    @discardableResult
+    static func finish(_ state: inout AppSnapshot, now: Date, force: Bool = false) -> Bool {
+        guard let timer = state.activeTimer, force || now >= timer.deadline else { return false }
+        state.activeTimer = nil
+        guard timer.kind == .focus else { return true }
+        let completed = now >= timer.deadline
+        let end = min(timer.deadline, max(timer.startedAt, now))
+        if !state.sessions.contains(where: { $0.id == timer.id }) {
+            state.sessions.append(FocusSession(id: timer.id, projectID: timer.projectID,
+                startedAt: timer.startedAt, endedAt: end, plannedSeconds: timer.plannedSeconds,
+                outcome: completed ? .completed : .interrupted))
+        }
+        if completed {
+            state.completedInCycle += 1
+            let isLong = state.completedInCycle >= timer.longBreakInterval
+            if isLong { state.completedInCycle = 0 }
+            state.breakOffer = BreakOffer(projectID: timer.projectID, kind: isLong ? .longBreak : .shortBreak,
+                minutes: isLong ? timer.longBreakMinutes : timer.shortBreakMinutes)
+        }
+        return true
+    }
+
+    static func merge(_ state: inout AppSnapshot, source: UUID, destination: UUID) throws {
+        guard source != destination,
+              state.projects.contains(where: { $0.id == source }),
+              state.projects.contains(where: { $0.id == destination }) else {
+            throw AppError.invalid("Select a different existing destination project.")
+        }
+        guard state.activeTimer?.projectID != source, state.activeTimer?.projectID != destination else {
+            throw AppError.invalid("End the affected project's timer before merging.")
+        }
+        for index in state.sessions.indices where state.sessions[index].projectID == source {
+            state.sessions[index].projectID = destination
+        }
+        if state.breakOffer?.projectID == source { state.breakOffer?.projectID = destination }
+        state.projects.removeAll { $0.id == source }
+    }
+}

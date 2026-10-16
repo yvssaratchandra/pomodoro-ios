@@ -1,0 +1,56 @@
+import SwiftUI
+
+struct StatsView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        NavigationStack {
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                List {
+                    Section("Today · \(timeline.date.formatted(date: .abbreviated, time: .omitted))") {
+                        GoalProgress(state: store.state, now: timeline.date)
+                    }
+                    Section("Focus sessions") {
+                        if let active = store.state.activeTimer, active.kind == .focus {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(store.projectName(active.projectID)).font(.headline)
+                                Text("\(active.startedAt.formatted(date: .omitted, time: .shortened)) · \(DurationText.work(active.elapsed(at: timeline.date)))")
+                                Label("In progress", systemImage: "timer").foregroundStyle(.secondary)
+                            }.accessibilityElement(children: .combine)
+                        }
+                        let sessions = Statistics.sessionsToday(store.state, now: timeline.date)
+                        ForEach(sessions) { session in
+                            SessionRow(session: session, name: store.projectName(session.projectID),
+                                day: Statistics.today(timeline.date))
+                        }
+                        if sessions.isEmpty && store.state.activeTimer?.kind != .focus {
+                            ContentUnavailableView("No Focus Yet", systemImage: "timer",
+                                description: Text("Start a session in Focus. Completed and interrupted sessions will appear here."))
+                        }
+                    }
+                }
+            }.navigationTitle("Stats")
+        }
+    }
+}
+
+struct SessionRow: View {
+    let session: FocusSession
+    let name: String
+    var day: DateInterval? = nil
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(name).font(.headline)
+            Text("\(session.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(DurationText.work(session.duration))")
+            Label(session.outcome == .completed ? "Completed" : "Interrupted",
+                  systemImage: session.outcome == .completed ? "checkmark.circle" : "stop.circle")
+                .foregroundStyle(.secondary)
+            if let day, session.startedAt < day.start || session.endedAt > day.end {
+                Text("Today: \(DurationText.work(Statistics.overlap(start: session.startedAt, end: session.endedAt, interval: day)))")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("session.\(session.outcome.rawValue)")
+    }
+}

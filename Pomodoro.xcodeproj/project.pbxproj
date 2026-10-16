@@ -1,0 +1,501 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = "1";
+	"classes" = {
+	};
+	"objectVersion" = "56";
+	"objects" = {
+		"FC17F9EC34D43BE6248A372C" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/App/AppStore.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"E0876EF3B46C44DF1F6EC388" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "FC17F9EC34D43BE6248A372C";
+		};
+		"BE35C8A650857B9D7EE881E1" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/App/PomodoroApp.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"4B5CE61640CF3879A4DDEE0F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BE35C8A650857B9D7EE881E1";
+		};
+		"BD95B1B587E0122B24C3E850" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Core/BackupService.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"C5FD709E081002190FC937BA" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BD95B1B587E0122B24C3E850";
+		};
+		"BFAD118E8CD2CD16214D3BD9" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Core/Models.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"A52FA65FA6A2D7156F2BC244" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "BFAD118E8CD2CD16214D3BD9";
+		};
+		"558EFC44131EF88372BBF1E0" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Core/Statistics.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"2A8E464E76AA3DE22ED23058" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "558EFC44131EF88372BBF1E0";
+		};
+		"8EB754B56BA01A0390C08188" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Core/TimerEngine.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"D631E1F92BD109CC82B95BA1" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8EB754B56BA01A0390C08188";
+		};
+		"EF50D9ADA62833CE6303D40D" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Views/FocusView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"95F6509F354C29CAD47267D3" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "EF50D9ADA62833CE6303D40D";
+		};
+		"42D5D9F0158B406B0FDE94EF" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Views/ProjectsView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"383ADAAC2FE8A48B53A4DDF0" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "42D5D9F0158B406B0FDE94EF";
+		};
+		"8A861549CA64D140231760A4" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Views/SettingsView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"4F89415ED8C716836EBA6CE4" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8A861549CA64D140231760A4";
+		};
+		"3CC7258986B262E63B7B4363" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Pomodoro/Views/StatsView.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"74DE8BEE7F86FEFEA9744645" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3CC7258986B262E63B7B4363";
+		};
+		"3685E330EC5277A9DD5661C6" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "folder.assetcatalog";
+			"path" = "Pomodoro/Assets.xcassets";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"D8E0ADF371274575CA215419" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3685E330EC5277A9DD5661C6";
+		};
+		"38C8218D18EA0A77A2FF4401" = {
+			"isa" = "PBXGroup";
+			"children" = ("FC17F9EC34D43BE6248A372C", "BE35C8A650857B9D7EE881E1", "BD95B1B587E0122B24C3E850", "BFAD118E8CD2CD16214D3BD9", "558EFC44131EF88372BBF1E0", "8EB754B56BA01A0390C08188", "EF50D9ADA62833CE6303D40D", "42D5D9F0158B406B0FDE94EF", "8A861549CA64D140231760A4", "3CC7258986B262E63B7B4363", "3685E330EC5277A9DD5661C6");
+			"name" = "Pomodoro";
+			"sourceTree" = "<group>";
+		};
+		"5D3A3AC4FB6B4ADF9497A54D" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = "0";
+			"path" = "Pomodoro.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"694C1A3701C45DC00B27CDF1" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("E0876EF3B46C44DF1F6EC388", "4B5CE61640CF3879A4DDEE0F", "C5FD709E081002190FC937BA", "A52FA65FA6A2D7156F2BC244", "2A8E464E76AA3DE22ED23058", "D631E1F92BD109CC82B95BA1", "95F6509F354C29CAD47267D3", "383ADAAC2FE8A48B53A4DDF0", "4F89415ED8C716836EBA6CE4", "74DE8BEE7F86FEFEA9744645");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"0409FF827B8F2663EE3D7904" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"22C38D03C5F5E9B8E5CE0B12" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("D8E0ADF371274575CA215419");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"A384BE9671B02BB25FB0E7AD" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.Pomodoro";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"MARKETING_VERSION" = "1.0";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Pomodoro";
+				"INFOPLIST_KEY_LSApplicationCategoryType" = "public.app-category.productivity";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
+				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			};
+			"name" = "Debug";
+		};
+		"EE81532D9D26D0A8F1B5B47B" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.Pomodoro";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"MARKETING_VERSION" = "1.0";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
+				"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME" = "AccentColor";
+				"INFOPLIST_KEY_CFBundleDisplayName" = "Pomodoro";
+				"INFOPLIST_KEY_LSApplicationCategoryType" = "public.app-category.productivity";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation" = "YES";
+				"INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			};
+			"name" = "Release";
+		};
+		"4AD9E28E25C689C42AAB7341" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("A384BE9671B02BB25FB0E7AD", "EE81532D9D26D0A8F1B5B47B");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"4586E916B193A7968981BF2C" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "4AD9E28E25C689C42AAB7341";
+			"buildPhases" = ("694C1A3701C45DC00B27CDF1", "0409FF827B8F2663EE3D7904", "22C38D03C5F5E9B8E5CE0B12");
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "Pomodoro";
+			"productName" = "Pomodoro";
+			"productReference" = "5D3A3AC4FB6B4ADF9497A54D";
+			"productType" = "com.apple.product-type.application";
+		};
+		"8D99BA08499DBDB078310CDD" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/App/AppStoreTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"7F5D3FAA56200E21A5E5A1A7" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "8D99BA08499DBDB078310CDD";
+		};
+		"85749C24D89FF2844C02B807" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/Core/PomodoroCoreTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"43754F572F24DABC9FE76989" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "85749C24D89FF2844C02B807";
+		};
+		"8D306AAA136C78EEED9F78C5" = {
+			"isa" = "PBXGroup";
+			"children" = ("8D99BA08499DBDB078310CDD", "85749C24D89FF2844C02B807");
+			"name" = "PomodoroTests";
+			"sourceTree" = "<group>";
+		};
+		"7026771CF4C5E1B3B641EE70" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"includeInIndex" = "0";
+			"path" = "PomodoroTests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"434EF8C308CF313683AB8CFF" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("7F5D3FAA56200E21A5E5A1A7", "43754F572F24DABC9FE76989");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"EDEDD6EEDF5149D9690B24A5" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"AA3E44DFE3CE5F68AE9D4E03" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"CDDC3284591349C6CB58B0E8" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+			"proxyType" = "1";
+			"remoteGlobalIDString" = "4586E916B193A7968981BF2C";
+			"remoteInfo" = "Pomodoro";
+		};
+		"AA4D108D01737669050FB49D" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "4586E916B193A7968981BF2C";
+			"targetProxy" = "CDDC3284591349C6CB58B0E8";
+		};
+		"1DC9700DDC7E5F570FEE9F71" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.PomodoroTests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"BUNDLE_LOADER" = "$(TEST_HOST)";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Pomodoro.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Pomodoro";
+			};
+			"name" = "Debug";
+		};
+		"4DA618F9A84443E42837E79A" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.PomodoroTests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"BUNDLE_LOADER" = "$(TEST_HOST)";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/Pomodoro.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Pomodoro";
+			};
+			"name" = "Release";
+		};
+		"618FDCAAF9CAF620E9D9991A" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("1DC9700DDC7E5F570FEE9F71", "4DA618F9A84443E42837E79A");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"5D07474910BA7B05D1E6BD31" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "618FDCAAF9CAF620E9D9991A";
+			"buildPhases" = ("434EF8C308CF313683AB8CFF", "EDEDD6EEDF5149D9690B24A5", "AA3E44DFE3CE5F68AE9D4E03");
+			"buildRules" = ();
+			"dependencies" = ("AA4D108D01737669050FB49D");
+			"name" = "PomodoroTests";
+			"productName" = "PomodoroTests";
+			"productReference" = "7026771CF4C5E1B3B641EE70";
+			"productType" = "com.apple.product-type.bundle.unit-test";
+		};
+		"12F017B6E660163D7C1ECF73" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/UI/PomodoroUITests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"3AE721BA7B14813413B4FE79" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "12F017B6E660163D7C1ECF73";
+		};
+		"75650B814A765D118CA11901" = {
+			"isa" = "PBXGroup";
+			"children" = ("12F017B6E660163D7C1ECF73");
+			"name" = "PomodoroUITests";
+			"sourceTree" = "<group>";
+		};
+		"B1D89115AE2D8AA033C8FAC9" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"includeInIndex" = "0";
+			"path" = "PomodoroUITests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"89A9BAAAA92D550CEFDF472B" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("3AE721BA7B14813413B4FE79");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"A25689B98A8CB9E805CF2ED1" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"C6467F1A51727D559E096E1D" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"235BBB651B3C067B788CBAC2" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+			"proxyType" = "1";
+			"remoteGlobalIDString" = "4586E916B193A7968981BF2C";
+			"remoteInfo" = "Pomodoro";
+		};
+		"9C21CC5956BCAE8B8A449177" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "4586E916B193A7968981BF2C";
+			"targetProxy" = "235BBB651B3C067B788CBAC2";
+		};
+		"F69D00E750A48BEB73CB78FD" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.PomodoroUITests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"TEST_TARGET_NAME" = "Pomodoro";
+			};
+			"name" = "Debug";
+		};
+		"CCE45B2F63B800C26F503EAC" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.PomodoroUITests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"TEST_TARGET_NAME" = "Pomodoro";
+			};
+			"name" = "Release";
+		};
+		"EF3D2B836FFCBAD44E63A54F" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("F69D00E750A48BEB73CB78FD", "CCE45B2F63B800C26F503EAC");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"638406839E0863AAF875D175" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "EF3D2B836FFCBAD44E63A54F";
+			"buildPhases" = ("89A9BAAAA92D550CEFDF472B", "A25689B98A8CB9E805CF2ED1", "C6467F1A51727D559E096E1D");
+			"buildRules" = ();
+			"dependencies" = ("9C21CC5956BCAE8B8A449177");
+			"name" = "PomodoroUITests";
+			"productName" = "PomodoroUITests";
+			"productReference" = "B1D89115AE2D8AA033C8FAC9";
+			"productType" = "com.apple.product-type.bundle.ui-testing";
+		};
+		"FBDC4F23F93125BBEEAE800C" = {
+			"isa" = "PBXGroup";
+			"children" = ("5D3A3AC4FB6B4ADF9497A54D", "7026771CF4C5E1B3B641EE70", "B1D89115AE2D8AA033C8FAC9");
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"B28B7AF69320201D1CF206EB" = {
+			"isa" = "PBXGroup";
+			"children" = ("38C8218D18EA0A77A2FF4401", "8D306AAA136C78EEED9F78C5", "75650B814A765D118CA11901", "FBDC4F23F93125BBEEAE800C");
+			"sourceTree" = "<group>";
+		};
+		"89E1FD6268CC0F221A2BE178" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"SDKROOT" = "iphoneos";
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"SWIFT_STRICT_CONCURRENCY" = "targeted";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf";
+				"ENABLE_TESTABILITY" = "YES";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+				"GCC_PREPROCESSOR_DEFINITIONS" = ("DEBUG=1", "$(inherited)");
+			};
+			"name" = "Debug";
+		};
+		"E6DE6C99132752C914FEF632" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+				"SDKROOT" = "iphoneos";
+				"SWIFT_VERSION" = "5.0";
+				"CLANG_ENABLE_MODULES" = "YES";
+				"CLANG_ENABLE_OBJC_ARC" = "YES";
+				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
+				"SWIFT_STRICT_CONCURRENCY" = "targeted";
+				"ENABLE_USER_SCRIPT_SANDBOXING" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+				"DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym";
+			};
+			"name" = "Release";
+		};
+		"862894B703A6DEDF96A9DD6C" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("89E1FD6268CC0F221A2BE178", "E6DE6C99132752C914FEF632");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"98F54143AB4E86B28C3AFEE0" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"BuildIndependentTargetsInParallel" = "YES";
+				"LastUpgradeCheck" = "2600";
+			};
+			"buildConfigurationList" = "862894B703A6DEDF96A9DD6C";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = "0";
+			"knownRegions" = ("en", "Base");
+			"mainGroup" = "B28B7AF69320201D1CF206EB";
+			"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = ("4586E916B193A7968981BF2C", "5D07474910BA7B05D1E6BD31", "638406839E0863AAF875D175");
+		};
+	};
+	"rootObject" = "98F54143AB4E86B28C3AFEE0";
+}
