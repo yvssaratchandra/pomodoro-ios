@@ -8,6 +8,7 @@ struct FocusView: View {
     @State private var intentions: [UUID: String] = [:]
     @State private var intentionTimer: ActiveTimer?
     @State private var breadcrumbSession: FocusSession?
+    @State private var thoughtContext: ThoughtCaptureContext?
 
     private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID } }
     private var minutes: Int { selected?.preferredFocusMinutes ?? store.state.settings.defaultFocusMinutes }
@@ -18,6 +19,14 @@ struct FocusView: View {
                 VStack(spacing: 20) {
                     timer
                     sessionAction
+                    if let timer = store.state.activeTimer, timer.kind == .focus {
+                        Button("Capture thought", systemImage: "text.bubble") {
+                            thoughtContext = ThoughtCaptureContext(projectID: timer.projectID, originSessionID: timer.id)
+                        }.accessibilityIdentifier("focus.captureThought")
+                    }
+                    if let projectID = store.state.breakOffer?.projectID ?? store.state.activeTimer?.projectID {
+                        Button("Review thoughts") { navigation.showThoughts(projectID: projectID) }
+                    }
                     if let id = store.lastFinishedSessionID, let session = store.state.sessions.first(where: { $0.id == id }), store.state.activeTimer?.kind != .focus {
                         Button("Next time…") { breadcrumbSession = session }
                     }
@@ -51,6 +60,7 @@ struct FocusView: View {
             }
             .sheet(item: $intentionTimer) { timer in IntentionEditor(store: store, sessionID: timer.id, active: true) }
             .sheet(item: $breadcrumbSession) { session in BreadcrumbEditor(store: store, sessionID: session.id, promote: true) }
+            .sheet(item: $thoughtContext) { context in ThoughtEditor(store: store, context: context) }
             .alert("End this focus session?", isPresented: $confirmingEnd) {
                 Button("End and Save Work") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {

@@ -69,9 +69,12 @@ struct RootView: View {
             StatsView(store: store).tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
             ProjectsView(store: store, navigation: navigation)
                 .tabItem { Label("Projects", systemImage: "folder") }.tag(AppNavigation.Tab.projects)
+            ThoughtsView(store: store, navigation: navigation)
+                .tabItem { Label("Thoughts", systemImage: "text.bubble") }.tag(AppNavigation.Tab.thoughts)
             SettingsView(store: store).tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
         }
         .onOpenURL { navigation.receive($0) }
+        .environment(navigation)
         .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
         .onChange(of: store.pendingSessionDeletion?.sessions.count) { _, count in
             if let count { UIAccessibility.post(notification: .announcement, argument: "\(count) sessions deleted. Undo available.") }

@@ -48,6 +48,7 @@ struct ProjectsView: View {
 struct ProjectDetail: View {
     @Bindable var store: AppStore
     let projectID: UUID
+    @Environment(AppNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
     @State private var merging = false
@@ -65,6 +66,7 @@ struct ProjectDetail: View {
                             LabeledContent("Short break", value: "\(project.shortBreakMinutes) min")
                             LabeledContent("Long break", value: "\(project.longBreakMinutes) min")
                             Button("Edit Project") { editing = true }
+                            Button("Review thoughts") { navigation.showThoughts(projectID: project.id) }
                             NavigationLink("Weekly goal") { WeeklyGoalEditor(store: store, projectID: project.id) }
                             if let target = GoalEngine.weeklyTarget(projectID: project.id, weekStart: Date(), plan: store.state.goalPlan) {
                                 LabeledContent("This week", value: "\(DurationText.work(Statistics.total(store.state, projectID: project.id, interval: GoalEngine.week(containing: Date()), now: Date()))) / \(DurationText.work(Double(target * 60)))")

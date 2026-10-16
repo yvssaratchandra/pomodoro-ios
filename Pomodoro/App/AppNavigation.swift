@@ -10,18 +10,26 @@ enum AppInstallation {
 }
 
 @MainActor @Observable final class AppNavigation {
-    enum Tab: Hashable { case focus, stats, projects, settings }
+    enum Tab: Hashable { case focus, stats, projects, thoughts, settings }
 
     var selectedTab: Tab = .focus
     var selectedProjectID: UUID?
     var showingProjectCreation = false
     var message: String?
+    var thoughtProjectID: UUID?
+    var thoughtFilter = 0
     private(set) var focusRequestID = UUID()
     private let router: AppURLRouter
     @ObservationIgnored private var store: AppStore?
     @ObservationIgnored private var pendingURLs: [URL] = []
 
     init(scheme: AppURLScheme) { router = AppURLRouter(scheme: scheme) }
+
+    func showThoughts(projectID: UUID?) {
+        thoughtProjectID = projectID
+        thoughtFilter = 0
+        selectedTab = .thoughts
+    }
 
     func connect(to store: AppStore) {
         self.store = store
