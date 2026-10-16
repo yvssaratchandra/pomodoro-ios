@@ -4,9 +4,9 @@ Target phone: iPhone 14 Pro, iOS 18.7.8. The intended container setup is SideSto
 
 | Check | Status |
 | --- | --- |
-| Container-compatible simulator compilation | Passed in the initial quick-start CI build |
-| Native app and embedded extension, unsigned simulator/device compilation | Passed before configurable widgets and Live Activities; current changes require a new CI run |
-| Current native integration and UI tests | Run by the checked-in CI workflow |
+| Container-compatible simulator compilation | Passed in CI with the feature set |
+| Native app and embedded extension, unsigned simulator/device compilation | Passed in unsigned CI builds with configurable widgets and Live Activities; latest integration checks run on each push |
+| Current native integration and UI tests | Run by the checked-in CI workflow; consult the exact commit result before installing |
 | Native signing, retained extension, and App Group access on phone | Not tested |
 | Home Screen widget start with idle/running/expired timer | Not tested on phone |
 | Live Activity with Lock Screen and Dynamic Island | Not tested on phone |

@@ -11,7 +11,7 @@ extension Statistics {
         let week = GoalEngine.week(containing: weekStart, calendar: calendar)
         let days = dailySummaries(state, interval: week, now: now, calendar: calendar)
         var provisional = false
-        if let timer = state.activeTimer, timer.kind == .focus, week.contains(now) {
+        if let timer = state.activeTimer, timer.kind == .focus, now >= week.start, now < week.end {
             let day = today(now, calendar: GoalEngine.calendar(calendar))
             var saved = state
             saved.activeTimer = nil

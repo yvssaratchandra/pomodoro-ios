@@ -19,10 +19,13 @@ struct DailyGoalsEditor: View {
                         Text(days[index]).font(.headline)
                         HStack {
                             Picker("Hours", selection: value(index, hours: true)) { ForEach(0...24, id: \.self) { Text("\($0) hr").tag($0) } }
+                                .accessibilityLabel("\(days[index]) hours")
                             Picker("Minutes", selection: value(index, hours: false)) { ForEach(0...59, id: \.self) { Text("\($0) min").tag($0) } }
                                 .disabled(draft[index] == 1440)
+                                .accessibilityLabel("\(days[index]) minutes")
                         }
                         if draft[index] == 0 { Text("Rest day").foregroundStyle(.secondary) }
+                        else { Button("Make rest day") { draft[index] = 0 }.accessibilityLabel("Make \(days[index]) a rest day") }
                     }
                 }
                 Button("Same every day") { draft = Array(repeating: draft[0], count: 7) }

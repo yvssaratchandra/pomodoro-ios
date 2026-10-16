@@ -166,7 +166,7 @@ struct SessionRow: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(session.outcome == .completed ? Color.green : Color.secondary)
             if let day, session.startedAt < day.start || session.endedAt > day.end {
-                Text("Today: \(DurationText.work(Statistics.overlap(start: session.startedAt, end: session.endedAt, interval: day)))")
+                Text("This day: \(DurationText.work(Statistics.overlap(start: session.startedAt, end: session.endedAt, interval: day)))")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }
