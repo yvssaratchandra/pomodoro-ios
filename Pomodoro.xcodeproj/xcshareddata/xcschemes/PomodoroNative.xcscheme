@@ -7,7 +7,7 @@
  </BuildAction>
  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
   <Testables>
-
+   <TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="E0195A3FB7F78C7483D4954D" BuildableName="PomodoroNativeTests.xctest" BlueprintName="PomodoroNativeTests" ReferencedContainer="container:Pomodoro.xcodeproj"/></TestableReference>
   </Testables>
  </TestAction>
  <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" debugServiceExtension="internal" allowLocationSimulation="YES">

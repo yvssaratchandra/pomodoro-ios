@@ -132,6 +132,19 @@ jobs:
             -derivedDataPath build/NativeRelease \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/native-release.log
           python3 Scripts/verify_native_bundle.py build/NativeRelease/Build/Products/Release-iphoneos/PomodoroNative.app
+      - name: Test native integration on simulator
+        run: |
+          set -o pipefail
+          SIMULATOR_ID=$(python3 Scripts/select_simulator.py)
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcodebuild test \
+            -project Pomodoro.xcodeproj -scheme PomodoroNative \
+            -configuration Debug -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath build/NativeSimulator \
+            -resultBundlePath build/NativeTests.xcresult \
+            -parallel-testing-enabled NO ARCHS=arm64 CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/native-tests.log
       - name: Package unsigned native IPA
         run: |
           mkdir -p build/NativeIPA/Payload
@@ -151,6 +164,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-build-diagnostics
-          path: build/native-*.log
+          path: |
+            build/native-*.log
+            build/NativeTests.xcresult
           if-no-files-found: warn
           retention-days: 14

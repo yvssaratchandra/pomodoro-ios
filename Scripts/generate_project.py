@@ -53,6 +53,7 @@ TARGETS = [
                          "Pomodoro/Core/Models.swift", "Pomodoro/Core/ExternalSurfaces.swift",
                          "Pomodoro/Core/WidgetSnapshotFile.swift", "Pomodoro/Core/LiveActivityProjection.swift"], "app-extension"),
     ("PomodoroTests", ["Tests/Core/*.swift", "Tests/App/*.swift"], "bundle.unit-test"),
+    ("PomodoroNativeTests", ["Tests/Native/*.swift"], "bundle.unit-test"),
     ("PomodoroUITests", ["Tests/UI/*.swift"], "bundle.ui-testing"),
 ]
 PRODUCT_EXTENSIONS = {name: "app" if kind == "application" else "appex" if kind == "app-extension" else "xctest"
@@ -133,9 +134,10 @@ for name, patterns, product_type in TARGETS:
                          "GENERATE_INFOPLIST_FILE": "NO", "INFOPLIST_FILE": "PomodoroWidgets/Info.plist",
                          "LD_RUNPATH_SEARCH_PATHS": ["$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"]})
     elif product_type.startswith("bundle."):
-        dependencies.append(dependency(name, "Pomodoro"))
-        if name == "PomodoroTests":
-            settings.update({"BUNDLE_LOADER": "$(TEST_HOST)", "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/Pomodoro.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Pomodoro"})
+        host = "PomodoroNative" if name == "PomodoroNativeTests" else "Pomodoro"
+        dependencies.append(dependency(name, host))
+        if name in ("PomodoroTests", "PomodoroNativeTests"):
+            settings.update({"BUNDLE_LOADER": "$(TEST_HOST)", "TEST_HOST": f"$(BUILT_PRODUCTS_DIR)/{host}.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/{host}"})
         else:
             settings["TEST_TARGET_NAME"] = "Pomodoro"
     targets.append(add(name + ".target", isa="PBXNativeTarget", buildConfigurationList=configurations(name, settings),
@@ -201,6 +203,6 @@ def scheme(name, test_targets):
 
 scheme_dir = project_dir / "xcshareddata" / "xcschemes"
 scheme_dir.mkdir(parents=True, exist_ok=True)
-for name, tests in [("Pomodoro", ["PomodoroTests", "PomodoroUITests"]), ("PomodoroNative", [])]:
+for name, tests in [("Pomodoro", ["PomodoroTests", "PomodoroUITests"]), ("PomodoroNative", ["PomodoroNativeTests"])]:
     (scheme_dir / f"{name}.xcscheme").write_text(scheme(name, tests))
 print(f"Generated project with {len(targets)} targets and {len(objects)} objects.")

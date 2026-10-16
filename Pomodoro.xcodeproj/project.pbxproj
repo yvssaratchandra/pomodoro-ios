@@ -881,6 +881,110 @@
 			"productReference" = "7026771CF4C5E1B3B641EE70";
 			"productType" = "com.apple.product-type.bundle.unit-test";
 		};
+		"580D3BD053E2B2D204537E8E" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/Native/NativeIntegrationTests.swift";
+			"sourceTree" = "SOURCE_ROOT";
+		};
+		"62CD6A168598C11935320837" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "580D3BD053E2B2D204537E8E";
+		};
+		"D75AB79EC72BF73FB4882A8F" = {
+			"isa" = "PBXGroup";
+			"children" = ("580D3BD053E2B2D204537E8E");
+			"name" = "PomodoroNativeTests";
+			"sourceTree" = "<group>";
+		};
+		"5F863EF9FC9A063CC92FADCE" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.cfbundle";
+			"includeInIndex" = "0";
+			"path" = "PomodoroNativeTests.xctest";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"5EFFA277570696D5403EA777" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ("62CD6A168598C11935320837");
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"77919C9AB706A8E5E1D12133" = {
+			"isa" = "PBXFrameworksBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"9514D44566997653A9269F2A" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = "2147483647";
+			"files" = ();
+			"runOnlyForDeploymentPostprocessing" = "0";
+		};
+		"AF68EF19E96CFFBA02F77B4C" = {
+			"isa" = "PBXContainerItemProxy";
+			"containerPortal" = "98F54143AB4E86B28C3AFEE0";
+			"proxyType" = "1";
+			"remoteGlobalIDString" = "83374E754C376F465A8E2F58";
+			"remoteInfo" = "PomodoroNative";
+		};
+		"0D1871D629C51F9A27B4368F" = {
+			"isa" = "PBXTargetDependency";
+			"target" = "83374E754C376F465A8E2F58";
+			"targetProxy" = "AF68EF19E96CFFBA02F77B4C";
+		};
+		"01419EC4CF297418EF102959" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.PomodoroNativeTests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"BUNDLE_LOADER" = "$(TEST_HOST)";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/PomodoroNative.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PomodoroNative";
+			};
+			"name" = "Debug";
+		};
+		"25473F7BD179E53DD4EB0217" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "$(TARGET_NAME)";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.example.PomodoroNativeTests";
+				"GENERATE_INFOPLIST_FILE" = "YES";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"TARGETED_DEVICE_FAMILY" = "1";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD" = "NO";
+				"LD_RUNPATH_SEARCH_PATHS" = ("$(inherited)", "@executable_path/Frameworks");
+				"BUNDLE_LOADER" = "$(TEST_HOST)";
+				"TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/PomodoroNative.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PomodoroNative";
+			};
+			"name" = "Release";
+		};
+		"E0D1C1EF243EB775FCE5B7F3" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("01419EC4CF297418EF102959", "25473F7BD179E53DD4EB0217");
+			"defaultConfigurationIsVisible" = "0";
+			"defaultConfigurationName" = "Release";
+		};
+		"E0195A3FB7F78C7483D4954D" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "E0D1C1EF243EB775FCE5B7F3";
+			"buildPhases" = ("5EFFA277570696D5403EA777", "77919C9AB706A8E5E1D12133", "9514D44566997653A9269F2A");
+			"buildRules" = ();
+			"dependencies" = ("0D1871D629C51F9A27B4368F");
+			"name" = "PomodoroNativeTests";
+			"productName" = "PomodoroNativeTests";
+			"productReference" = "5F863EF9FC9A063CC92FADCE";
+			"productType" = "com.apple.product-type.bundle.unit-test";
+		};
 		"12F017B6E660163D7C1ECF73" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.swift";
@@ -1021,13 +1125,13 @@
 		};
 		"FBDC4F23F93125BBEEAE800C" = {
 			"isa" = "PBXGroup";
-			"children" = ("5D3A3AC4FB6B4ADF9497A54D", "323A46D969570139F222EBD9", "6D636BF31D27C60AC65696C9", "7026771CF4C5E1B3B641EE70", "B1D89115AE2D8AA033C8FAC9");
+			"children" = ("5D3A3AC4FB6B4ADF9497A54D", "323A46D969570139F222EBD9", "6D636BF31D27C60AC65696C9", "7026771CF4C5E1B3B641EE70", "5F863EF9FC9A063CC92FADCE", "B1D89115AE2D8AA033C8FAC9");
 			"name" = "Products";
 			"sourceTree" = "<group>";
 		};
 		"B28B7AF69320201D1CF206EB" = {
 			"isa" = "PBXGroup";
-			"children" = ("38C8218D18EA0A77A2FF4401", "B069DA80A68513AABEA6AB2D", "6B50D6E01165E97499DD6852", "8D306AAA136C78EEED9F78C5", "75650B814A765D118CA11901", "0652E436F42D75F5672A8BD9", "FBDC4F23F93125BBEEAE800C");
+			"children" = ("38C8218D18EA0A77A2FF4401", "B069DA80A68513AABEA6AB2D", "6B50D6E01165E97499DD6852", "8D306AAA136C78EEED9F78C5", "D75AB79EC72BF73FB4882A8F", "75650B814A765D118CA11901", "0652E436F42D75F5672A8BD9", "FBDC4F23F93125BBEEAE800C");
 			"sourceTree" = "<group>";
 		};
 		"89E1FD6268CC0F221A2BE178" = {
@@ -1092,7 +1196,7 @@
 			"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
 			"projectDirPath" = "";
 			"projectRoot" = "";
-			"targets" = ("4586E916B193A7968981BF2C", "83374E754C376F465A8E2F58", "1B5FCE5F6ECCA328FA3E66F8", "5D07474910BA7B05D1E6BD31", "638406839E0863AAF875D175");
+			"targets" = ("4586E916B193A7968981BF2C", "83374E754C376F465A8E2F58", "1B5FCE5F6ECCA328FA3E66F8", "5D07474910BA7B05D1E6BD31", "E0195A3FB7F78C7483D4954D", "638406839E0863AAF875D175");
 		};
 	};
 	"rootObject" = "98F54143AB4E86B28C3AFEE0";

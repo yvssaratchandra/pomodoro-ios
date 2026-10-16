@@ -30,7 +30,7 @@ class ProjectTests(unittest.TestCase):
 
     def test_target_products_and_dependencies(self):
         self.assertEqual(set(self.targets), {"Pomodoro", "PomodoroNative", "PomodoroWidgets",
-                                            "PomodoroTests", "PomodoroUITests"})
+                                            "PomodoroTests", "PomodoroNativeTests", "PomodoroUITests"})
         native = self.targets["PomodoroNative"]
         widget = self.targets["PomodoroWidgets"]
         self.assertEqual(widget["productType"], "com.apple.product-type.app-extension")
@@ -133,7 +133,7 @@ class ProjectTests(unittest.TestCase):
             self.assertEqual([item.get("BuildableName") for item in launches], [name + ".app"])
             tests = root.findall("TestAction/Testables/TestableReference/BuildableReference")
             self.assertEqual([item.get("BlueprintName") for item in tests],
-                             ["PomodoroTests", "PomodoroUITests"] if name == "Pomodoro" else [])
+                             ["PomodoroTests", "PomodoroUITests"] if name == "Pomodoro" else ["PomodoroNativeTests"])
 
     def test_regeneration_is_deterministic(self):
         paths = [ROOT / "Pomodoro.xcodeproj/project.pbxproj",
