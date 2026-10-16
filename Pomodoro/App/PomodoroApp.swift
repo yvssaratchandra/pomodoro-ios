@@ -35,7 +35,15 @@ extension View {
         var loadError: String?
         do {
             let testing = ProcessInfo.processInfo.arguments.contains("--ui-testing")
-            let config = ModelConfiguration(isStoredInMemoryOnly: testing, cloudKitDatabase: .none)
+            let config: ModelConfiguration
+            if testing, let identifier = ProcessInfo.processInfo.environment["POMODORO_TEST_STORE_ID"],
+               let id = UUID(uuidString: identifier) {
+                // A unique temporary store lets launch tests verify recovery across processes.
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("test-\(id.uuidString).store")
+                config = ModelConfiguration(url: url, cloudKitDatabase: .none)
+            } else {
+                config = ModelConfiguration(isStoredInMemoryOnly: testing, cloudKitDatabase: .none)
+            }
             let container = try ModelContainer(for: AppDocument.self, configurations: config)
             loadedStore = try AppStore(container: container)
         } catch {

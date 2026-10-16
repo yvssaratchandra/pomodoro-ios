@@ -1,10 +1,11 @@
 import XCTest
 
 final class PomodoroUITests: XCTestCase {
-    func testColdURLProjectCreationAndWarmTimerNavigation() {
+    func testURLProjectCreationAndTimerRecoveryAcrossRelaunch() {
         continueAfterFailure = false
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        app.launchEnvironment["POMODORO_TEST_STORE_ID"] = UUID().uuidString
         app.open(URL(string: "pomodoro://projects/new")!)
         let name = app.textFields["project.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
@@ -16,6 +17,7 @@ final class PomodoroUITests: XCTestCase {
         start.tap()
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Stats"].tap()
+        // open(_:) relaunches the process, so this also exercises durable timer recovery.
         app.open(URL(string: "pomodoro://timer")!)
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.tabBars.buttons["Focus"].isSelected)

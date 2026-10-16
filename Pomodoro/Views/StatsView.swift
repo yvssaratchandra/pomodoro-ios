@@ -13,7 +13,6 @@ struct StatsView: View {
     @State private var projectID: UUID?
     @State private var selectedDay: Date?
     @State private var pendingDeletion: FocusSession?
-    @State private var confirmingDeletion = false
     private var period: FocusPeriod { range == .week ? .week : .month }
 
     var body: some View {
@@ -61,13 +60,16 @@ struct StatsView: View {
                         .appScreen().navigationTitle(selectedDay.formatted(date: .abbreviated, time: .omitted))
                 }
             }
-            .alert("Delete this session?", isPresented: $confirmingDeletion) {
+            .alert("Delete this session?", isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ), presenting: pendingDeletion) { session in
                 Button("Delete Session", role: .destructive) {
-                    if let pendingDeletion { store.deleteSession(pendingDeletion.id) }
+                    store.deleteSession(session.id)
                     pendingDeletion = nil
                 }
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
-            } message: { Text("This removes the session's time from all statistics. Undo is available briefly after deletion.") }
+            } message: { _ in Text("This removes the session's time from all statistics. Undo is available briefly after deletion.") }
         }
     }
 
@@ -149,7 +151,7 @@ struct StatsView: View {
             .accessibilityAction(named: "Delete Session") { requestDeletion(session) }
         }
     }
-    private func requestDeletion(_ session: FocusSession) { pendingDeletion = session; confirmingDeletion = true }
+    private func requestDeletion(_ session: FocusSession) { pendingDeletion = session }
 }
 
 struct SessionRow: View {
