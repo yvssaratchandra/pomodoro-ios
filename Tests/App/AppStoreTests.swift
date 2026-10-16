@@ -400,21 +400,21 @@ import UserNotifications
         let store = try AppStore(persistence: persistence, uptime: { tick }, voiceOver: { false })
         persistence.failSave = true
         XCTAssertFalse(store.deleteSession(sessions[0].id))
-        XCTAssertNil(store.pendingSessionDeletion)
+        XCTAssertNil(store.pendingDeletion)
         persistence.failSave = false
         XCTAssertTrue(store.deleteSession(sessions[0].id))
         tick = 105
         XCTAssertTrue(store.deleteSession(sessions[1].id))
-        XCTAssertEqual(store.pendingSessionDeletion?.sessions.count, 2)
-        XCTAssertEqual(store.pendingSessionDeletion?.expiresAt, 115)
+        XCTAssertEqual(store.pendingDeletion?.sessions.count, 2)
+        XCTAssertEqual(store.pendingDeletion?.expiresAt, 115)
         persistence.failSave = true
-        XCTAssertFalse(store.undoSessionDeletion())
+        XCTAssertFalse(store.undoDeletion())
         XCTAssertTrue(store.state.sessions.isEmpty)
-        XCTAssertEqual(store.pendingSessionDeletion?.sessions.count, 2)
+        XCTAssertEqual(store.pendingDeletion?.sessions.count, 2)
         persistence.failSave = false
-        XCTAssertTrue(store.undoSessionDeletion())
+        XCTAssertTrue(store.undoDeletion())
         XCTAssertEqual(store.state.sessions, sessions)
-        XCTAssertNil(store.pendingSessionDeletion)
+        XCTAssertNil(store.pendingDeletion)
         XCTAssertEqual(try AppStore(persistence: persistence).state, store.state)
     }
 
@@ -428,14 +428,14 @@ import UserNotifications
         let store = try AppStore(persistence: persistence, uptime: { tick }, voiceOver: { true })
         XCTAssertTrue(store.deleteSession(session.id))
         tick = 29
-        store.expireSessionUndo()
-        XCTAssertNotNil(store.pendingSessionDeletion)
+        store.expireUndo()
+        XCTAssertNotNil(store.pendingDeletion)
         XCTAssertTrue(store.update { $0.sessions.append(session) })
-        XCTAssertFalse(store.undoSessionDeletion())
+        XCTAssertFalse(store.undoDeletion())
         XCTAssertEqual(store.state.sessions, [session])
         tick = 30
-        XCTAssertFalse(store.undoSessionDeletion())
-        XCTAssertNil(store.pendingSessionDeletion)
+        XCTAssertFalse(store.undoDeletion())
+        XCTAssertNil(store.pendingDeletion)
     }
 
     func testIntentionThoughtAndBreadcrumbPersistAcrossSessionDeletionAndUndo() throws {
@@ -457,7 +457,7 @@ import UserNotifications
         XCTAssertEqual(store.state.thoughts.first?.text, thought.text)
         XCTAssertNotNil(store.state.thoughts.first?.completedAt)
         XCTAssertEqual(store.state.projects.first?.breadcrumb?.text, "Continue with methods")
-        XCTAssertTrue(store.undoSessionDeletion())
+        XCTAssertTrue(store.undoDeletion())
         XCTAssertEqual(store.state.sessions.first?.intention, "Revise introduction")
         XCTAssertEqual(store.state.sessions.first?.nextStep, "Continue with methods")
         XCTAssertTrue(store.setThoughtCompleted(id: thought.id, completed: false))
@@ -466,6 +466,31 @@ import UserNotifications
         XCTAssertEqual(backup, store.state)
         XCTAssertTrue(store.restore(backup))
         XCTAssertNil(store.lastFinishedSessionID)
+    }
+
+    func testMixedDeletionUndoRestoresExactThoughtsAndSessionsAtomically() throws {
+        let project = Project(name: "Writing")
+        let date = Date()
+        let session = FocusSession(id: UUID(), projectID: project.id, startedAt: date, endedAt: date,
+                                   plannedSeconds: 600, outcome: .interrupted, intention: "Draft")
+        let thought = CapturedThought(projectID: project.id, originSessionID: session.id,
+                                      createdAt: date, text: "Find source", completedAt: date)
+        let original = AppSnapshot(projects: [project], sessions: [session], thoughts: [thought])
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(original))
+        let store = try AppStore(persistence: persistence)
+        XCTAssertTrue(store.deleteSession(session.id))
+        XCTAssertTrue(store.deleteThought(id: thought.id))
+        XCTAssertEqual(store.pendingDeletion?.count, 2)
+        XCTAssertEqual(store.pendingDeletion?.message, "2 items deleted")
+        persistence.failSave = true
+        XCTAssertFalse(store.undoDeletion())
+        XCTAssertTrue(store.state.sessions.isEmpty)
+        XCTAssertTrue(store.state.thoughts.isEmpty)
+        XCTAssertEqual(store.pendingDeletion?.count, 2)
+        persistence.failSave = false
+        XCTAssertTrue(store.undoDeletion())
+        XCTAssertEqual(store.state, original)
+        XCTAssertNil(store.pendingDeletion)
     }
 
 }

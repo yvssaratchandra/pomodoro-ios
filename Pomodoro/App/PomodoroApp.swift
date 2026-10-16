@@ -73,19 +73,23 @@ struct RootView: View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.selectedTab) {
             FocusView(store: store, navigation: navigation)
+                .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Focus", systemImage: "timer") }.tag(AppNavigation.Tab.focus)
-            StatsView(store: store).tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
+            StatsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
             ProjectsView(store: store, navigation: navigation)
+                .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Projects", systemImage: "folder") }.tag(AppNavigation.Tab.projects)
             ThoughtsView(store: store, navigation: navigation)
+                .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Thoughts", systemImage: "text.bubble") }.tag(AppNavigation.Tab.thoughts)
-            SettingsView(store: store).tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
+            SettingsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
         }
         .onOpenURL { navigation.receive($0) }
         .environment(navigation)
-        .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
-        .onChange(of: store.pendingSessionDeletion?.sessions.count) { _, count in
-            if let count { UIAccessibility.post(notification: .announcement, argument: "\(count) sessions deleted. Undo available.") }
+        .onChange(of: store.pendingDeletion?.count) { _, count in
+            if count != nil, let pending = store.pendingDeletion {
+                UIAccessibility.post(notification: .announcement, argument: "\(pending.message). Undo available.")
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             store.reconcile()
@@ -108,7 +112,7 @@ struct RootView: View {
             if store.state.activeTimer != nil { store.scheduleNotification() }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                store.expireSessionUndo()
+                store.expireUndo()
                 if scenePhase == .active { store.reconcile() }
             }
         }

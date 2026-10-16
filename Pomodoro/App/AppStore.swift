@@ -3,8 +3,15 @@ import SwiftData
 import UserNotifications
 import Observation
 
-struct PendingSessionDeletion {
+struct PendingDeletion {
     var sessions: [FocusSession]
+    var thoughts: [CapturedThought] = []
+    var count: Int { sessions.count + thoughts.count }
+    var message: String {
+        if thoughts.isEmpty { return sessions.count == 1 ? "Session deleted" : "\(sessions.count) sessions deleted" }
+        if sessions.isEmpty { return thoughts.count == 1 ? "Thought deleted" : "\(thoughts.count) thoughts deleted" }
+        return "\(count) items deleted"
+    }
     var expiresAt: TimeInterval
 }
 
@@ -12,7 +19,7 @@ struct PendingSessionDeletion {
     private(set) var state: AppSnapshot
     var errorMessage: String?
     private(set) var lastFinishedSessionID: UUID?
-    private(set) var pendingSessionDeletion: PendingSessionDeletion?
+    private(set) var pendingDeletion: PendingDeletion?
     private let uptime: () -> TimeInterval
     private let voiceOver: () -> Bool
     private let persistence: any SnapshotPersistence
@@ -77,7 +84,7 @@ struct PendingSessionDeletion {
             let payload = try BackupService.encode(candidate, forBackup: false)
             try persistence.save(payload)
             if !Set(state.projects.map(\.id)).isSubset(of: Set(candidate.projects.map(\.id))) {
-                pendingSessionDeletion = nil
+                pendingDeletion = nil
             }
             state = candidate
             refreshExternalSurfaces()
@@ -166,10 +173,26 @@ struct PendingSessionDeletion {
     func setThoughtCompleted(id: UUID, completed: Bool) -> Bool {
         update { try ThoughtEngine.setCompleted(&$0, id: id, completed: completed, now: now()) }
     }
-    func deleteThought(id: UUID) -> Bool {
-        update { state in
-            guard state.thoughts.contains(where: { $0.id == id }) else { throw AppError.invalid("Thought unavailable.") }
-            state.thoughts.removeAll { $0.id == id }
+    @discardableResult func deleteThought(id: UUID) -> Bool {
+        deleteThoughts(ids: [id])
+    }
+
+    @discardableResult func deleteThoughts(ids: Set<UUID>) -> Bool {
+        expireUndo()
+        let removed = state.thoughts.filter { ids.contains($0.id) }
+        guard !removed.isEmpty, removed.count == ids.count else { return false }
+        guard update({ $0.thoughts.removeAll { ids.contains($0.id) } }) else { return false }
+        var pending = pendingDeletion ?? PendingDeletion(sessions: [], expiresAt: 0)
+        pending.thoughts.append(contentsOf: removed)
+        pending.expiresAt = uptime() + (voiceOver() ? 30 : 10)
+        pendingDeletion = pending
+        return true
+    }
+
+    @discardableResult func setThoughtsCompleted(ids: Set<UUID>, completed: Bool) -> Bool {
+        guard !ids.isEmpty else { return false }
+        return update { state in
+            for id in ids { try ThoughtEngine.setCompleted(&state, id: id, completed: completed, now: now()) }
         }
     }
 
@@ -231,33 +254,37 @@ struct PendingSessionDeletion {
 
     @discardableResult
     func deleteSession(_ sessionID: UUID) -> Bool {
-        expireSessionUndo()
+        expireUndo()
         guard let session = state.sessions.first(where: { $0.id == sessionID }) else { return false }
         guard update({ TimerEngine.deleteSession(&$0, sessionID: sessionID) }) else { return false }
-        var sessions = pendingSessionDeletion?.sessions ?? []
-        sessions.append(session)
-        pendingSessionDeletion = PendingSessionDeletion(sessions: sessions, expiresAt: uptime() + (voiceOver() ? 30 : 10))
+        var pending = pendingDeletion ?? PendingDeletion(sessions: [], expiresAt: 0)
+        pending.sessions.append(session)
+        pending.expiresAt = uptime() + (voiceOver() ? 30 : 10)
+        pendingDeletion = pending
         return true
     }
 
-    func expireSessionUndo() {
-        if let pendingSessionDeletion, uptime() >= pendingSessionDeletion.expiresAt { self.pendingSessionDeletion = nil }
+    func expireUndo() {
+        if let pendingDeletion, uptime() >= pendingDeletion.expiresAt { self.pendingDeletion = nil }
     }
 
-    func dismissSessionUndo() { pendingSessionDeletion = nil }
+    func dismissUndo() { pendingDeletion = nil }
 
-    @discardableResult func undoSessionDeletion() -> Bool {
-        expireSessionUndo()
-        guard let pending = pendingSessionDeletion else { return false }
+    @discardableResult func undoDeletion() -> Bool {
+        expireUndo()
+        guard let pending = pendingDeletion else { return false }
         let success = update { state in
             let existing = Set(state.sessions.map(\.id))
             let projects = Set(state.projects.map(\.id))
-            guard pending.sessions.allSatisfy({ !existing.contains($0.id) && projects.contains($0.projectID) }) else {
-                throw AppError.invalid("These sessions cannot be restored because their project or history has changed.")
+            let thoughtIDs = Set(state.thoughts.map(\.id))
+            guard pending.sessions.allSatisfy({ !existing.contains($0.id) && projects.contains($0.projectID) }),
+                  pending.thoughts.allSatisfy({ !thoughtIDs.contains($0.id) && projects.contains($0.projectID) }) else {
+                throw AppError.invalid("These items cannot be restored because their project or history has changed.")
             }
             state.sessions.append(contentsOf: pending.sessions)
+            state.thoughts.append(contentsOf: pending.thoughts)
         }
-        if success { pendingSessionDeletion = nil }
+        if success { pendingDeletion = nil }
         return success
     }
 
@@ -265,7 +292,7 @@ struct PendingSessionDeletion {
         guard state.activeTimer == nil else { errorMessage = "End the timer before restoring a backup."; return false }
         guard backup.activeTimer == nil else { errorMessage = "A backup cannot contain an active timer."; return false }
         if update({ $0 = backup }) {
-            pendingSessionDeletion = nil
+            pendingDeletion = nil
             lastFinishedSessionID = nil
             notifications.reset()
             return true

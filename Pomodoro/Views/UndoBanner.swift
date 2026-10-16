@@ -3,13 +3,13 @@ import SwiftUI
 struct UndoBanner: View {
     @Bindable var store: AppStore
     var body: some View {
-        if let pending = store.pendingSessionDeletion {
+        if let pending = store.pendingDeletion {
             HStack {
-                Text(pending.sessions.count == 1 ? "Session deleted" : "\(pending.sessions.count) sessions deleted")
+                Text(pending.message)
                     .font(.subheadline)
                 Spacer()
-                Button("Undo") { store.undoSessionDeletion() }.accessibilityIdentifier("session.undo")
-                Button("Dismiss", systemImage: "xmark") { store.dismissSessionUndo() }.labelStyle(.iconOnly)
+                Button("Undo") { store.undoDeletion() }.accessibilityIdentifier("session.undo")
+                Button("Dismiss", systemImage: "xmark") { store.dismissUndo() }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
             }
             .padding().background(.regularMaterial)
         }
