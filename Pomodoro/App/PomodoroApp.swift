@@ -17,9 +17,8 @@ private struct AppScreen: ViewModifier {
         content
             .scrollContentBackground(.hidden)
             .background(AppTheme.background.ignoresSafeArea())
-            .toolbarBackground(AppTheme.background, for: .navigationBar, .tabBar)
-            .toolbarBackground(colorScheme == .dark ? .visible : .automatic, for: .navigationBar, .tabBar)
-            .toolbarColorScheme(colorScheme, for: .navigationBar, .tabBar)
+            .toolbarBackground(AppTheme.background, for: .tabBar)
+            .toolbarBackground(colorScheme == .dark ? .visible : .automatic, for: .tabBar)
     }
 }
 
