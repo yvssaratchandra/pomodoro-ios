@@ -63,6 +63,12 @@ enum SnapshotMigration {
                 document["thoughts"] = []
                 current = 6
                 document["schemaVersion"] = current
+            case 6:
+                guard var settings = document["settings"] as? [String: Any] else { throw AppError.invalid("Invalid settings.") }
+                settings["consistencyTargetDays"] = 4
+                document["settings"] = settings
+                current = 7
+                document["schemaVersion"] = current
             default:
                 throw AppError.invalid("This data version is not supported.")
             }

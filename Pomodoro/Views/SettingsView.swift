@@ -41,6 +41,8 @@ struct SettingsView: View {
                     }
                     Section("Daily focus goal") {
                         NavigationLink("Weekday goals and rest days") { DailyGoalsEditor(store: store) }
+                        Stepper("Focused days per week: \(store.state.settings.consistencyTargetDays)", value: setting(\.consistencyTargetDays), in: 1...7)
+                        Text("A focused day has at least 10 minutes of actual focus, including interrupted sessions.").font(.footnote).foregroundStyle(.secondary)
                     }
                     Section {
                         MinutePicker(title: "Focus", value: setting(\.defaultFocusMinutes), range: 10...60)

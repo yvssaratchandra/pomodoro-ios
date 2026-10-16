@@ -21,6 +21,7 @@ struct StatsView: View {
             TimelineView(.periodic(from: .now, by: 60)) { timeline in
                 let now = timeline.date
                 List {
+                    Section("Consistency") { ConsistencyView(state: store.state, now: now) }
                     Section {
                         Picker("Session history", selection: $range) {
                             ForEach(HistoryRange.allCases) { Text($0.rawValue).tag($0) }

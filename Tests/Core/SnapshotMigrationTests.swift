@@ -33,6 +33,7 @@ final class SnapshotMigrationTests: XCTestCase {
         var settings = try XCTUnwrap(json["settings"] as? [String: Any])
         XCTAssertEqual(settings.removeValue(forKey: "showProjectNameOnLockScreen") as? Bool, false)
         XCTAssertEqual(settings.removeValue(forKey: "showIntentionOnLockScreen") as? Bool, false)
+        settings.removeValue(forKey: "consistencyTargetDays")
         settings.removeValue(forKey: "focusCompletionSound")
         settings.removeValue(forKey: "breakCompletionSound")
         json["settings"] = settings

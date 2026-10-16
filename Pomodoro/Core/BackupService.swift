@@ -33,6 +33,7 @@ enum BackupService {
     static func validate(_ state: AppSnapshot) throws {
         guard state.schemaVersion == currentSchemaVersion else { throw AppError.invalid("This data version is not supported.") }
         let settings = state.settings
+        guard (1...7).contains(settings.consistencyTargetDays) else { throw AppError.invalid("Choose 1 to 7 focused days per week.") }
         guard (1...1440).contains(settings.dailyGoalMinutes),
               (10...60).contains(settings.defaultFocusMinutes),
               (1...60).contains(settings.defaultShortBreakMinutes),

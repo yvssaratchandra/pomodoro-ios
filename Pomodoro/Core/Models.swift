@@ -85,10 +85,11 @@ struct Settings: Codable, Equatable {
     var appearance: Appearance = .system
     var showProjectNameOnLockScreen = false
     var showIntentionOnLockScreen = false
+    var consistencyTargetDays = 4
 }
 
 struct AppSnapshot: Codable, Equatable {
-    static let currentSchemaVersion = 6
+    static let currentSchemaVersion = 7
     var schemaVersion = AppSnapshot.currentSchemaVersion
     var projects: [Project] = []
     var sessions: [FocusSession] = []
