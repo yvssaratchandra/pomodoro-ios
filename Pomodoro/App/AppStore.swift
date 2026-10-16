@@ -105,10 +105,13 @@ import Observation
         }
     }
 
-    func startFocus(projectID: UUID, minutes: Int) {
+    @discardableResult
+    func startFocus(projectID: UUID, minutes: Int) -> Bool {
         if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, now: now()) }) {
             scheduleNotification()
+            return true
         }
+        return false
     }
 
     func startBreak() {

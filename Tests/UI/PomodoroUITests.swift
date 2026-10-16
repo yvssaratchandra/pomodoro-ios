@@ -1,6 +1,65 @@
 import XCTest
 
 final class PomodoroUITests: XCTestCase {
+    func testColdURLProjectCreationAndWarmTimerNavigation() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        app.open(URL(string: "pomodoro://projects/new")!)
+        let name = app.textFields["project.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("Linked project")
+        app.buttons["project.save"].tap()
+        let start = app.buttons["focus.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        start.tap()
+        XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Stats"].tap()
+        app.open(URL(string: "pomodoro://timer")!)
+        XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Focus"].isSelected)
+        app.open(URL(string: "pomodoro://focus?project=AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA&action=start")!)
+        XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Linked project"].firstMatch.exists)
+        app.buttons["timer.end"].tap()
+        app.alerts["End this focus session?"].buttons["Discard Session"].tap()
+        XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Stats"].tap()
+        XCTAssertTrue(app.staticTexts["No Focus Yet"].waitForExistence(timeout: 5))
+    }
+
+    func testQuickStartSetupShowsInvalidURLAndCreatesShortcutWithoutStarting() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        app.launch()
+        createProject("Writing", in: app)
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["settings.quickstart"].tap()
+        let toggle = app.switches["quickstart.useContainer"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if toggle.value as? String == "0" { toggle.tap() }
+        let field = app.textFields["quickstart.launchURL"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        let previous = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: previous.count))
+        field.typeText("https://example.com")
+        XCTAssertTrue(app.staticTexts["quickstart.invalidURL"].waitForExistence(timeout: 5))
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "https://example.com".count))
+        field.typeText("livecontainer2://livecontainer-launch?bundle-name=Pomodoro.app&container-folder-name=test")
+        app.swipeUp()
+        let copy = app.buttons["quickstart.copy"]
+        reveal(copy, in: app, scrollingUp: true)
+        XCTAssertTrue(copy.isEnabled)
+        copy.tap()
+        XCTAssertTrue(app.staticTexts["quickstart.copied"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Focus"].tap()
+        XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["timer.countdown"].exists)
+    }
+
     func testCreateFocusEndAndReviewInterruptedSession() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--disable-notifications"]

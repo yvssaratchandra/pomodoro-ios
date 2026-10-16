@@ -142,6 +142,16 @@ class ProjectTests(unittest.TestCase):
         runpy.run_path(str(ROOT / "Scripts/generate_project.py"))
         self.assertEqual(before, {path: path.read_bytes() for path in paths})
 
+    def test_each_app_registers_only_its_own_url_scheme(self):
+        for name, scheme in (("Pomodoro", "pomodoro"), ("PomodoroNative", "pomodoro-native")):
+            for settings in self.settings(name):
+                with (ROOT / settings["INFOPLIST_FILE"]).open("rb") as file:
+                    info = plistlib.load(file)
+                types = info["CFBundleURLTypes"]
+                self.assertEqual([value for entry in types for value in entry["CFBundleURLSchemes"]], [scheme])
+        with (ROOT / "PomodoroWidgets/Info.plist").open("rb") as file:
+            self.assertNotIn("CFBundleURLTypes", plistlib.load(file))
+
 
 if __name__ == "__main__":
     unittest.main()

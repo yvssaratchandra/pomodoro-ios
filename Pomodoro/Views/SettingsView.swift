@@ -34,6 +34,10 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Group {
+                    Section {
+                        NavigationLink("Quick-start shortcuts") { QuickStartSetupView(store: store) }
+                            .accessibilityIdentifier("settings.quickstart")
+                    }
                     Section("Daily focus goal") {
                         Picker("Hours", selection: Binding(get: { store.state.settings.dailyGoalMinutes / 60 }, set: { hours in
                             store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, hours * 60 + $0.settings.dailyGoalMinutes % 60)) }

@@ -59,19 +59,29 @@ extension View {
 
 struct RootView: View {
     @Bindable var store: AppStore
+    @State private var navigation = AppNavigation(scheme: AppInstallation.scheme)
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
-        TabView {
-            FocusView(store: store).tabItem { Label("Focus", systemImage: "timer") }
-            StatsView(store: store).tabItem { Label("Stats", systemImage: "chart.bar") }
-            ProjectsView(store: store).tabItem { Label("Projects", systemImage: "folder") }
-            SettingsView(store: store).tabItem { Label("Settings", systemImage: "gearshape") }
+        @Bindable var navigation = navigation
+        TabView(selection: $navigation.selectedTab) {
+            FocusView(store: store, navigation: navigation)
+                .tabItem { Label("Focus", systemImage: "timer") }.tag(AppNavigation.Tab.focus)
+            StatsView(store: store).tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
+            ProjectsView(store: store, navigation: navigation)
+                .tabItem { Label("Projects", systemImage: "folder") }.tag(AppNavigation.Tab.projects)
+            SettingsView(store: store).tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
         }
+        .onOpenURL { navigation.receive($0) }
+        .sheet(isPresented: $navigation.showingProjectCreation) { ProjectEditor(store: store, project: nil) }
+        .alert("Quick Start", isPresented: Binding(get: { navigation.message != nil }, set: { if !$0 { navigation.message = nil } })) {
+            Button("OK", role: .cancel) { navigation.message = nil }
+        } message: { Text(navigation.message ?? "") }
         .preferredColorScheme(store.state.settings.appearance == .system ? nil : store.state.settings.appearance == .dark ? .dark : .light)
         .alert("Unable to Complete Action", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
             Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
         .task {
+            navigation.connect(to: store)
             store.reconcile()
             if store.state.activeTimer != nil { store.scheduleNotification() }
             while !Task.isCancelled {

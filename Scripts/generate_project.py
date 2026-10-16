@@ -112,6 +112,8 @@ for name, patterns, product_type in TARGETS:
                          "INFOPLIST_KEY_UIApplicationSceneManifest_Generation": "YES",
                          "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",
                          "INFOPLIST_KEY_UISupportedInterfaceOrientations": "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"})
+        if name == "Pomodoro":
+            settings["INFOPLIST_FILE"] = "Config/Pomodoro-Info.plist"
     if name in ("PomodoroNative", "PomodoroWidgets"):
         settings.update({"SWIFT_ACTIVE_COMPILATION_CONDITIONS": ["$(inherited)", "NATIVE_INTEGRATIONS"],
                          "CODE_SIGN_ENTITLEMENTS": "Config/" + name + ".entitlements"})
@@ -140,6 +142,7 @@ for name, patterns, product_type in TARGETS:
                        productReference=product, productType="com.apple.product-type." + product_type))
 
 config_files = [file_reference("Config/PomodoroNative.entitlements", "text.plist.entitlements"),
+                file_reference("Config/Pomodoro-Info.plist", "text.plist.xml"),
                 file_reference("Config/PomodoroWidgets.entitlements", "text.plist.entitlements"),
                 file_reference("Config/PomodoroNative-Info.plist", "text.plist.xml"),
                 file_reference("PomodoroWidgets/Info.plist", "text.plist.xml")]

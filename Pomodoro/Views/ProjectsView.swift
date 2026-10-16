@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ProjectsView: View {
     @Bindable var store: AppStore
-    @State private var showingCreate = false
+    @Bindable var navigation: AppNavigation
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -14,7 +14,7 @@ struct ProjectsView: View {
                             } description: {
                                 Text("Give your focus a home. Create your first project to begin.")
                             } actions: {
-                                Button("Create Project") { showingCreate = true }
+                                Button("Create Project") { navigation.showingProjectCreation = true }
                             }
                         }
                         ForEach(ProjectStatus.allCases) { status in
@@ -40,8 +40,7 @@ struct ProjectsView: View {
                 }.appScreen()
             }
             .navigationTitle("Projects")
-            .toolbar { Button("New Project", systemImage: "plus") { showingCreate = true }.accessibilityIdentifier("projects.new") }
-            .sheet(isPresented: $showingCreate) { ProjectEditor(store: store, project: nil) }
+            .toolbar { Button("New Project", systemImage: "plus") { navigation.showingProjectCreation = true }.accessibilityIdentifier("projects.new") }
         }
     }
 }
@@ -66,6 +65,11 @@ struct ProjectDetail: View {
                             LabeledContent("Short break", value: "\(project.shortBreakMinutes) min")
                             LabeledContent("Long break", value: "\(project.longBreakMinutes) min")
                             Button("Edit Project") { editing = true }
+                            NavigationLink("Create quick-start shortcut") {
+                                QuickStartSetupView(store: store, projectID: project.id)
+                            }
+                            .disabled(project.status != .ongoing)
+                            .accessibilityIdentifier("project.quickstart")
                         }
                         Section {
                             Button("Merge into Another Project") { merging = true }

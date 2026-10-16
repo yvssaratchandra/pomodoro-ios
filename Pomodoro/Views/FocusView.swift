@@ -2,12 +2,11 @@ import SwiftUI
 
 struct FocusView: View {
     @Bindable var store: AppStore
-    @State private var selectedID: UUID?
+    @Bindable var navigation: AppNavigation
     @State private var durationProject: Project?
-    @State private var showingCreate = false
     @State private var confirmingEnd = false
 
-    private var selected: Project? { store.state.projects.first { $0.id == selectedID } }
+    private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID } }
     private var minutes: Int { selected?.preferredFocusMinutes ?? store.state.settings.defaultFocusMinutes }
 
     var body: some View {
@@ -38,7 +37,6 @@ struct FocusView: View {
             .appScreen()
             .navigationTitle("Focus")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showingCreate) { ProjectEditor(store: store, project: nil) }
             .sheet(item: $durationProject) { project in
                 FocusDurationSheet(store: store, project: project)
             }
@@ -50,6 +48,10 @@ struct FocusView: View {
                 Button("Keep Focusing", role: .cancel) { }
             } message: { Text("Save elapsed focus time as an interrupted session, or discard this session so none of its time counts.") }
             .onChange(of: store.state.activeTimer?.id) { _, _ in confirmingEnd = false }
+            .onChange(of: navigation.focusRequestID) { _, _ in
+                durationProject = nil
+                confirmingEnd = false
+            }
             .onAppear { repairSelection() }
             .onChange(of: store.state.projects) { _, _ in repairSelection() }
         }
@@ -94,13 +96,13 @@ struct FocusView: View {
                     .padding(8)
             }
         } else if store.state.projects.isEmpty {
-            Button { showingCreate = true } label: {
+            Button { navigation.showingProjectCreation = true } label: {
                 Label("Create Project", systemImage: "plus")
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
             }.buttonStyle(.borderedProminent).controlSize(.large)
         } else {
             Button {
-                if let selectedID { store.startFocus(projectID: selectedID, minutes: minutes) }
+                if let selectedID = navigation.selectedProjectID { store.startFocus(projectID: selectedID, minutes: minutes) }
             } label: {
                 Label("Start Focus", systemImage: "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -118,7 +120,7 @@ struct FocusView: View {
             if store.state.projects.isEmpty {
                 Text("Create a project to start focusing.").foregroundStyle(.secondary)
             } else {
-                Picker(selection: $selectedID) {
+                Picker(selection: $navigation.selectedProjectID) {
                     Text("Choose a project").tag(Optional<UUID>.none)
                     ForEach(store.state.projects) { project in
                         Text(project.name + (project.status == .ongoing ? "" : " · \(project.status.title)"))
@@ -169,7 +171,7 @@ struct FocusView: View {
 
     private func repairSelection() {
         guard selected == nil else { return }
-        selectedID = store.state.projects.first(where: { $0.status == .ongoing })?.id ?? store.state.projects.first?.id
+        navigation.selectedProjectID = store.state.projects.first(where: { $0.status == .ongoing })?.id ?? store.state.projects.first?.id
     }
 }
 

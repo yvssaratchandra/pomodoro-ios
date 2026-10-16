@@ -45,6 +45,16 @@ xcodebuild build \
   CODE_SIGNING_ALLOWED=NO
 ```
 
+## Quick-start shortcuts
+
+Open **Settings > Quick-start shortcuts**, or **Create quick-start shortcut** in an ongoing project's details. Choose the project, copy its shortcut URL, and create a shortcut using **Open URLs**. Add it to the Home Screen or Apple's Shortcuts widget. Opening the link starts focus immediately with the project's current remembered duration. If a focus or break timer is running, the link opens that timer instead.
+
+For LiveContainer, keep **Use LiveContainer** enabled and paste the URL copied from Pomodoro's **Add to Home Screen > Copy Launch URL** menu in LiveContainer. The setup preserves the selected LiveContainer instance and container. The copied launch URL stays in device preferences and is excluded from portable backups. If Pomodoro is installed directly, turn **Use LiveContainer** off. The native build uses direct links.
+
+Check a shortcut with Pomodoro both closed and already open. Forwarding depends on the installed LiveContainer version. If it only launches the app, **Copy app-launch URL** provides a fallback; open it and tap **Start Focus** in Pomodoro. The current host URL format is based on [LiveContainer's launch handler](https://github.com/LiveContainer/LiveContainer/blob/main/LiveContainerSwiftUI/Views/AppList/LCAppListView.swift); the physical-device compatibility check is still pending.
+
+The container-compatible app handles `pomodoro://focus?project=UUID&action=start`, `pomodoro://timer`, and `pomodoro://projects/new`. The native app uses the same routes with `pomodoro-native`. Links use the current project state, so an unavailable project produces a message instead of starting another project. Ordinary app launch never starts a session automatically.
+
 ## Compile and run on a Mac
 
 ### Xcode interface
@@ -158,6 +168,6 @@ Before distribution, also check on simulator/device: largest accessibility text 
 
 ## Validation status
 
-The current portable suite has 38 core XCTest cases, verified with Swift 6.0.3 on Linux. Project checks cover native/container separation, extension embedding, signing configuration, entry points, shared-scheme XML, and deterministic generation. Swift syntax parsing and these structural checks do not type-check SwiftUI, SwiftData, or WidgetKit against an iOS SDK.
+The current portable suite has 42 core XCTest cases, verified with Swift 6.0.3 on Linux. Project checks cover native/container separation, extension embedding, signing configuration, URL scheme registration, entry points, shared-scheme XML, and deterministic generation. Swift syntax parsing and these structural checks do not type-check SwiftUI, SwiftData, or WidgetKit against an iOS SDK.
 
 The checked-in workflow provides the macOS build/test path for both schemes; a successful run for the current commit is required before treating iOS builds as verified. The container scheme also runs persistence and UI tests. Native device signing, App Group access, and widget installation remain unverified until checked on a physical iPhone.
