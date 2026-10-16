@@ -65,6 +65,10 @@ struct ProjectDetail: View {
                             LabeledContent("Short break", value: "\(project.shortBreakMinutes) min")
                             LabeledContent("Long break", value: "\(project.longBreakMinutes) min")
                             Button("Edit Project") { editing = true }
+                            NavigationLink("Weekly goal") { WeeklyGoalEditor(store: store, projectID: project.id) }
+                            if let target = GoalEngine.weeklyTarget(projectID: project.id, weekStart: Date(), plan: store.state.goalPlan) {
+                                LabeledContent("This week", value: "\(DurationText.work(Statistics.total(store.state, projectID: project.id, interval: GoalEngine.week(containing: Date()), now: Date()))) / \(DurationText.work(Double(target * 60)))")
+                            }
                             NavigationLink("Create quick-start shortcut") {
                                 QuickStartSetupView(store: store, projectID: project.id)
                             }

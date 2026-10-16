@@ -316,24 +316,26 @@ struct GoalProgress: View {
     let now: Date
     var body: some View {
         let worked = Statistics.total(state, interval: Statistics.today(now), now: now)
-        let goal = Double(state.settings.dailyGoalMinutes * 60)
+        let target = GoalEngine.dailyTarget(on: now, plan: state.goalPlan)
+        let goal = Double((target ?? 0) * 60)
         VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(DurationText.work(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text("of \(DurationText.work(goal))").foregroundStyle(.secondary)
+                    Text(goal > 0 ? "of \(DurationText.work(goal))" : "focused").foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading) {
                     Text(DurationText.work(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text("of \(DurationText.work(goal))").foregroundStyle(.secondary)
+                    Text(goal > 0 ? "of \(DurationText.work(goal))" : "focused").foregroundStyle(.secondary)
                 }
             }
-            ProgressView(value: min(worked, goal), total: goal)
-                .tint(worked >= goal ? .green : .indigo)
-                .accessibilityLabel("Daily goal progress")
-                .accessibilityValue("\(Int(worked / goal * 100)) percent")
-            if worked >= goal {
-                Label("Daily goal reached", systemImage: "checkmark.circle.fill").font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+            if goal > 0 {
+                ProgressView(value: min(worked, goal), total: goal).tint(worked >= goal ? .green : .indigo)
+                    .accessibilityLabel("Daily goal progress")
+                    .accessibilityValue("\(Int(worked / goal * 100)) percent")
+                if worked >= goal { Label("Daily goal reached", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
+            } else {
+                Text(target == 0 ? "Rest day" : "No recorded goal").foregroundStyle(.secondary)
             }
         }.padding(.vertical, 4)
     }

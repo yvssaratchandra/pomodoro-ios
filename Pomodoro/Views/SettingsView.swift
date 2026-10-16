@@ -40,13 +40,7 @@ struct SettingsView: View {
                             .accessibilityIdentifier("settings.quickstart")
                     }
                     Section("Daily focus goal") {
-                        Picker("Hours", selection: Binding(get: { store.state.settings.dailyGoalMinutes / 60 }, set: { hours in
-                            store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, hours * 60 + $0.settings.dailyGoalMinutes % 60)) }
-                        })) { ForEach(0...24, id: \.self) { Text("\($0) hr").tag($0) } }
-                        Picker("Minutes", selection: Binding(get: { store.state.settings.dailyGoalMinutes % 60 }, set: { minutes in
-                            store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, $0.settings.dailyGoalMinutes / 60 * 60 + minutes)) }
-                        })) { ForEach(0...59, id: \.self) { Text("\($0) min").tag($0) } }
-                            .disabled(store.state.settings.dailyGoalMinutes == 1440)
+                        NavigationLink("Weekday goals and rest days") { DailyGoalsEditor(store: store) }
                     }
                     Section {
                         MinutePicker(title: "Focus", value: setting(\.defaultFocusMinutes), range: 10...60)
