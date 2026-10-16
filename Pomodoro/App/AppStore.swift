@@ -215,6 +215,27 @@ struct PendingDeletion {
         }
     }
 
+    func canDeleteProject(id: UUID) -> Bool {
+        let pending = pendingDeletion.flatMap { uptime() < $0.expiresAt ? $0 : nil }
+        return state.projects.contains(where: { $0.id == id && $0.breadcrumb == nil })
+            && !state.sessions.contains(where: { $0.projectID == id })
+            && !state.thoughts.contains(where: { $0.projectID == id })
+            && state.activeTimer?.projectID != id && state.breakOffer?.projectID != id
+            && !(pending?.sessions.contains(where: { $0.projectID == id }) ?? false)
+            && !(pending?.thoughts.contains(where: { $0.projectID == id }) ?? false)
+    }
+
+    @discardableResult func deleteEmptyProject(id: UUID) -> Bool {
+        guard canDeleteProject(id: id) else {
+            errorMessage = "This project still has content. Put it on hold or merge it with another project."
+            return false
+        }
+        return update { state in
+            state.projects.removeAll { $0.id == id }
+            state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == id }
+        }
+    }
+
     func startBreak() {
         if update({ try TimerEngine.startBreak(&$0, now: now()) }) { scheduleNotification() }
     }

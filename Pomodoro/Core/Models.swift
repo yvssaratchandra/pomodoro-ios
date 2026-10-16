@@ -3,7 +3,13 @@ import Foundation
 enum ProjectStatus: String, Codable, CaseIterable, Identifiable {
     case ongoing, suspended, completed
     var id: String { rawValue }
-    var title: String { rawValue.capitalized }
+    var title: String {
+        switch self {
+        case .ongoing: return "Active"
+        case .suspended: return "On hold"
+        case .completed: return "Completed"
+        }
+    }
 }
 
 struct Project: Identifiable, Codable, Equatable {
@@ -114,7 +120,7 @@ enum DurationText {
         if seconds < 60 { return "\(seconds) sec" }
         let minutes = seconds / 60
         if minutes < 60 { return "\(minutes) min" }
-        return "\(minutes / 60) hr \(minutes % 60) min"
+        return minutes % 60 == 0 ? "\(minutes / 60) hr" : "\(minutes / 60) hr \(minutes % 60) min"
     }
 
     static func countdown(_ seconds: TimeInterval) -> String {
