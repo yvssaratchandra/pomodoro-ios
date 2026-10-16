@@ -72,6 +72,13 @@ struct RootView: View {
             SettingsView(store: store).tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
         }
         .onOpenURL { navigation.receive($0) }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            store.reconcile()
+            store.refreshExternalSurfaces()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+            store.refreshExternalSurfaces()
+        }
         .sheet(isPresented: $navigation.showingProjectCreation) { ProjectEditor(store: store, project: nil) }
         .alert("Quick Start", isPresented: Binding(get: { navigation.message != nil }, set: { if !$0 { navigation.message = nil } })) {
             Button("OK", role: .cancel) { navigation.message = nil }

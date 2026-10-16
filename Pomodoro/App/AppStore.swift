@@ -26,7 +26,11 @@ import Observation
          notificationCenter: (any TimerNotificationCenter)? = nil) throws {
         self.persistence = persistence
         self.now = now
+        #if NATIVE_INTEGRATIONS
+        self.publisher = publisher ?? NativeSnapshotPublisher()
+        #else
         self.publisher = publisher ?? NoOpSnapshotPublisher()
+        #endif
         self.liveActivities = liveActivities ?? NoOpLiveActivityManager()
         self.notificationCenter = notificationCenter ?? SystemTimerNotificationCenter()
         if let payload = try persistence.load() {
