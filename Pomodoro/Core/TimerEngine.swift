@@ -45,6 +45,18 @@ enum TimerEngine {
         return true
     }
 
+    @discardableResult
+    static func discardFocus(_ state: inout AppSnapshot, timerID: UUID) -> Bool {
+        guard let timer = state.activeTimer, timer.id == timerID, timer.kind == .focus else { return false }
+        state.activeTimer = nil
+        return true
+    }
+
+    // History edits affect statistics; they do not rewind the running break cycle.
+    static func deleteSession(_ state: inout AppSnapshot, sessionID: UUID) {
+        state.sessions.removeAll { $0.id == sessionID }
+    }
+
     static func merge(_ state: inout AppSnapshot, source: UUID, destination: UUID) throws {
         guard source != destination,
               state.projects.contains(where: { $0.id == source }),

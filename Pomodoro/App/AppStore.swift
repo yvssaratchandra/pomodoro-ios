@@ -104,6 +104,18 @@ import Observation
         }
     }
 
+    func discardFocus(timerID: UUID) {
+        guard state.activeTimer?.id == timerID, state.activeTimer?.kind == .focus else { return }
+        if update({ TimerEngine.discardFocus(&$0, timerID: timerID) }) {
+            cancelNotification(timerID: timerID)
+        }
+    }
+
+    @discardableResult
+    func deleteSession(_ sessionID: UUID) -> Bool {
+        update { TimerEngine.deleteSession(&$0, sessionID: sessionID) }
+    }
+
     func restore(_ backup: AppSnapshot) -> Bool {
         guard state.activeTimer == nil else { errorMessage = "End the timer before restoring a backup."; return false }
         guard backup.activeTimer == nil else { errorMessage = "A backup cannot contain an active timer."; return false }

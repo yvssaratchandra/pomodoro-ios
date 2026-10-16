@@ -35,7 +35,7 @@ struct FocusView: View {
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .appScreen()
             .navigationTitle("Focus")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingCreate) { ProjectEditor(store: store, project: nil) }
@@ -43,8 +43,13 @@ struct FocusView: View {
                 FocusDurationSheet(store: store, project: project)
             }
             .confirmationDialog("End this focus session?", isPresented: $confirmingEnd, titleVisibility: .visible) {
-                Button("End and Save Work", role: .destructive) { store.endTimer() }
-            } message: { Text("Elapsed focus time will be saved as an interrupted session.") }
+                Button("End and Save Work") { store.endTimer() }
+                Button("Discard Session", role: .destructive) {
+                    if let timer = store.state.activeTimer { store.discardFocus(timerID: timer.id) }
+                }
+                Button("Keep Focusing", role: .cancel) { }
+            } message: { Text("Save elapsed focus time as an interrupted session, or discard this session so none of its time counts.") }
+            .onChange(of: store.state.activeTimer?.id) { _, _ in confirmingEnd = false }
             .onAppear { repairSelection() }
             .onChange(of: store.state.projects) { _, _ in repairSelection() }
         }
@@ -195,6 +200,8 @@ private struct FocusDurationSheet: View {
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .appScreen()
             .navigationTitle("Focus duration")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -229,6 +236,7 @@ private struct TimerFace: View {
     let isBreak: Bool
     let isRunning: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .largeTitle) private var digitSize = 80.0
 
@@ -256,7 +264,7 @@ private struct TimerFace: View {
                 ProgressView(value: min(1, max(0, fraction))).tint(tint).accessibilityHidden(true)
             } else {
                 ZStack {
-                    Circle().fill(tint.opacity(0.04))
+                    Circle().fill(colorScheme == .dark ? Color.black : tint.opacity(0.04))
                     Circle().stroke(tint.opacity(0.12), lineWidth: 8)
                     Circle().trim(from: 0, to: min(1, max(0, fraction)))
                         .stroke(tint.gradient, style: StrokeStyle(lineWidth: 8, lineCap: .round))
@@ -277,7 +285,12 @@ private struct TimerFace: View {
 private extension View {
     func focusCard() -> some View {
         self.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 22))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
     }
 }
 

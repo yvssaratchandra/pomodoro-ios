@@ -70,6 +70,42 @@ final class PomodoroUITests: XCTestCase {
         assertDuration("35 min", in: app)
     }
 
+    func testDiscardAndConfirmedHistoryDeletion() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        app.launch()
+        createProject("Writing", in: app)
+        app.tabBars.buttons["Focus"].tap()
+        app.buttons["focus.start"].tap()
+        app.buttons["timer.end"].tap()
+        app.buttons["Keep Focusing"].tap()
+        XCTAssertTrue(app.staticTexts["timer.countdown"].exists)
+        app.buttons["timer.end"].tap()
+        app.buttons["Discard Session"].tap()
+        XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Stats"].tap()
+        XCTAssertTrue(app.staticTexts["No Focus Yet"].waitForExistence(timeout: 5))
+
+        app.tabBars.buttons["Focus"].tap()
+        app.buttons["focus.start"].tap()
+        app.buttons["timer.end"].tap()
+        app.buttons["End and Save Work"].tap()
+        app.tabBars.buttons["Stats"].tap()
+        app.buttons["All history"].tap()
+        let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
+        session.swipeLeft()
+        app.buttons["Delete"].tap()
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(session.exists)
+        if !app.buttons["Delete"].isHittable { session.swipeLeft() }
+        app.buttons["Delete"].tap()
+        app.buttons["Delete Session"].tap()
+        XCTAssertTrue(app.staticTexts["No Focus Yet"].waitForExistence(timeout: 5))
+        XCTAssertFalse(session.exists)
+    }
+
     private func createProject(_ name: String, in app: XCUIApplication) {
         app.tabBars.buttons["Projects"].tap()
         app.buttons["projects.new"].tap()

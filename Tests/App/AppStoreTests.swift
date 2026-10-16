@@ -75,4 +75,27 @@ import SwiftData
         XCTAssertEqual(reloaded.state.projects[0].preferredFocusMinutes, 45)
         XCTAssertEqual(reloaded.state.activeTimer, active)
     }
+
+    func testDiscardAndHistoryDeletionPersist() throws {
+        let container = try makeContainer()
+        let store = try AppStore(container: container)
+        let project = Project(name: "Writing")
+        XCTAssertTrue(store.saveProject(project))
+        let start = Date().addingTimeInterval(-1200)
+        XCTAssertTrue(store.update {
+            try TimerEngine.startFocus(&$0, projectID: project.id, minutes: 10, now: start)
+            TimerEngine.finish(&$0, now: start.addingTimeInterval(600))
+            try TimerEngine.startFocus(&$0, projectID: project.id, minutes: 10, now: Date())
+        })
+        let sessionID = try XCTUnwrap(store.state.sessions.first?.id)
+        store.discardFocus(timerID: try XCTUnwrap(store.state.activeTimer?.id))
+        let reloaded = try AppStore(container: container)
+        XCTAssertNil(reloaded.state.activeTimer)
+        XCTAssertEqual(reloaded.state.sessions.map(\.id), [sessionID])
+        XCTAssertTrue(reloaded.deleteSession(sessionID))
+        let afterDeletion = try AppStore(container: container)
+        XCTAssertTrue(afterDeletion.state.sessions.isEmpty)
+        XCTAssertEqual(afterDeletion.state.completedInCycle, 1)
+        XCTAssertEqual(Statistics.total(afterDeletion.state, now: Date()), 0)
+    }
 }

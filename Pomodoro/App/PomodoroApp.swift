@@ -1,6 +1,31 @@
 import SwiftUI
 import SwiftData
 
+enum AppTheme {
+    static let background = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .black : .systemGroupedBackground
+    })
+    static let surface = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .black : .secondarySystemGroupedBackground
+    })
+}
+
+private struct AppScreen: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.background.ignoresSafeArea())
+            .toolbarBackground(AppTheme.background, for: .navigationBar, .tabBar)
+            .toolbarBackground(colorScheme == .dark ? .visible : .automatic, for: .navigationBar, .tabBar)
+    }
+}
+
+extension View {
+    func appScreen() -> some View { modifier(AppScreen()) }
+}
+
 @main struct PomodoroApp: App {
     @State private var store: AppStore? = nil
     private let startupError: String?

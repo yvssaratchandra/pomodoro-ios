@@ -34,6 +34,72 @@ final class PomodoroCoreTests: XCTestCase {
         XCTAssertEqual(Statistics.total(state, now: now), 600)
     }
 
+    func testDiscardRemovesActiveWorkWithoutSavingOrAdvancingCycle() throws {
+        var state = fixture()
+        let projectID = state.projects[0].id
+        try TimerEngine.startFocus(&state, projectID: projectID, minutes: 10, now: now)
+        TimerEngine.finish(&state, now: now.addingTimeInterval(600))
+        let previousSessions = state.sessions
+        try TimerEngine.startFocus(&state, projectID: projectID, minutes: 10, now: now.addingTimeInterval(700))
+        let timer = try XCTUnwrap(state.activeTimer)
+        XCTAssertEqual(Statistics.total(state, now: now.addingTimeInterval(800)), 700)
+
+        XCTAssertFalse(TimerEngine.discardFocus(&state, timerID: UUID()))
+        XCTAssertEqual(state.activeTimer, timer)
+        XCTAssertTrue(TimerEngine.discardFocus(&state, timerID: timer.id))
+        XCTAssertFalse(TimerEngine.discardFocus(&state, timerID: timer.id))
+        XCTAssertFalse(TimerEngine.finish(&state, now: now.addingTimeInterval(2000)))
+        XCTAssertNil(state.activeTimer)
+        XCTAssertNil(state.breakOffer)
+        XCTAssertEqual(state.sessions, previousSessions)
+        XCTAssertEqual(state.completedInCycle, 1)
+        XCTAssertEqual(Statistics.total(state, now: now.addingTimeInterval(2000)), 600)
+        XCTAssertEqual(try BackupService.decode(BackupService.encode(state)), state)
+    }
+
+    func testDiscardDoesNotRemoveACompletedSessionOrBreak() throws {
+        var state = fixture()
+        try TimerEngine.startFocus(&state, projectID: state.projects[0].id, minutes: 10, now: now)
+        let timerID = try XCTUnwrap(state.activeTimer?.id)
+        TimerEngine.finish(&state, now: now.addingTimeInterval(600))
+        let completed = state
+        XCTAssertFalse(TimerEngine.discardFocus(&state, timerID: timerID))
+        XCTAssertEqual(state, completed)
+        try TimerEngine.startBreak(&state, now: now.addingTimeInterval(600))
+        let takingBreak = state
+        let breakID = try XCTUnwrap(state.activeTimer?.id)
+        XCTAssertFalse(TimerEngine.discardFocus(&state, timerID: breakID))
+        XCTAssertEqual(state, takingBreak)
+    }
+
+    func testDeletingSessionUpdatesBothDaysAndAverageWithoutChangingTimer() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let midnight = calendar.startOfDay(for: now)
+        var state = fixture()
+        let projectID = state.projects[0].id
+        try TimerEngine.startFocus(&state, projectID: projectID, minutes: 20, now: midnight.addingTimeInterval(-600))
+        TimerEngine.finish(&state, now: midnight.addingTimeInterval(600))
+        let sessionID = state.sessions[0].id
+        try TimerEngine.startFocus(&state, projectID: state.projects[1].id, minutes: 10, now: midnight.addingTimeInterval(700))
+        TimerEngine.finish(&state, now: midnight.addingTimeInterval(760), force: true)
+        let interrupted = state.sessions[1]
+        try TimerEngine.startFocus(&state, projectID: state.projects[1].id, minutes: 10, now: midnight.addingTimeInterval(800))
+        let active = state.activeTimer
+
+        TimerEngine.deleteSession(&state, sessionID: sessionID)
+        TimerEngine.deleteSession(&state, sessionID: sessionID)
+        XCTAssertEqual(state.sessions, [interrupted])
+        XCTAssertEqual(state.activeTimer, active)
+        XCTAssertEqual(state.completedInCycle, 1)
+        XCTAssertEqual(Statistics.total(state, projectID: projectID, interval: Statistics.today(midnight, calendar: calendar), now: now), 0)
+        XCTAssertEqual(Statistics.total(state, projectID: projectID, interval: Statistics.today(midnight.addingTimeInterval(-1), calendar: calendar), now: now), 0)
+        XCTAssertEqual(Statistics.dailyAverage(state, projectID: projectID, now: midnight, calendar: calendar), 0)
+        TimerEngine.deleteSession(&state, sessionID: interrupted.id)
+        XCTAssertTrue(state.sessions.isEmpty)
+        XCTAssertEqual(Statistics.total(state, now: midnight.addingTimeInterval(900)), 100)
+    }
+
     func testLongBreakAcrossProjectsAndBreakTimeExcluded() throws {
         var state = fixture()
         state.settings.longBreakInterval = 2

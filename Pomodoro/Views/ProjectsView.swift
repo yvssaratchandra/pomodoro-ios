@@ -7,35 +7,37 @@ struct ProjectsView: View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 List {
-                    if store.state.projects.isEmpty {
-                        ContentUnavailableView {
-                            Label("Your Projects", systemImage: "folder")
-                        } description: {
-                            Text("Give your focus a home. Create your first project to begin.")
-                        } actions: {
-                            Button("Create Project") { showingCreate = true }
+                    Group {
+                        if store.state.projects.isEmpty {
+                            ContentUnavailableView {
+                                Label("Your Projects", systemImage: "folder")
+                            } description: {
+                                Text("Give your focus a home. Create your first project to begin.")
+                            } actions: {
+                                Button("Create Project") { showingCreate = true }
+                            }
                         }
-                    }
-                    ForEach(ProjectStatus.allCases) { status in
-                        let projects = store.state.projects.filter { $0.status == status }
-                        if !projects.isEmpty {
-                            Section(status.title) {
-                                ForEach(projects) { project in
-                                    NavigationLink {
-                                        ProjectDetail(store: store, projectID: project.id)
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Label(project.name, systemImage: "folder.fill").font(.headline)
-                                            Text("\(DurationText.work(Statistics.total(store.state, projectID: project.id, now: timeline.date))) total")
-                                                .font(.system(.subheadline, design: .rounded)).monospacedDigit()
-                                                .foregroundStyle(.secondary)
+                        ForEach(ProjectStatus.allCases) { status in
+                            let projects = store.state.projects.filter { $0.status == status }
+                            if !projects.isEmpty {
+                                Section(status.title) {
+                                    ForEach(projects) { project in
+                                        NavigationLink {
+                                            ProjectDetail(store: store, projectID: project.id)
+                                        } label: {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Label(project.name, systemImage: "folder.fill").font(.headline)
+                                                Text("\(DurationText.work(Statistics.total(store.state, projectID: project.id, now: timeline.date))) total")
+                                                    .font(.system(.subheadline, design: .rounded)).monospacedDigit()
+                                                    .foregroundStyle(.secondary)
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                }
+                    }.listRowBackground(AppTheme.surface)
+                }.appScreen()
             }
             .navigationTitle("Projects")
             .toolbar { Button("New Project", systemImage: "plus") { showingCreate = true }.accessibilityIdentifier("projects.new") }
@@ -56,26 +58,29 @@ struct ProjectDetail: View {
         Group {
             if let project {
                 List {
-                    Section("Project") {
-                        LabeledContent("Status", value: project.status.title)
-                        LabeledContent("Total focus", value: DurationText.work(Statistics.total(store.state, projectID: project.id, now: Date())))
-                        LabeledContent("Focus session", value: "\(project.focusMinutes) min")
-                        LabeledContent("Short break", value: "\(project.shortBreakMinutes) min")
-                        LabeledContent("Long break", value: "\(project.longBreakMinutes) min")
-                        Button("Edit Project") { editing = true }
-                    }
-                    Section {
-                        Button("Merge into Another Project") { merging = true }
-                            .disabled(store.state.projects.count < 2 || store.state.activeTimer?.projectID == project.id)
-                    } footer: {
-                        Text("Merging transfers this project's history to another project and removes this project.")
-                    }
-                    Section("Session history") {
-                        let sessions = store.state.sessions.filter { $0.projectID == project.id }.sorted { $0.startedAt > $1.startedAt }
-                        if sessions.isEmpty { Text("No sessions yet").foregroundStyle(.secondary) }
-                        ForEach(sessions) { SessionRow(session: $0, name: project.name) }
-                    }
+                    Group {
+                        Section("Project") {
+                            LabeledContent("Status", value: project.status.title)
+                            LabeledContent("Total focus", value: DurationText.work(Statistics.total(store.state, projectID: project.id, now: Date())))
+                            LabeledContent("Focus session", value: "\(project.focusMinutes) min")
+                            LabeledContent("Short break", value: "\(project.shortBreakMinutes) min")
+                            LabeledContent("Long break", value: "\(project.longBreakMinutes) min")
+                            Button("Edit Project") { editing = true }
+                        }
+                        Section {
+                            Button("Merge into Another Project") { merging = true }
+                                .disabled(store.state.projects.count < 2 || store.state.activeTimer?.projectID == project.id)
+                        } footer: {
+                            Text("Merging transfers this project's history to another project and removes this project.")
+                        }
+                        Section("Session history") {
+                            let sessions = store.state.sessions.filter { $0.projectID == project.id }.sorted { $0.startedAt > $1.startedAt }
+                            if sessions.isEmpty { Text("No sessions yet").foregroundStyle(.secondary) }
+                            ForEach(sessions) { SessionRow(session: $0, name: project.name) }
+                        }
+                    }.listRowBackground(AppTheme.surface)
                 }
+                .appScreen()
                 .navigationTitle(project.name)
                 .sheet(isPresented: $editing) { ProjectEditor(store: store, project: project) }
                 .sheet(isPresented: $merging) { MergeView(store: store, source: project) { dismiss() } }
@@ -103,24 +108,27 @@ struct ProjectEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Details") {
-                    TextField("Project name", text: $draft.name).accessibilityIdentifier("project.name")
-                    Picker("Status", selection: $draft.status) {
-                        ForEach(ProjectStatus.allCases) { Text($0.title).tag($0) }
-                    }.disabled(store.state.activeTimer?.projectID == draft.id)
-                }
-                Section {
-                    MinutePicker(title: "Focus", value: $draft.focusMinutes, range: 10...60)
-                    MinutePicker(title: "Short break", value: $draft.shortBreakMinutes, range: 1...60)
-                    MinutePicker(title: "Long break", value: $draft.longBreakMinutes, range: 1...60)
-                } header: { Text("Default durations") } footer: {
-                    Text("Changing the focus default replaces this project's remembered session duration.")
-                }
-                if store.state.activeTimer?.projectID == draft.id {
-                    Text("End this project's timer to change its status. Duration changes apply to future sessions.")
-                        .foregroundStyle(.secondary)
-                }
+                Group {
+                    Section("Details") {
+                        TextField("Project name", text: $draft.name).accessibilityIdentifier("project.name")
+                        Picker("Status", selection: $draft.status) {
+                            ForEach(ProjectStatus.allCases) { Text($0.title).tag($0) }
+                        }.disabled(store.state.activeTimer?.projectID == draft.id)
+                    }
+                    Section {
+                        MinutePicker(title: "Focus", value: $draft.focusMinutes, range: 10...60)
+                        MinutePicker(title: "Short break", value: $draft.shortBreakMinutes, range: 1...60)
+                        MinutePicker(title: "Long break", value: $draft.longBreakMinutes, range: 1...60)
+                    } header: { Text("Default durations") } footer: {
+                        Text("Changing the focus default replaces this project's remembered session duration.")
+                    }
+                    if store.state.activeTimer?.projectID == draft.id {
+                        Text("End this project's timer to change its status. Duration changes apply to future sessions.")
+                            .foregroundStyle(.secondary)
+                    }
+                }.listRowBackground(AppTheme.surface)
             }
+            .appScreen()
             .navigationTitle(isNew ? "New Project" : "Edit Project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -149,18 +157,21 @@ struct MergeView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Merge \(source.name) into") {
-                    Picker("Destination", selection: $destination) {
-                        Text("Choose a project").tag(Optional<UUID>.none)
-                        ForEach(store.state.projects.filter { $0.id != source.id && $0.id != store.state.activeTimer?.projectID }) {
-                            Text($0.name).tag(Optional($0.id))
+                Group {
+                    Section("Merge \(source.name) into") {
+                        Picker("Destination", selection: $destination) {
+                            Text("Choose a project").tag(Optional<UUID>.none)
+                            ForEach(store.state.projects.filter { $0.id != source.id && $0.id != store.state.activeTimer?.projectID }) {
+                                Text($0.name).tag(Optional($0.id))
+                            }
                         }
+                        Text("All session history will move. The destination keeps its status and duration settings.")
+                            .foregroundStyle(.secondary)
+                        Button("Merge Projects", role: .destructive) { confirming = true }.disabled(destination == nil)
                     }
-                    Text("All session history will move. The destination keeps its status and duration settings.")
-                        .foregroundStyle(.secondary)
-                    Button("Merge Projects", role: .destructive) { confirming = true }.disabled(destination == nil)
-                }
+                }.listRowBackground(AppTheme.surface)
             }
+            .appScreen()
             .navigationTitle("Merge Project").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .confirmationDialog("Merge \(source.name) into \(destination.map { store.projectName($0) } ?? "project")?",

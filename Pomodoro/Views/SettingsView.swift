@@ -33,57 +33,60 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Daily focus goal") {
-                    Picker("Hours", selection: Binding(get: { store.state.settings.dailyGoalMinutes / 60 }, set: { hours in
-                        store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, hours * 60 + $0.settings.dailyGoalMinutes % 60)) }
-                    })) { ForEach(0...24, id: \.self) { Text("\($0) hr").tag($0) } }
-                    Picker("Minutes", selection: Binding(get: { store.state.settings.dailyGoalMinutes % 60 }, set: { minutes in
-                        store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, $0.settings.dailyGoalMinutes / 60 * 60 + minutes)) }
-                    })) { ForEach(0...59, id: \.self) { Text("\($0) min").tag($0) } }
-                        .disabled(store.state.settings.dailyGoalMinutes == 1440)
-                }
-                Section {
-                    MinutePicker(title: "Focus", value: setting(\.defaultFocusMinutes), range: 10...60)
-                    MinutePicker(title: "Short break", value: setting(\.defaultShortBreakMinutes), range: 1...60)
-                    MinutePicker(title: "Long break", value: setting(\.defaultLongBreakMinutes), range: 1...60)
-                } header: { Label("New project defaults", systemImage: "timer") } footer: { Text("Existing projects keep their own durations.") }
-                Section {
-                    Picker("Long break after", selection: setting(\.longBreakInterval)) {
-                        ForEach(1...12, id: \.self) { Text("\($0) completed sessions").tag($0) }
+                Group {
+                    Section("Daily focus goal") {
+                        Picker("Hours", selection: Binding(get: { store.state.settings.dailyGoalMinutes / 60 }, set: { hours in
+                            store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, hours * 60 + $0.settings.dailyGoalMinutes % 60)) }
+                        })) { ForEach(0...24, id: \.self) { Text("\($0) hr").tag($0) } }
+                        Picker("Minutes", selection: Binding(get: { store.state.settings.dailyGoalMinutes % 60 }, set: { minutes in
+                            store.update { $0.settings.dailyGoalMinutes = max(1, min(1440, $0.settings.dailyGoalMinutes / 60 * 60 + minutes)) }
+                        })) { ForEach(0...59, id: \.self) { Text("\($0) min").tag($0) } }
+                            .disabled(store.state.settings.dailyGoalMinutes == 1440)
+                    }
+                    Section {
+                        MinutePicker(title: "Focus", value: setting(\.defaultFocusMinutes), range: 10...60)
+                        MinutePicker(title: "Short break", value: setting(\.defaultShortBreakMinutes), range: 1...60)
+                        MinutePicker(title: "Long break", value: setting(\.defaultLongBreakMinutes), range: 1...60)
+                    } header: { Label("New project defaults", systemImage: "timer") } footer: { Text("Existing projects keep their own durations.") }
+                    Section {
+                        Picker("Long break after", selection: setting(\.longBreakInterval)) {
+                            ForEach(1...12, id: \.self) { Text("\($0) completed sessions").tag($0) }
+                        }
+                        .disabled(store.state.activeTimer != nil)
+                        LabeledContent("Cycle progress", value: "\(store.state.completedInCycle) completed")
+                    } header: { Label("Break cycle", systemImage: "cup.and.saucer") } footer: {
+                        Text("Completed focus sessions count across projects. Changing the interval resets the cycle. Each focus and break starts manually.")
+                    }
+                    Section {
+                        Toggle("Notification sound", isOn: setting(\.notificationSound))
+                        Toggle("Completion haptics", isOn: setting(\.haptics))
+                        Button("Notification Settings") {
+                            if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
+                        }
+                    } header: { Label("Alerts", systemImage: "bell") } footer: {
+                        Text("Uses the iPhone's default notification sound. Sound changes apply to the next timer. Haptics play when the app is open. Notifications follow your iPhone's notification settings.")
+                    }
+                    Section("Appearance") {
+                        Picker("Appearance", selection: setting(\.appearance)) {
+                            ForEach(Appearance.allCases) { Text($0.rawValue.capitalized).tag($0) }
+                        }
+                    }
+                    Section {
+                        Button("Export Backup") {
+                            do {
+                                backupDocument = BackupDocument(data: try BackupService.encode(store.state))
+                                exporting = true
+                            } catch { store.errorMessage = error.localizedDescription }
+                        }
+                        Button("Restore Backup") { importing = true }
+                    } header: { Label("Backup", systemImage: "externaldrive") } footer: {
+                        Text("Save a backup to Files or iCloud Drive. Restoring replaces all projects, history, and settings. End the timer before exporting or restoring.")
                     }
                     .disabled(store.state.activeTimer != nil)
-                    LabeledContent("Cycle progress", value: "\(store.state.completedInCycle) completed")
-                } header: { Label("Break cycle", systemImage: "cup.and.saucer") } footer: {
-                    Text("Completed focus sessions count across projects. Changing the interval resets the cycle. Each focus and break starts manually.")
-                }
-                Section {
-                    Toggle("Notification sound", isOn: setting(\.notificationSound))
-                    Toggle("Completion haptics", isOn: setting(\.haptics))
-                    Button("Notification Settings") {
-                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
-                    }
-                } header: { Label("Alerts", systemImage: "bell") } footer: {
-                    Text("Sound changes apply to the next timer. Haptics play when the app is open. Notifications follow your iPhone's notification settings.")
-                }
-                Section("Appearance") {
-                    Picker("Appearance", selection: setting(\.appearance)) {
-                        ForEach(Appearance.allCases) { Text($0.rawValue.capitalized).tag($0) }
-                    }
-                }
-                Section {
-                    Button("Export Backup") {
-                        do {
-                            backupDocument = BackupDocument(data: try BackupService.encode(store.state))
-                            exporting = true
-                        } catch { store.errorMessage = error.localizedDescription }
-                    }
-                    Button("Restore Backup") { importing = true }
-                } header: { Label("Backup", systemImage: "externaldrive") } footer: {
-                    Text("Save a backup to Files or iCloud Drive. Restoring replaces all projects, history, and settings. End the timer before exporting or restoring.")
-                }
-                .disabled(store.state.activeTimer != nil)
-                Section { Text("Your data stays on this device unless you export a backup.").foregroundStyle(.secondary) }
+                    Section { Text("Your data stays on this device unless you export a backup.").foregroundStyle(.secondary) }
+                }.listRowBackground(AppTheme.surface)
             }
+            .appScreen()
             .navigationTitle("Settings")
             .fileExporter(isPresented: $exporting, document: backupDocument, contentType: .json,
                 defaultFilename: "Pomodoro-Backup") { result in

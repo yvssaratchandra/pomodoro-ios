@@ -2,13 +2,22 @@ import SwiftUI
 
 struct StatsView: View {
     @Bindable var store: AppStore
+    @State private var showAllHistory = false
+    @State private var pendingDeletion: FocusSession?
+    @State private var confirmingDeletion = false
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 List {
                     Section("Today · \(timeline.date.formatted(date: .abbreviated, time: .omitted))") {
                         GoalProgress(state: store.state, now: timeline.date)
-                    }
+                    }.listRowBackground(AppTheme.surface)
+                    Section {
+                        Picker("Session history", selection: $showAllHistory) {
+                            Text("Today").tag(false)
+                            Text("All history").tag(true)
+                        }.pickerStyle(.segmented)
+                    }.listRowBackground(AppTheme.surface)
                     Section("Focus sessions") {
                         if let active = store.state.activeTimer, active.kind == .focus {
                             VStack(alignment: .leading, spacing: 6) {
@@ -17,19 +26,46 @@ struct StatsView: View {
                                 Label("In progress", systemImage: "timer").foregroundStyle(.indigo)
                             }.accessibilityElement(children: .combine)
                         }
-                        let sessions = Statistics.sessionsToday(store.state, now: timeline.date)
+                        let sessions = showAllHistory
+                            ? store.state.sessions.sorted { $0.startedAt > $1.startedAt }
+                            : Statistics.sessionsToday(store.state, now: timeline.date)
                         ForEach(sessions) { session in
                             SessionRow(session: session, name: store.projectName(session.projectID),
-                                day: Statistics.today(timeline.date))
+                                day: showAllHistory ? nil : Statistics.today(timeline.date))
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button("Delete", systemImage: "trash") { requestDeletion(session) }
+                                        .tint(.red)
+                                }
+                                .contextMenu {
+                                    Button("Delete Session", systemImage: "trash", role: .destructive) { requestDeletion(session) }
+                                }
+                                .accessibilityAction(named: "Delete Session") { requestDeletion(session) }
                         }
                         if sessions.isEmpty && store.state.activeTimer?.kind != .focus {
                             ContentUnavailableView("No Focus Yet", systemImage: "timer",
                                 description: Text("Start a session in Focus. Completed and interrupted sessions will appear here."))
                         }
-                    }
+                    }.listRowBackground(AppTheme.surface)
                 }
+                .appScreen()
             }.navigationTitle("Stats")
+            .confirmationDialog("Delete this session?", isPresented: $confirmingDeletion, titleVisibility: .visible) {
+                Button("Delete Session", role: .destructive) {
+                    if let session = pendingDeletion { store.deleteSession(session.id) }
+                    pendingDeletion = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDeletion = nil }
+            } message: {
+                if let session = pendingDeletion {
+                    Text("Delete \(DurationText.work(session.duration)) for \(store.projectName(session.projectID)) from \(session.startedAt.formatted(date: .abbreviated, time: .shortened))? This removes its time from all statistics and cannot be undone.")
+                }
+            }
         }
+    }
+
+    private func requestDeletion(_ session: FocusSession) {
+        pendingDeletion = session
+        confirmingDeletion = true
     }
 }
 
