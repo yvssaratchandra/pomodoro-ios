@@ -7,11 +7,12 @@ enum TimerEngine {
               let project = state.projects.first(where: { $0.id == projectID }), project.status == .ongoing else {
             throw AppError.invalid("Choose an ongoing project and a focus duration from 10 to 60 minutes.")
         }
+        let normalizedIntention = try SessionText.normalize(intention)
         state.breakOffer = nil
         state.activeTimer = ActiveTimer(projectID: projectID, kind: .focus, startedAt: now,
             plannedSeconds: minutes * 60, shortBreakMinutes: project.shortBreakMinutes,
             longBreakMinutes: project.longBreakMinutes, longBreakInterval: state.settings.longBreakInterval,
-            intention: try SessionText.normalize(intention))
+            intention: normalizedIntention)
     }
 
     static func startBreak(_ state: inout AppSnapshot, now: Date) throws {

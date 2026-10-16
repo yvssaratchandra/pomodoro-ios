@@ -5,6 +5,8 @@ struct FocusView: View {
     @Bindable var navigation: AppNavigation
     @State private var durationProject: Project?
     @State private var confirmingEnd = false
+    @State private var intentions: [UUID: String] = [:]
+    @State private var intentionTimer: ActiveTimer?
 
     private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID } }
     private var minutes: Int { selected?.preferredFocusMinutes ?? store.state.settings.defaultFocusMinutes }
@@ -40,6 +42,7 @@ struct FocusView: View {
             .sheet(item: $durationProject) { project in
                 FocusDurationSheet(store: store, project: project)
             }
+            .sheet(item: $intentionTimer) { timer in IntentionEditor(store: store, sessionID: timer.id, active: true) }
             .alert("End this focus session?", isPresented: $confirmingEnd) {
                 Button("End and Save Work") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
@@ -102,7 +105,10 @@ struct FocusView: View {
             }.buttonStyle(.borderedProminent).controlSize(.large)
         } else {
             Button {
-                if let selectedID = navigation.selectedProjectID { store.startFocus(projectID: selectedID, minutes: minutes) }
+                if let selectedID = navigation.selectedProjectID,
+                   store.startFocus(projectID: selectedID, minutes: minutes, intention: intentions[selectedID]) {
+                    intentions[selectedID] = nil
+                }
             } label: {
                 Label("Start Focus", systemImage: "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -120,6 +126,11 @@ struct FocusView: View {
             if store.state.projects.isEmpty {
                 Text("Create a project to start focusing.").foregroundStyle(.secondary)
             } else {
+                if let timer = store.state.activeTimer, timer.kind == .focus {
+                    Button(timer.intention == nil ? "Add intention" : "Edit intention") { intentionTimer = timer }
+                        .accessibilityIdentifier("focus.intention.edit")
+                    if let intention = timer.intention { Text(intention).font(.subheadline) }
+                }
                 Picker(selection: $navigation.selectedProjectID) {
                     Text("Choose a project").tag(Optional<UUID>.none)
                     ForEach(store.state.projects) { project in
@@ -130,6 +141,10 @@ struct FocusView: View {
                 .pickerStyle(.menu)
                 .accessibilityIdentifier("focus.project")
                 Divider()
+                if let selectedID = navigation.selectedProjectID {
+                    TextField("What are you working on? (optional)", text: Binding(get: { intentions[selectedID] ?? "" }, set: { intentions[selectedID] = $0 }))
+                        .accessibilityIdentifier("focus.intention")
+                }
                 Button { durationProject = selected } label: {
                     HStack {
                         Label("Duration", systemImage: "clock")

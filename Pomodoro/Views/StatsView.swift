@@ -30,8 +30,12 @@ struct StatsView: View {
                             ? store.state.sessions.sorted { $0.startedAt > $1.startedAt }
                             : Statistics.sessionsToday(store.state, now: timeline.date)
                         ForEach(sessions) { session in
-                            SessionRow(session: session, name: store.projectName(session.projectID),
-                                day: showAllHistory ? nil : Statistics.today(timeline.date))
+                            NavigationLink {
+                                SessionDetailView(store: store, sessionID: session.id)
+                            } label: {
+                                SessionRow(session: session, name: store.projectName(session.projectID),
+                                    day: showAllHistory ? nil : Statistics.today(timeline.date))
+                            }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button("Delete", systemImage: "trash") { requestDeletion(session) }
                                         .tint(.red)
@@ -76,6 +80,7 @@ struct SessionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(name).font(.headline)
+            if let intention = session.intention { Text(intention).font(.subheadline).lineLimit(2) }
             Text("\(session.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(DurationText.work(session.duration))")
             Label(session.outcome == .completed ? "Completed" : "Interrupted",
                   systemImage: session.outcome == .completed ? "checkmark.circle" : "stop.circle")

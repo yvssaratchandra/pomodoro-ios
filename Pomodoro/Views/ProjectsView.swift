@@ -80,7 +80,10 @@ struct ProjectDetail: View {
                         Section("Session history") {
                             let sessions = store.state.sessions.filter { $0.projectID == project.id }.sorted { $0.startedAt > $1.startedAt }
                             if sessions.isEmpty { Text("No sessions yet").foregroundStyle(.secondary) }
-                            ForEach(sessions) { SessionRow(session: $0, name: project.name) }
+                            ForEach(sessions) { session in
+                                NavigationLink { SessionDetailView(store: store, sessionID: session.id) }
+                                    label: { SessionRow(session: session, name: project.name) }
+                            }
                         }
                     }.listRowBackground(AppTheme.surface)
                 }
