@@ -386,6 +386,88 @@ import UserNotifications
         let payload = try XCTUnwrap(SwiftDataSnapshotPersistence(container: container).load())
         XCTAssertFalse(try BackupService.decodeWithMigration(payload, forBackup: false).didMigrate)
     }
+    func testGroupedUndoIsAtomicAndCanRetryAfterSaveFailure() throws {
+        var tick: TimeInterval = 100
+        let project = Project(name: "Writing")
+        let start = Date(timeIntervalSince1970: 1_780_000_000)
+        let sessions = (0..<2).map { index in
+            FocusSession(id: UUID(), projectID: project.id, startedAt: start.addingTimeInterval(Double(index * 1200)),
+                         endedAt: start.addingTimeInterval(Double(index * 1200 + 600)), plannedSeconds: 600, outcome: .completed,
+                         intention: "Keep the exact record")
+        }
+        let snapshot = AppSnapshot(projects: [project], sessions: sessions)
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot))
+        let store = try AppStore(persistence: persistence, uptime: { tick }, voiceOver: { false })
+        persistence.failSave = true
+        XCTAssertFalse(store.deleteSession(sessions[0].id))
+        XCTAssertNil(store.pendingSessionDeletion)
+        persistence.failSave = false
+        XCTAssertTrue(store.deleteSession(sessions[0].id))
+        tick = 105
+        XCTAssertTrue(store.deleteSession(sessions[1].id))
+        XCTAssertEqual(store.pendingSessionDeletion?.sessions.count, 2)
+        XCTAssertEqual(store.pendingSessionDeletion?.expiresAt, 115)
+        persistence.failSave = true
+        XCTAssertFalse(store.undoSessionDeletion())
+        XCTAssertTrue(store.state.sessions.isEmpty)
+        XCTAssertEqual(store.pendingSessionDeletion?.sessions.count, 2)
+        persistence.failSave = false
+        XCTAssertTrue(store.undoSessionDeletion())
+        XCTAssertEqual(store.state.sessions, sessions)
+        XCTAssertNil(store.pendingSessionDeletion)
+        XCTAssertEqual(try AppStore(persistence: persistence).state, store.state)
+    }
+
+    func testUndoUsesMonotonicExpiryAndRejectsConflictingHistoryAsOneGroup() throws {
+        var tick: TimeInterval = 0
+        let project = Project(name: "Writing")
+        let date = Date()
+        let session = FocusSession(id: UUID(), projectID: project.id, startedAt: date, endedAt: date,
+                                   plannedSeconds: 600, outcome: .interrupted)
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [project], sessions: [session])))
+        let store = try AppStore(persistence: persistence, uptime: { tick }, voiceOver: { true })
+        XCTAssertTrue(store.deleteSession(session.id))
+        tick = 29
+        store.expireSessionUndo()
+        XCTAssertNotNil(store.pendingSessionDeletion)
+        XCTAssertTrue(store.update { $0.sessions.append(session) })
+        XCTAssertFalse(store.undoSessionDeletion())
+        XCTAssertEqual(store.state.sessions, [session])
+        tick = 30
+        XCTAssertFalse(store.undoSessionDeletion())
+        XCTAssertNil(store.pendingSessionDeletion)
+    }
+
+    func testIntentionThoughtAndBreadcrumbPersistAcrossSessionDeletionAndUndo() throws {
+        var date = Date()
+        let project = Project(name: "Writing")
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [project])))
+        let store = try AppStore(persistence: persistence, now: { date }, notificationCenter: RecordingNotificationCenter())
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 10, intention: "Draft introduction"))
+        let timer = try XCTUnwrap(store.state.activeTimer)
+        let context = ThoughtCaptureContext(projectID: project.id, originSessionID: timer.id)
+        XCTAssertTrue(store.captureThought(context: context, text: "Find the source later"))
+        date = date.addingTimeInterval(90)
+        store.endTimer()
+        XCTAssertTrue(store.saveNextStep(sessionID: timer.id, text: "Continue with methods", promote: true))
+        XCTAssertTrue(store.editIntention(id: timer.id, active: false, text: "Revise introduction"))
+        let thought = try XCTUnwrap(store.state.thoughts.first)
+        XCTAssertTrue(store.setThoughtCompleted(id: thought.id, completed: true))
+        XCTAssertTrue(store.deleteSession(timer.id))
+        XCTAssertEqual(store.state.thoughts.first?.text, thought.text)
+        XCTAssertNotNil(store.state.thoughts.first?.completedAt)
+        XCTAssertEqual(store.state.projects.first?.breadcrumb?.text, "Continue with methods")
+        XCTAssertTrue(store.undoSessionDeletion())
+        XCTAssertEqual(store.state.sessions.first?.intention, "Revise introduction")
+        XCTAssertEqual(store.state.sessions.first?.nextStep, "Continue with methods")
+        XCTAssertTrue(store.setThoughtCompleted(id: thought.id, completed: false))
+        XCTAssertNil(store.state.thoughts.first?.completedAt)
+        let backup = try BackupService.decode(BackupService.encode(store.state))
+        XCTAssertEqual(backup, store.state)
+        XCTAssertTrue(store.restore(backup))
+        XCTAssertNil(store.lastFinishedSessionID)
+    }
+
 }
 
 private enum TestStoreError: Error { case save, publish }

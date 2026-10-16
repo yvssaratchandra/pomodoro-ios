@@ -28,7 +28,7 @@ struct FocusView: View {
                         Button("Review thoughts") { navigation.showThoughts(projectID: projectID) }
                     }
                     if let id = store.lastFinishedSessionID, let session = store.state.sessions.first(where: { $0.id == id }), store.state.activeTimer?.kind != .focus {
-                        Button("Next time…") { breadcrumbSession = session }
+                        Button("Next time…") { breadcrumbSession = session }.accessibilityIdentifier("focus.nextStep")
                     }
                     if let selected {
                         BreadcrumbCard(store: store, project: selected, useAsIntention: { intentions[selected.id] = $0 })
@@ -52,6 +52,7 @@ struct FocusView: View {
                 .frame(maxWidth: 600)
                 .frame(maxWidth: .infinity)
             }
+            .scrollDismissesKeyboard(.interactively)
             .appScreen()
             .navigationTitle("Focus")
             .navigationBarTitleDisplayMode(.inline)

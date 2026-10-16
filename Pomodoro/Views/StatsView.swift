@@ -55,14 +55,10 @@ struct StatsView: View {
             }
             .navigationTitle("Stats")
             .onChange(of: range) { _, _ in anchor = Date() }
-            .sheet(isPresented: Binding(get: { selectedDay != nil }, set: { if !$0 { selectedDay = nil } })) {
+            .navigationDestination(isPresented: Binding(get: { selectedDay != nil }, set: { if !$0 { selectedDay = nil } })) {
                 if let selectedDay {
-                    NavigationStack {
-                        List { sessionRows(savedSessions(day: Statistics.today(selectedDay)), day: Statistics.today(selectedDay)) }
-                            .appScreen().navigationTitle(selectedDay.formatted(date: .abbreviated, time: .omitted))
-                            .toolbar { Button("Done") { self.selectedDay = nil } }
-                            .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
-                    }
+                    List { sessionRows(savedSessions(day: Statistics.today(selectedDay)), day: Statistics.today(selectedDay)) }
+                        .appScreen().navigationTitle(selectedDay.formatted(date: .abbreviated, time: .omitted))
                 }
             }
             .alert("Delete this session?", isPresented: $confirmingDeletion) {

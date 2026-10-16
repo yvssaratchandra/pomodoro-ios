@@ -266,7 +266,8 @@ struct PendingSessionDeletion {
         guard backup.activeTimer == nil else { errorMessage = "A backup cannot contain an active timer."; return false }
         if update({ $0 = backup }) {
             pendingSessionDeletion = nil
-            notificationCenter.removeAllPendingNotificationRequests()
+            lastFinishedSessionID = nil
+            notifications.reset()
             return true
         }
         return false

@@ -16,7 +16,7 @@ struct BreadcrumbEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Where will you pick up next time?", text: $draft, axis: .vertical).lineLimit(3...8)
+                TextField("Where will you pick up next time?", text: $draft, axis: .vertical).lineLimit(3...8).accessibilityIdentifier("breadcrumb.text")
                 Text("\(draft.count) / 280 characters").foregroundStyle(.secondary)
             }.appScreen().navigationTitle("Next time")
             .toolbar {
@@ -29,6 +29,7 @@ struct BreadcrumbEditor: View {
                         else { return }
                         if saved { dismiss() } else { error = store.errorMessage; store.errorMessage = nil }
                     }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).count > 280)
+                        .accessibilityIdentifier("breadcrumb.save")
                 }
             }
             .alert("Unable to save", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }

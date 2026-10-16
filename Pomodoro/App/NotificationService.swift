@@ -6,6 +6,7 @@ import UserNotifications
     private let now: () -> Date
     private var generation = 0
     private var testGeneration = 0
+    private var testTask: Task<String, Error>?
     private var activeID: UUID?
     private var scheduled: Set<UUID> = []
     private var completed: Set<UUID> = []
@@ -68,6 +69,27 @@ import UserNotifications
         let current = testGeneration
         center.removePendingNotificationRequests(withIdentifiers: ["completion-sound-test"])
         guard sound != .silent else { return "Sound is off." }
+        let previous = testTask
+        let task = Task { @MainActor in
+            _ = await previous?.result
+            guard current == self.testGeneration else { return "A newer test was selected." }
+            return try await self.performTest(sound: sound, generation: current)
+        }
+        testTask = task
+        return try await task.value
+    }
+
+    func reset() {
+        generation += 1
+        testGeneration += 1
+        activeID = nil
+        scheduled.removeAll()
+        completed.removeAll()
+        delivered.removeAll()
+        center.removeAllPendingNotificationRequests()
+    }
+
+    private func performTest(sound: CompletionSound, generation current: Int) async throws -> String {
         let granted = try await center.requestAuthorization(options: [.alert, .sound])
         guard current == testGeneration else { return "A newer test was selected." }
         guard granted else { return "Allow notifications in Notification Settings to test an alert." }

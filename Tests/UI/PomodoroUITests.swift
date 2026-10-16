@@ -177,6 +177,68 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertFalse(session.exists)
     }
 
+    func testIntentionCaptureBreadcrumbUndoAndThoughtChecklist() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--disable-notifications"]
+        app.launch()
+        createProject("Writing", in: app)
+        app.tabBars.buttons["Focus"].tap()
+        app.buttons["focus.start"].tap()
+        let intention = app.buttons["focus.intention.edit"]
+        reveal(intention, in: app)
+        intention.tap()
+        let intentionText = app.textViews["intention.text"].exists ? app.textViews["intention.text"] : app.textFields["intention.text"]
+        XCTAssertTrue(intentionText.waitForExistence(timeout: 5))
+        intentionText.tap()
+        intentionText.typeText("Draft introduction")
+        app.buttons["intention.save"].tap()
+        let capture = app.buttons["focus.captureThought"]
+        reveal(capture, in: app, scrollingUp: false)
+        capture.tap()
+        let text = app.textViews["thought.text"].exists ? app.textViews["thought.text"] : app.textFields["thought.text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 5))
+        text.tap()
+        text.typeText("Find the source later")
+        app.buttons["thought.save"].tap()
+        reveal(app.buttons["timer.end"], in: app, scrollingUp: false)
+        app.buttons["timer.end"].tap()
+        app.alerts.buttons["End and Save Work"].tap()
+        let next = app.buttons["focus.nextStep"]
+        reveal(next, in: app)
+        next.tap()
+        let note = app.textViews["breadcrumb.text"].exists ? app.textViews["breadcrumb.text"] : app.textFields["breadcrumb.text"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.tap()
+        note.typeText("Continue with methods")
+        app.buttons["breadcrumb.save"].tap()
+        app.tabBars.buttons["Stats"].tap()
+        let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
+        XCTAssertTrue(session.label.contains("Draft introduction"))
+        session.swipeLeft()
+        app.buttons["Delete"].tap()
+        app.alerts["Delete this session?"].buttons["Delete Session"].tap()
+        let undo = app.buttons["session.undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        undo.tap()
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
+        app.buttons["Week"].tap()
+        XCTAssertTrue(app.staticTexts["Total focus"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Thoughts"].tap()
+        let check = app.buttons["thought.check"].firstMatch
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+        XCTAssertEqual(check.value as? String, "Open")
+        check.tap()
+        XCTAssertEqual(check.value as? String, "Done")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(check.exists)
+        check.tap()
+        XCTAssertTrue(app.staticTexts["No Thoughts"].waitForExistence(timeout: 5))
+        app.buttons["Open"].tap()
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+    }
+
     private func createProject(_ name: String, in app: XCUIApplication) {
         app.tabBars.buttons["Projects"].tap()
         app.buttons["projects.new"].tap()

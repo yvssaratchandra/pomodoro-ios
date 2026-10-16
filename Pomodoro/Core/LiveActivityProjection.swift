@@ -15,7 +15,17 @@ struct LiveActivityProjection: Codable, Equatable, Hashable {
         kind = timer.kind.rawValue
         startedAt = timer.startedAt
         deadline = timer.deadline
-        projectName = state.settings.showProjectNameOnLockScreen ? state.projects.first { $0.id == timer.projectID }?.name : nil
-        intention = state.settings.showIntentionOnLockScreen ? timer.intention : nil
+        projectName = state.settings.showProjectNameOnLockScreen ? Self.preview(state.projects.first { $0.id == timer.projectID }?.name, byteLimit: 256) : nil
+        intention = state.settings.showIntentionOnLockScreen ? Self.preview(timer.intention, byteLimit: 1024) : nil
+    }
+    // Keep display text within ActivityKit's payload budget, including multi-scalar characters.
+    private static func preview(_ text: String?, byteLimit: Int) -> String? {
+        guard let text, text.utf8.count > byteLimit else { return text }
+        var result = ""
+        for character in text {
+            guard result.utf8.count + String(character).utf8.count <= byteLimit - 3 else { break }
+            result.append(character)
+        }
+        return result + "…"
     }
 }

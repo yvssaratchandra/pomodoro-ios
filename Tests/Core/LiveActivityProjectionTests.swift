@@ -22,4 +22,16 @@ final class LiveActivityProjectionTests: XCTestCase {
         XCTAssertEqual(LiveActivityProjection(state: state)?.intention, "Private intention")
         XCTAssertEqual(LiveActivityProjection(state: state)?.deadline, state.activeTimer?.deadline)
     }
+    func testUnicodePreviewsStayWithinActivityPayloadBudgetWithoutChangingSavedText() throws {
+        let text = String(repeating: "👨‍👩‍👧‍👦", count: 280)
+        var state = AppSnapshot(projects: [Project(name: String(text.prefix(100)))])
+        try TimerEngine.startFocus(&state, projectID: state.projects[0].id, minutes: 25, intention: text, now: Date())
+        state.settings.showProjectNameOnLockScreen = true
+        state.settings.showIntentionOnLockScreen = true
+        let projection = try XCTUnwrap(LiveActivityProjection(state: state))
+        XCTAssertLessThan(try JSONEncoder().encode(projection).count, 4096)
+        XCTAssertEqual(state.activeTimer?.intention, text)
+        XCTAssertTrue(projection.intention?.hasSuffix("…") == true)
+    }
+
 }
