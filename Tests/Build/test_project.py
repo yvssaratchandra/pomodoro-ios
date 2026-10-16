@@ -1,6 +1,7 @@
 import plistlib
 from pathlib import Path
 import runpy
+import wave
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -152,6 +153,17 @@ class ProjectTests(unittest.TestCase):
                 self.assertEqual([value for entry in types for value in entry["CFBundleURLSchemes"]], [scheme])
         with (ROOT / "PomodoroWidgets/Info.plist").open("rb") as file:
             self.assertNotIn("CFBundleURLTypes", plistlib.load(file))
+
+    def test_original_sounds_are_short_pcm_and_bundled_in_both_apps(self):
+        paths = {f"Pomodoro/Sounds/{name}.wav" for name in ("bell", "chime", "softTap", "digital")}
+        for path in paths:
+            with wave.open(str(ROOT / path), "rb") as sound:
+                self.assertEqual((sound.getnchannels(), sound.getsampwidth(), sound.getframerate()), (1, 2, 44100))
+                self.assertLessEqual(sound.getnframes() / sound.getframerate(), 5)
+        for name in ("Pomodoro", "PomodoroNative"):
+            resources = {self.objects[self.objects[value]["fileRef"]]["path"]
+                         for phase in self.phases(name, "PBXResourcesBuildPhase") for value in phase["files"]}
+            self.assertTrue(paths.issubset(resources))
 
 
 if __name__ == "__main__":

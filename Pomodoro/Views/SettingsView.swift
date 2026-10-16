@@ -20,6 +20,7 @@ struct SettingsView: View {
     @State private var pendingRestore: AppSnapshot?
     @State private var confirmingRestore = false
     @State private var backupMessage: String?
+    @State private var soundTestMessage: String?
 
     private func setting<Value>(_ path: WritableKeyPath<Settings, Value>) -> Binding<Value> {
         Binding(get: { store.state.settings[keyPath: path] }, set: { value in
@@ -63,12 +64,24 @@ struct SettingsView: View {
                     }
                     Section {
                         Toggle("Notification sound", isOn: setting(\.notificationSound))
+                        soundPicker("Focus complete", selection: setting(\.focusCompletionSound))
+                        soundPicker("Break complete", selection: setting(\.breakCompletionSound))
+                        Button("Test focus completion alert") {
+                            Task { soundTestMessage = await store.testCompletionAlert(kind: .focus) }
+                        }
+                        Button("Test break completion alert") {
+                            Task { soundTestMessage = await store.testCompletionAlert(kind: .shortBreak) }
+                        }
+                        if let soundTestMessage { Text(soundTestMessage).font(.footnote).foregroundStyle(.secondary) }
                         Toggle("Completion haptics", isOn: setting(\.haptics))
                         Button("Notification Settings") {
                             if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
                         }
                     } header: { Label("Alerts", systemImage: "bell") } footer: {
-                        Text("Uses the iPhone's default notification sound. Sound changes apply to the next timer. Haptics play when the app is open. Notifications follow your iPhone's notification settings.")
+                        Text("Completion sounds use your iPhone's alert volume and follow Silent mode, Focus, and notification settings. System Default uses iOS's default alert; it does not select a Messages tone. Changes apply to the next timer.")
+                        if !CompletionSound.customSoundsSupported {
+                            Text("Custom tones require the direct native installation. This build uses System Default for imported custom selections until LiveContainer sound compatibility is verified.")
+                        }
                     }
                     Section("Appearance") {
                         Picker("Appearance", selection: setting(\.appearance)) {
@@ -128,6 +141,15 @@ struct SettingsView: View {
             .alert("Backup", isPresented: Binding(get: { backupMessage != nil }, set: { if !$0 { backupMessage = nil } })) {
                 Button("OK") { backupMessage = nil }
             } message: { Text(backupMessage ?? "") }
+        }
+    }
+
+    private func soundPicker(_ title: String, selection: Binding<CompletionSound>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(CompletionSound.allCases) { sound in
+                Text(sound.title).tag(sound)
+                    .disabled(sound.filename != nil && !CompletionSound.customSoundsSupported)
+            }
         }
     }
 }

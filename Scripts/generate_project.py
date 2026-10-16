@@ -85,6 +85,11 @@ for name, patterns, product_type in TARGETS:
         ref = file_reference("Pomodoro/Assets.xcassets", "folder.assetcatalog")
         children.append(ref)
         resources.append(add(name + ".assets", isa="PBXBuildFile", fileRef=ref))
+        for path in sorted(ROOT.glob("Pomodoro/Sounds/*.wav")):
+            relative = path.relative_to(ROOT).as_posix()
+            ref = file_reference(relative, "audio.wav")
+            children.append(ref)
+            resources.append(add(name + ".sound." + relative, isa="PBXBuildFile", fileRef=ref))
     elif name == "PomodoroTests":
         ref = file_reference("Tests/Core/Fixtures", "folder")
         children.append(ref)
