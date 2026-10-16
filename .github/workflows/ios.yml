@@ -28,6 +28,15 @@ jobs:
         run: |
           set -o pipefail
           swift test 2>&1 | tee build/core-tests.log
+      - name: Compile iOS app for simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Pomodoro.xcodeproj -scheme Pomodoro \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/simulator-build.log
       - name: Select and boot iPhone simulator
         run: |
           SIMULATOR_ID=$(python3 Scripts/select_simulator.py)
@@ -44,7 +53,7 @@ jobs:
             -derivedDataPath build/DerivedData \
             -resultBundlePath build/Tests.xcresult \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/simulator.log
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/simulator.log
       - name: Build Release for iOS
         run: |
           set -o pipefail

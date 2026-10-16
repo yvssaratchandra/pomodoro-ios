@@ -2,22 +2,22 @@ import SwiftUI
 import SwiftData
 
 @main struct PomodoroApp: App {
-    private let container: ModelContainer?
     @State private var store: AppStore? = nil
     private let startupError: String?
 
     init() {
+        var loadedStore: AppStore?
+        var loadError: String?
         do {
             let testing = ProcessInfo.processInfo.arguments.contains("--ui-testing")
             let config = ModelConfiguration(isStoredInMemoryOnly: testing, cloudKitDatabase: .none)
             let container = try ModelContainer(for: AppDocument.self, configurations: config)
-            self.container = container
-            _store = State(initialValue: try AppStore(container: container))
-            startupError = nil
+            loadedStore = try AppStore(container: container)
         } catch {
-            container = nil
-            startupError = error.localizedDescription
+            loadError = error.localizedDescription
         }
+        _store = State(initialValue: loadedStore)
+        startupError = loadError
     }
 
     var body: some Scene {

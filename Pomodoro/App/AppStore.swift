@@ -23,8 +23,10 @@ import Observation
             document = existing
             state = try BackupService.decode(existing.payload, forBackup: false)
         } else {
-            state = AppSnapshot()
-            document = AppDocument(payload: try BackupService.encode(state, forBackup: false))
+            let initialState = AppSnapshot()
+            let initialPayload = try BackupService.encode(initialState, forBackup: false)
+            state = initialState
+            document = AppDocument(payload: initialPayload)
             context.insert(document)
             try context.save()
         }

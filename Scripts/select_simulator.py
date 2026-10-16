@@ -12,7 +12,9 @@ for runtime, entries in devices.items():
     version = tuple(int(part) for part in re.findall(r"\d+", runtime.split(".iOS-")[-1]))
     for device in entries:
         if device.get("isAvailable") and device["name"].startswith("iPhone"):
-            candidates.append((version, device["name"], device["udid"]))
+            # Prefer a standard iPhone to the Air, which failed first-boot data migration
+            # on the macOS 26.6.2 runner used by the initial CI run.
+            candidates.append((version, device["name"] == "iPhone 17 Pro", device["name"], device["udid"]))
 if not candidates:
     raise SystemExit("No available iPhone simulator. Install an iOS runtime in Xcode Settings > Components.")
-print(max(candidates)[2])
+print(max(candidates)[3])
