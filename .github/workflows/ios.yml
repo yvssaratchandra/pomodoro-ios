@@ -18,6 +18,10 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Verify project structure and generation
+        run: |
+          python3 -m unittest discover -s Tests/Build -v
+          git diff --exit-code -- Pomodoro.xcodeproj
       - name: Record toolchain
         run: |
           mkdir -p build
@@ -64,6 +68,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/release.log
       - name: Package unsigned device IPA
         run: |
+          test ! -d build/Release/Build/Products/Release-iphoneos/Pomodoro.app/PlugIns
           mkdir -p build/IPA/Payload
           ditto build/Release/Build/Products/Release-iphoneos/Pomodoro.app \
             build/IPA/Payload/Pomodoro.app
@@ -95,5 +100,57 @@ jobs:
           path: |
             build/*.log
             build/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
+  native-build:
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record native toolchain
+        run: |
+          mkdir -p build
+          xcodebuild -version | tee build/native-toolchain.log
+          xcodebuild -list -project Pomodoro.xcodeproj | tee -a build/native-toolchain.log
+      - name: Compile native app and extension for simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Pomodoro.xcodeproj -scheme PomodoroNative \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/NativeSimulator \
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/native-simulator-build.log
+          python3 Scripts/verify_native_bundle.py build/NativeSimulator/Build/Products/Debug-iphonesimulator/PomodoroNative.app
+      - name: Build native Release for iOS
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Pomodoro.xcodeproj -scheme PomodoroNative \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build/NativeRelease \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/native-release.log
+          python3 Scripts/verify_native_bundle.py build/NativeRelease/Build/Products/Release-iphoneos/PomodoroNative.app
+      - name: Package unsigned native IPA
+        run: |
+          mkdir -p build/NativeIPA/Payload
+          ditto build/NativeRelease/Build/Products/Release-iphoneos/PomodoroNative.app \
+            build/NativeIPA/Payload/PomodoroNative.app
+          cd build/NativeIPA
+          ditto -c -k --keepParent Payload ../Pomodoro-Native.ipa
+      - name: Upload native device IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pomodoro-Native-IPA
+          path: build/Pomodoro-Native.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload native build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-build-diagnostics
+          path: build/native-*.log
           if-no-files-found: warn
           retention-days: 14

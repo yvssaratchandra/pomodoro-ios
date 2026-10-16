@@ -9,13 +9,41 @@ The repository includes `.github/workflows/ios.yml`. GitHub Actions builds and t
 1. Create a GitHub repository and push this project to it. If your downloaded folder is not already a Git checkout, run `git init`, add and commit the files, then follow GitHub's instructions for adding your repository remote and pushing.
 2. Open the repository's **Actions** tab, then **iOS build and tests**. Pushes and pull requests run it automatically; **Run workflow** also starts it manually.
 3. Check the job result. The workflow tests the portable core, runs app/unit/UI tests on an iPhone simulator, and compiles an unsigned Release build for iOS.
-4. Download **Pomodoro-IPA** for the unsigned device `Pomodoro.ipa`, **Pomodoro-Simulator** for the simulator `.app`, or **build-diagnostics** for logs and the Xcode `.xcresult` test report. Diagnostics are uploaded even when a step fails.
+4. Download **Pomodoro-IPA** for the unsigned device `Pomodoro.ipa`, **Pomodoro-Native-IPA** for the separate app with its widget extension, **Pomodoro-Simulator** for the container-compatible simulator `.app`, or **build-diagnostics** for logs and the Xcode `.xcresult` test report. The native build has its own **native-build-diagnostics** artifact. Diagnostics are uploaded even when a step fails.
 
 To use your iPhone without a Mac, extract the downloaded **Pomodoro-IPA** artifact ZIP to get `Pomodoro.ipa`. Import it using the **+** button in your configured LiveContainer, or use Sideloadly on your computer to sign and install it. The IPA contains the Release build for physical iOS devices in `Payload/Pomodoro.app`; CI does not sign it or require signing secrets. LiveContainer compatibility, including notifications and file import/export, still needs testing on your device. The simulator artifact cannot run on an iPhone.
 
 TestFlight distribution requires Apple Developer Program membership and an additional signed distribution workflow. This project does not publish releases or upload to TestFlight automatically. GitHub account limits and macOS Actions usage charges may apply; check your repository's Actions billing settings.
 
 The hosted runner and installed SDK versions are recorded in `toolchain.log`. The simulator selector chooses an available iPhone from the newest installed iOS runtime, avoiding dependence on a particular device name.
+
+## Native app and widget extension
+
+The **PomodoroNative** scheme builds a separate app with an embedded **PomodoroWidgets** extension. It shares the app's screens and core logic with **Pomodoro**, while using a separate bundle identifier and private data store. Move data between installations with export/restore. The existing **Pomodoro** scheme and **Pomodoro-IPA** artifact remain available for LiveContainer.
+
+The extension currently provides a small/medium widget that opens the app. Configurable quick start, shared timer data, and Live Activity presentation are still being implemented. The native target declares Live Activity support, but this build structure alone does not provide a Lock Screen timer.
+
+CI builds the native app and extension for Simulator and physical iOS devices in a separate job and packages `Pomodoro-Native.ipa`. These are unsigned build checks. Installation must preserve the extension and provision the same App Group for both targets before widget data sharing can be verified. [Apple widget extensions](https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension), [App Groups entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.application-groups)
+
+Native signing identifiers are build settings, so they can be supplied through `xcodebuild` or an external `.xcconfig` without editing the generator:
+
+| Setting | Default |
+| --- | --- |
+| `POMODORO_NATIVE_BUNDLE_ID` | `com.example.Pomodoro.Native` |
+| `POMODORO_WIDGET_BUNDLE_ID` | `$(POMODORO_NATIVE_BUNDLE_ID).Widgets` |
+| `POMODORO_APP_GROUP` | `group.$(POMODORO_NATIVE_BUNDLE_ID)` |
+
+Both native targets use the same App Group entitlement and expose its resolved value as `PomodoroAppGroup` in their Info.plist. Select a signing team for both targets and supply matching provisioned identifiers. These settings do not alter the container-compatible app's bundle identifier or move its database into a shared container.
+
+For an unsigned native build:
+
+```sh
+xcodebuild build \
+  -project Pomodoro.xcodeproj -scheme PomodoroNative \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -derivedDataPath build/NativeRelease \
+  CODE_SIGNING_ALLOWED=NO
+```
 
 ## Compile and run on a Mac
 
@@ -113,7 +141,10 @@ xcodebuild build \
 - `Pomodoro/App`: app lifecycle, notification scheduling, and an observable store. SwiftData persists one versioned document so a session transition, project merge, or restore uses a single atomic save. All edits are validated before saving; failures retain the previous state.
 - `Pomodoro/Views`: native SwiftUI screens and forms.
 - `Tests/Core`, `Tests/App`, `Tests/UI`: timer/statistics/backup tests, SwiftData restore tests, and a simulator UI smoke test. UI tests use a fresh in-memory store.
-- `Scripts/generate_project.py`: optional deterministic project generator. Run it after adding/removing Swift files if you do not update target membership through Xcode. It overwrites project build settings, including local signing changes; normally use the committed project directly.
+- `PomodoroWidgets`: the native widget extension. It compiles only its own views and the explicitly shared Foundation models; it cannot access the app's SwiftData store.
+- `Config`: native app and extension entitlements, using overridable App Group settings.
+- `Scripts/generate_project.py`: the source of truth for target membership, build settings, and shared schemes. Run it after adding/removing Swift files. Keep signing overrides in an external `.xcconfig` or command-line settings because regeneration overwrites project edits.
+- `Tests/Build`: project structure, entitlement, source membership, scheme, and generation checks, run with `python3 -m unittest discover -s Tests/Build -v`.
 
 Run portable tests on any supported Swift 5.9+ toolchain:
 
@@ -127,6 +158,6 @@ Before distribution, also check on simulator/device: largest accessibility text 
 
 ## Validation status
 
-Source and build configuration were created in a Linux workspace without Xcode. All 11 core XCTest cases passed using a temporary Swift 6.0.3 Linux compiler and a direct XCTest harness. Swift syntax parsing also passed for the app, views, and iOS tests; project references, shared-scheme XML, assets, and deterministic project generation were checked. The GitHub workflow passed actionlint 1.7.12. These checks do not type-check SwiftUI/SwiftData against an iOS SDK.
+The current portable suite has 38 core XCTest cases, verified with Swift 6.0.3 on Linux. Project checks cover native/container separation, extension embedding, signing configuration, entry points, shared-scheme XML, and deterministic generation. Swift syntax parsing and these structural checks do not type-check SwiftUI, SwiftData, or WidgetKit against an iOS SDK.
 
-The checked-in workflow provides the macOS build/test path; a successful hosted run is required before treating the iOS build, persistence tests, and UI tests as verified. No CI run or signed distribution is implied by the presence of the workflow.
+The checked-in workflow provides the macOS build/test path for both schemes; a successful run for the current commit is required before treating iOS builds as verified. The container scheme also runs persistence and UI tests. Native device signing, App Group access, and widget installation remain unverified until checked on a physical iPhone.
