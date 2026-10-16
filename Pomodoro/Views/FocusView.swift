@@ -7,6 +7,7 @@ struct FocusView: View {
     @State private var confirmingEnd = false
     @State private var intentions: [UUID: String] = [:]
     @State private var intentionTimer: ActiveTimer?
+    @State private var breadcrumbSession: FocusSession?
 
     private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID } }
     private var minutes: Int { selected?.preferredFocusMinutes ?? store.state.settings.defaultFocusMinutes }
@@ -17,6 +18,12 @@ struct FocusView: View {
                 VStack(spacing: 20) {
                     timer
                     sessionAction
+                    if let id = store.lastFinishedSessionID, let session = store.state.sessions.first(where: { $0.id == id }), store.state.activeTimer?.kind != .focus {
+                        Button("Next time…") { breadcrumbSession = session }
+                    }
+                    if let selected {
+                        BreadcrumbCard(store: store, project: selected, useAsIntention: { intentions[selected.id] = $0 })
+                    }
                     sessionSetup
                         .focusCard()
                     TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -43,6 +50,7 @@ struct FocusView: View {
                 FocusDurationSheet(store: store, project: project)
             }
             .sheet(item: $intentionTimer) { timer in IntentionEditor(store: store, sessionID: timer.id, active: true) }
+            .sheet(item: $breadcrumbSession) { session in BreadcrumbEditor(store: store, sessionID: session.id, promote: true) }
             .alert("End this focus session?", isPresented: $confirmingEnd) {
                 Button("End and Save Work") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {

@@ -43,6 +43,7 @@ struct SessionDetailView: View {
     @Bindable var store: AppStore
     let sessionID: UUID
     @State private var editingIntention = false
+    @State private var editingBreadcrumb = false
     var body: some View {
         Group {
             if let session = store.state.sessions.first(where: { $0.id == sessionID }) {
@@ -52,8 +53,16 @@ struct SessionDetailView: View {
                         Text(session.intention ?? "No intention recorded")
                         Button("Edit intention") { editingIntention = true }
                     }
+                    Section("Next time") {
+                        Text(session.nextStep ?? "No next step recorded")
+                        Button("Edit next step") { editingBreadcrumb = true }
+                        if let note = session.nextStep {
+                            Button("Use as project's next step") { _ = store.saveNextStep(sessionID: session.id, text: note, promote: true) }
+                        }
+                    }
                 }.appScreen()
                 .sheet(isPresented: $editingIntention) { IntentionEditor(store: store, sessionID: sessionID, active: false) }
+                .sheet(isPresented: $editingBreadcrumb) { BreadcrumbEditor(store: store, sessionID: sessionID) }
             } else { ContentUnavailableView("Session removed", systemImage: "timer") }
         }.navigationTitle("Session").navigationBarTitleDisplayMode(.inline)
     }

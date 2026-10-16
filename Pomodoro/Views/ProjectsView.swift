@@ -89,6 +89,7 @@ struct ProjectDetail: View {
                                     label: { SessionRow(session: session, name: project.name) }
                             }
                         }
+                        Section { BreadcrumbCard(store: store, project: project) }
                     }.listRowBackground(AppTheme.surface)
                 }
                 .appScreen()
