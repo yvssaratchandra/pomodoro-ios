@@ -61,7 +61,7 @@ struct StatsView: View {
                 Button("Cancel", role: .cancel) { pendingDeletion = nil }
             } message: {
                 if let session = pendingDeletion {
-                    Text("Delete \(DurationText.work(session.duration)) for \(store.projectName(session.projectID)) from \(session.startedAt.formatted(date: .abbreviated, time: .shortened))? This removes its time from all statistics and cannot be undone.")
+                    Text("Delete \(DurationText.work(session.duration)) for \(store.projectName(session.projectID)) from \(session.startedAt.formatted(date: .abbreviated, time: .shortened))? This removes its time from statistics. Undo is available briefly after deletion.")
                 }
             }
         }

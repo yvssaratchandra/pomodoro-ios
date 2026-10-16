@@ -72,6 +72,10 @@ struct RootView: View {
             SettingsView(store: store).tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
         }
         .onOpenURL { navigation.receive($0) }
+        .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
+        .onChange(of: store.pendingSessionDeletion?.sessions.count) { _, count in
+            if let count { UIAccessibility.post(notification: .announcement, argument: "\(count) sessions deleted. Undo available.") }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             store.reconcile()
             store.refreshExternalSurfaces()
@@ -93,6 +97,7 @@ struct RootView: View {
             if store.state.activeTimer != nil { store.scheduleNotification() }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
+                store.expireSessionUndo()
                 if scenePhase == .active { store.reconcile() }
             }
         }
