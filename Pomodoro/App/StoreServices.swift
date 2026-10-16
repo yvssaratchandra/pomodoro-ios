@@ -29,6 +29,11 @@ import UserNotifications
     func add(_ request: UNNotificationRequest) async throws
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
     func removeAllPendingNotificationRequests()
+    func soundIsEnabled() async -> Bool
+}
+
+extension TimerNotificationCenter {
+    func soundIsEnabled() async -> Bool { true }
 }
 
 @MainActor struct SystemTimerNotificationCenter: TimerNotificationCenter {
@@ -48,5 +53,9 @@ import UserNotifications
 
     func removeAllPendingNotificationRequests() {
         center.removeAllPendingNotificationRequests()
+    }
+
+    func soundIsEnabled() async -> Bool {
+        await center.notificationSettings().soundSetting == .enabled
     }
 }

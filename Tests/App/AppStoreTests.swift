@@ -323,7 +323,7 @@ import UserNotifications
                                  notificationCenter: RecordingNotificationCenter())
         XCTAssertTrue(publishedAfterMigrationSave)
         XCTAssertEqual(publisher.states, [store.state])
-        XCTAssertEqual(store.state.schemaVersion, 2)
+        XCTAssertEqual(store.state.schemaVersion, AppSnapshot.currentSchemaVersion)
         XCTAssertEqual(store.state.activeTimer?.id, UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
         XCTAssertEqual(store.state.activeTimer?.deadline, Date(timeIntervalSinceReferenceDate: 770004500.875))
         XCTAssertEqual(store.state.completedInCycle, 1)
@@ -349,7 +349,7 @@ import UserNotifications
         XCTAssertEqual(notifications.effectCount, 0)
         persistence.failSave = false
         let store = try AppStore(persistence: persistence)
-        XCTAssertEqual(store.state.schemaVersion, 2)
+        XCTAssertEqual(store.state.schemaVersion, AppSnapshot.currentSchemaVersion)
         XCTAssertEqual(persistence.saveAttempts, 2)
     }
 
@@ -381,7 +381,7 @@ import UserNotifications
         XCTAssertEqual(try failed.load(), original)
         XCTAssertEqual(try SwiftDataSnapshotPersistence(container: container).load(), original)
         let store = try AppStore(container: container)
-        XCTAssertEqual(store.state.schemaVersion, 2)
+        XCTAssertEqual(store.state.schemaVersion, AppSnapshot.currentSchemaVersion)
         XCTAssertEqual(try AppStore(container: container).state, store.state)
         let payload = try XCTUnwrap(SwiftDataSnapshotPersistence(container: container).load())
         XCTAssertFalse(try BackupService.decodeWithMigration(payload, forBackup: false).didMigrate)

@@ -52,6 +52,7 @@ struct ActiveTimer: Identifiable, Codable, Equatable {
     var longBreakMinutes: Int
     var longBreakInterval: Int
     var intention: String?
+    var completionSound: CompletionSound = .systemDefault
     var deadline: Date { startedAt.addingTimeInterval(Double(plannedSeconds)) }
     func elapsed(at date: Date) -> TimeInterval {
         min(Double(plannedSeconds), max(0, date.timeIntervalSince(startedAt)))
@@ -76,6 +77,8 @@ struct Settings: Codable, Equatable {
     var defaultLongBreakMinutes = 15
     var longBreakInterval = 4
     var notificationSound = true
+    var focusCompletionSound: CompletionSound = .systemDefault
+    var breakCompletionSound: CompletionSound = .systemDefault
     var haptics = true
     var appearance: Appearance = .system
     var showProjectNameOnLockScreen = false
@@ -83,7 +86,7 @@ struct Settings: Codable, Equatable {
 }
 
 struct AppSnapshot: Codable, Equatable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
     var schemaVersion = AppSnapshot.currentSchemaVersion
     var projects: [Project] = []
     var sessions: [FocusSession] = []

@@ -18,7 +18,7 @@ final class ExternalSurfacesTests: XCTestCase {
         let snapshot = WidgetSnapshot(state: state, now: now)
         XCTAssertEqual(snapshot.formatVersion, WidgetSnapshot.currentFormatVersion)
         XCTAssertEqual(snapshot.formatVersion, 1)
-        XCTAssertEqual(state.schemaVersion, 2)
+        XCTAssertEqual(state.schemaVersion, AppSnapshot.currentSchemaVersion)
         XCTAssertEqual(snapshot.generatedAt, now)
         XCTAssertEqual(snapshot.projects.map(\.id), [writing.id, study.id])
         XCTAssertEqual(snapshot.projects.map(\.name), ["Writing", "日本語 📚"])

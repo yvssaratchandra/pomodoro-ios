@@ -19,6 +19,7 @@ struct PendingSessionDeletion {
     private let publisher: any SnapshotPublishing
     private let liveActivities: any LiveActivityManaging
     private let notificationCenter: any TimerNotificationCenter
+    private let notifications: NotificationService
     @ObservationIgnored private var activityTask: Task<Void, Never>?
     @ObservationIgnored private var activityGeneration: UInt64 = 0
 
@@ -48,7 +49,9 @@ struct PendingSessionDeletion {
         #else
         self.liveActivities = liveActivities ?? NoOpLiveActivityManager()
         #endif
-        self.notificationCenter = notificationCenter ?? SystemTimerNotificationCenter()
+        let center = notificationCenter ?? SystemTimerNotificationCenter()
+        self.notificationCenter = center
+        self.notifications = NotificationService(center: center, now: now)
         if let payload = try persistence.load() {
             let decoded = try BackupService.decodeWithMigration(payload, forBackup: false,
                                                                 now: now(), calendar: calendar)
@@ -163,7 +166,7 @@ struct PendingSessionDeletion {
         let date = now()
         guard let active = state.activeTimer, date >= active.deadline else { return }
         if update({ TimerEngine.finish(&$0, now: date) }) {
-            cancelNotification(timerID: active.id)
+            notifications.naturalCompletion(timerID: active.id)
             if state.settings.haptics { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         }
     }
@@ -218,32 +221,18 @@ struct PendingSessionDeletion {
         return false
     }
 
-    private func cancelNotification(timerID: UUID) {
-        notificationCenter.removePendingNotificationRequests(withIdentifiers: ["timer.\(timerID.uuidString)"])
-    }
+    private func cancelNotification(timerID: UUID) { notifications.cancel(timerID: timerID) }
 
     func scheduleNotification() {
-        guard !ProcessInfo.processInfo.arguments.contains("--disable-notifications") else { return }
-        guard let timer = state.activeTimer else { return }
-        let sound = state.settings.notificationSound
-        let name = projectName(timer.projectID)
-        Task {
-            do {
-                let center = notificationCenter
-                let granted = try await center.requestAuthorization(options: [.alert, .sound])
-                guard granted, state.activeTimer?.id == timer.id else { return }
-                let remaining = timer.deadline.timeIntervalSince(now())
-                guard remaining > 0 else { reconcile(); return }
-                let content = UNMutableNotificationContent()
-                content.title = "\(timer.kind.title) complete"
-                content.body = timer.kind == .focus ? "Your focus on \(name) is saved. Your break is ready." : "Ready for your next focus session?"
-                if sound { content.sound = .default }
-                let identifier = "timer.\(timer.id.uuidString)"
-                let request = UNNotificationRequest(identifier: identifier, content: content,
-                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, remaining), repeats: false))
-                try await center.add(request)
-                if state.activeTimer?.id != timer.id { center.removePendingNotificationRequests(withIdentifiers: [identifier]) }
-            } catch { errorMessage = "The timer is running, but its notification could not be scheduled: \(error.localizedDescription)" }
-        }
+        guard !ProcessInfo.processInfo.arguments.contains("--disable-notifications"), let timer = state.activeTimer else { return }
+        notifications.schedule(timer: timer, project: projectName(timer.projectID),
+            isCurrent: { [weak self] in self?.state.activeTimer?.id == timer.id },
+            expired: { [weak self] in self?.reconcile() },
+            failed: { [weak self] in self?.errorMessage = $0 })
+    }
+
+    func testCompletionAlert(kind: TimerKind) async -> String {
+        do { return try await notifications.test(sound: state.settings.completionSound(for: kind)) }
+        catch { return "Unable to schedule test alert: \(error.localizedDescription)" }
     }
 }

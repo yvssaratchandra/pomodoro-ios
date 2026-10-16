@@ -57,7 +57,7 @@ class ProjectTests(unittest.TestCase):
         widget = self.sources("PomodoroWidgets")
         self.assertTrue(container.issubset(native))
         self.assertTrue({"Pomodoro/Core/Models.swift", "Pomodoro/Core/ExternalSurfaces.swift"}.issubset(widget))
-        shared = {"Pomodoro/Core/Models.swift", "Pomodoro/Core/ExternalSurfaces.swift", "Pomodoro/Core/WidgetSnapshotFile.swift", "Pomodoro/Core/LiveActivityProjection.swift"}
+        shared = {"Pomodoro/Core/Models.swift", "Pomodoro/Core/ExternalSurfaces.swift", "Pomodoro/Core/WidgetSnapshotFile.swift", "Pomodoro/Core/LiveActivityProjection.swift", "Pomodoro/Core/CompletionSound.swift"}
         self.assertFalse(widget.intersection(container - shared))
         for name, expected in [("Pomodoro", "Pomodoro/App/PomodoroApp.swift"),
                                ("PomodoroNative", "Pomodoro/App/PomodoroApp.swift"),

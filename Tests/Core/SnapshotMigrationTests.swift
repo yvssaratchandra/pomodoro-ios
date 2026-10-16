@@ -29,10 +29,12 @@ final class SnapshotMigrationTests: XCTestCase {
         let original = try MigrationFixtures.data("v1-history")
         let upgraded = try SnapshotMigration.upgrade(data: original, now: now, calendar: calendar)
         var json = try object(upgraded)
-        XCTAssertEqual(json["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(json["schemaVersion"] as? Int, AppSnapshot.currentSchemaVersion)
         var settings = try XCTUnwrap(json["settings"] as? [String: Any])
         XCTAssertEqual(settings.removeValue(forKey: "showProjectNameOnLockScreen") as? Bool, false)
         XCTAssertEqual(settings.removeValue(forKey: "showIntentionOnLockScreen") as? Bool, false)
+        settings.removeValue(forKey: "focusCompletionSound")
+        settings.removeValue(forKey: "breakCompletionSound")
         json["settings"] = settings
         json["schemaVersion"] = 1
         XCTAssertTrue(NSDictionary(dictionary: json).isEqual(to: try object(original)))

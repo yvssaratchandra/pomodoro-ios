@@ -12,7 +12,7 @@ enum TimerEngine {
         state.activeTimer = ActiveTimer(projectID: projectID, kind: .focus, startedAt: now,
             plannedSeconds: minutes * 60, shortBreakMinutes: project.shortBreakMinutes,
             longBreakMinutes: project.longBreakMinutes, longBreakInterval: state.settings.longBreakInterval,
-            intention: normalizedIntention)
+            intention: normalizedIntention, completionSound: state.settings.completionSound(for: .focus))
     }
 
     static func startBreak(_ state: inout AppSnapshot, now: Date) throws {
@@ -21,7 +21,7 @@ enum TimerEngine {
         }
         state.activeTimer = ActiveTimer(projectID: offer.projectID, kind: offer.kind, startedAt: now,
             plannedSeconds: offer.minutes * 60, shortBreakMinutes: 0, longBreakMinutes: 0,
-            longBreakInterval: state.settings.longBreakInterval)
+            longBreakInterval: state.settings.longBreakInterval, completionSound: state.settings.completionSound(for: offer.kind))
         state.breakOffer = nil
     }
 
