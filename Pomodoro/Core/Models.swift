@@ -11,9 +11,12 @@ struct Project: Identifiable, Codable, Equatable {
     var name: String
     var status: ProjectStatus = .ongoing
     var focusMinutes = 25
+    var lastFocusMinutes: Int?
     var shortBreakMinutes = 5
     var longBreakMinutes = 15
     var createdAt = Date()
+
+    var preferredFocusMinutes: Int { lastFocusMinutes ?? focusMinutes }
 }
 
 enum SessionOutcome: String, Codable { case completed, interrupted }

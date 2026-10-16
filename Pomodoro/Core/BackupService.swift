@@ -36,6 +36,9 @@ enum BackupService {
             throw AppError.invalid("Duplicate identifiers in data.")
         }
         for project in state.projects {
+            if let minutes = project.lastFocusMinutes, !(10...60).contains(minutes) {
+                throw AppError.invalid("Invalid remembered focus duration.")
+            }
             guard !project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   project.name.count <= 100, project.createdAt.timeIntervalSince1970.isFinite,
                   (10...60).contains(project.focusMinutes),

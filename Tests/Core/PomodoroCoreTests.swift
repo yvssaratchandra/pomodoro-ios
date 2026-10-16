@@ -155,4 +155,47 @@ final class PomodoroCoreTests: XCTestCase {
         XCTAssertEqual(restored.sessions[0].duration, 59.75)
         XCTAssertEqual(DurationText.work(restored.sessions[0].duration), "59 sec")
     }
+
+    func testRememberedDurationsSupportOldBackupsAndRoundTrip() throws {
+        var state = fixture()
+        state.projects[0].focusMinutes = 30
+        state.projects[0].lastFocusMinutes = 40
+        state.projects[1].lastFocusMinutes = 15
+        let data = try BackupService.encode(state)
+        let restored = try BackupService.decode(data)
+        XCTAssertEqual(restored, state)
+        XCTAssertEqual(restored.projects.map(\.preferredFocusMinutes), [40, 15])
+
+        // Simulate an existing v1 backup produced before duration memory existed.
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var projects = try XCTUnwrap(json["projects"] as? [[String: Any]])
+        for index in projects.indices { projects[index].removeValue(forKey: "lastFocusMinutes") }
+        json["projects"] = projects
+        let oldData = try JSONSerialization.data(withJSONObject: json)
+        let oldBackup = try BackupService.decode(oldData)
+        XCTAssertEqual(oldBackup.projects.map(\.preferredFocusMinutes), [30, 25])
+        XCTAssertNil(oldBackup.projects[0].lastFocusMinutes)
+    }
+
+    func testInvalidRememberedDurationRejectedOnImport() throws {
+        var state = fixture()
+        for minutes in [9, 61] {
+            state.projects[0].lastFocusMinutes = minutes
+            XCTAssertThrowsError(try BackupService.encode(state))
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .deferredToDate
+            XCTAssertThrowsError(try BackupService.decode(encoder.encode(state)))
+        }
+    }
+
+    func testMergeKeepsDestinationDurationPreference() throws {
+        var state = fixture()
+        state.projects[0].lastFocusMinutes = 40
+        state.projects[1].lastFocusMinutes = 15
+        let destination = state.projects[1].id
+        try TimerEngine.merge(&state, source: state.projects[0].id, destination: destination)
+        XCTAssertEqual(state.projects.count, 1)
+        XCTAssertEqual(state.projects[0].id, destination)
+        XCTAssertEqual(state.projects[0].preferredFocusMinutes, 15)
+    }
 }

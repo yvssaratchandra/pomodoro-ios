@@ -14,7 +14,7 @@ struct StatsView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(store.projectName(active.projectID)).font(.headline)
                                 Text("\(active.startedAt.formatted(date: .omitted, time: .shortened)) · \(DurationText.work(active.elapsed(at: timeline.date)))")
-                                Label("In progress", systemImage: "timer").foregroundStyle(.secondary)
+                                Label("In progress", systemImage: "timer").foregroundStyle(.indigo)
                             }.accessibilityElement(children: .combine)
                         }
                         let sessions = Statistics.sessionsToday(store.state, now: timeline.date)
@@ -43,7 +43,8 @@ struct SessionRow: View {
             Text("\(session.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(DurationText.work(session.duration))")
             Label(session.outcome == .completed ? "Completed" : "Interrupted",
                   systemImage: session.outcome == .completed ? "checkmark.circle" : "stop.circle")
-                .foregroundStyle(.secondary)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(session.outcome == .completed ? Color.green : Color.secondary)
             if let day, session.startedAt < day.start || session.endedAt > day.end {
                 Text("Today: \(DurationText.work(Statistics.overlap(start: session.startedAt, end: session.endedAt, interval: day)))")
                     .font(.footnote).foregroundStyle(.secondary)

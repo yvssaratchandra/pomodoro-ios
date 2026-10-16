@@ -62,8 +62,22 @@ import Observation
                 if state.activeTimer?.projectID == project.id && state.projects[index].status != project.status {
                     throw AppError.invalid("End this project's timer before changing its status.")
                 }
-                state.projects[index] = project
+                var updated = project
+                // Editing a default deliberately replaces the previous session preference.
+                updated.lastFocusMinutes = project.focusMinutes == state.projects[index].focusMinutes
+                    ? state.projects[index].lastFocusMinutes : nil
+                state.projects[index] = updated
             } else { state.projects.append(project) }
+        }
+    }
+
+    @discardableResult
+    func rememberFocusDuration(projectID: UUID, minutes: Int) -> Bool {
+        update { state in
+            guard let index = state.projects.firstIndex(where: { $0.id == projectID }) else {
+                throw AppError.invalid("This project is no longer available.")
+            }
+            state.projects[index].lastFocusMinutes = minutes
         }
     }
 

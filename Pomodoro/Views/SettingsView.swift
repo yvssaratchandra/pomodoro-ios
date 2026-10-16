@@ -46,14 +46,14 @@ struct SettingsView: View {
                     MinutePicker(title: "Focus", value: setting(\.defaultFocusMinutes), range: 10...60)
                     MinutePicker(title: "Short break", value: setting(\.defaultShortBreakMinutes), range: 1...60)
                     MinutePicker(title: "Long break", value: setting(\.defaultLongBreakMinutes), range: 1...60)
-                } header: { Text("New project defaults") } footer: { Text("Existing projects keep their own durations.") }
+                } header: { Label("New project defaults", systemImage: "timer") } footer: { Text("Existing projects keep their own durations.") }
                 Section {
                     Picker("Long break after", selection: setting(\.longBreakInterval)) {
                         ForEach(1...12, id: \.self) { Text("\($0) completed sessions").tag($0) }
                     }
                     .disabled(store.state.activeTimer != nil)
                     LabeledContent("Cycle progress", value: "\(store.state.completedInCycle) completed")
-                } header: { Text("Break cycle") } footer: {
+                } header: { Label("Break cycle", systemImage: "cup.and.saucer") } footer: {
                     Text("Completed focus sessions count across projects. Changing the interval resets the cycle. Each focus and break starts manually.")
                 }
                 Section {
@@ -62,7 +62,7 @@ struct SettingsView: View {
                     Button("Notification Settings") {
                         if let url = URL(string: UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) }
                     }
-                } header: { Text("Alerts") } footer: {
+                } header: { Label("Alerts", systemImage: "bell") } footer: {
                     Text("Sound changes apply to the next timer. Haptics play when the app is open. Notifications follow your iPhone's notification settings.")
                 }
                 Section("Appearance") {
@@ -78,7 +78,7 @@ struct SettingsView: View {
                         } catch { store.errorMessage = error.localizedDescription }
                     }
                     Button("Restore Backup") { importing = true }
-                } header: { Text("Backup") } footer: {
+                } header: { Label("Backup", systemImage: "externaldrive") } footer: {
                     Text("Save a backup to Files or iCloud Drive. Restoring replaces all projects, history, and settings. End the timer before exporting or restoring.")
                 }
                 .disabled(store.state.activeTimer != nil)

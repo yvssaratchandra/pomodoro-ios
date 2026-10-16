@@ -25,8 +25,9 @@ struct ProjectsView: View {
                                         ProjectDetail(store: store, projectID: project.id)
                                     } label: {
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(project.name).font(.headline)
+                                            Label(project.name, systemImage: "folder.fill").font(.headline)
                                             Text("\(DurationText.work(Statistics.total(store.state, projectID: project.id, now: timeline.date))) total")
+                                                .font(.system(.subheadline, design: .rounded)).monospacedDigit()
                                                 .foregroundStyle(.secondary)
                                         }
                                     }
@@ -108,10 +109,12 @@ struct ProjectEditor: View {
                         ForEach(ProjectStatus.allCases) { Text($0.title).tag($0) }
                     }.disabled(store.state.activeTimer?.projectID == draft.id)
                 }
-                Section("Default durations") {
+                Section {
                     MinutePicker(title: "Focus", value: $draft.focusMinutes, range: 10...60)
                     MinutePicker(title: "Short break", value: $draft.shortBreakMinutes, range: 1...60)
                     MinutePicker(title: "Long break", value: $draft.longBreakMinutes, range: 1...60)
+                } header: { Text("Default durations") } footer: {
+                    Text("Changing the focus default replaces this project's remembered session duration.")
                 }
                 if store.state.activeTimer?.projectID == draft.id {
                     Text("End this project's timer to change its status. Duration changes apply to future sessions.")

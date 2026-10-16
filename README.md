@@ -96,6 +96,8 @@ xcodebuild build \
 - Four tabs: **Focus**, **Stats**, **Projects**, **Settings**. Native system controls support light/dark mode, Dynamic Type, and VoiceOver labels.
 - Daily goal: initially 4 hours, configurable from 1 minute to 24 hours. Only elapsed focus time counts.
 - Focus duration: 10–60 minutes. Project defaults begin at 25-minute focus, 5-minute short break, and 15-minute long break; breaks accept 1–60 minutes.
+- Focus opens with a large countdown and progress ring, followed by session controls, today's goal, and project metrics. Accessibility text sizes use a progress bar to leave room for larger numbers.
+- Each project remembers the last focus duration saved with **Done** in the duration sheet, including across tabs and app restarts. **Cancel** discards picker changes. Editing a project's focus default clears its remembered duration; renaming and status changes preserve it. During a timer, duration selection applies only to the next session. Backups preserve these preferences and older backups continue to load using project defaults.
 - One timer at a time, with no pause. Ending focus early saves an interrupted session. Breaks have visible countdowns and never count as work. Every phase starts manually.
 - A long break is offered every four completed sessions by default; configure 1–12 in Settings. Completion counts across projects, including across days. Changing the interval while idle resets cycle progress. Skipping a long break still begins a new cycle.
 - Switching the selected project updates its stats and the next-session configuration. The running timer retains its original project. Starting focus while a break is offered skips that pending break.
