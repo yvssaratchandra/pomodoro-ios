@@ -31,7 +31,11 @@ import Observation
         #else
         self.publisher = publisher ?? NoOpSnapshotPublisher()
         #endif
+        #if NATIVE_INTEGRATIONS
+        self.liveActivities = liveActivities ?? NativeLiveActivityManager()
+        #else
         self.liveActivities = liveActivities ?? NoOpLiveActivityManager()
+        #endif
         self.notificationCenter = notificationCenter ?? SystemTimerNotificationCenter()
         if let payload = try persistence.load() {
             let decoded = try BackupService.decodeWithMigration(payload, forBackup: false,

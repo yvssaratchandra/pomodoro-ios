@@ -75,6 +75,12 @@ struct SettingsView: View {
                             ForEach(Appearance.allCases) { Text($0.rawValue.capitalized).tag($0) }
                         }
                     }
+                    #if NATIVE_INTEGRATIONS
+                    Section("Lock Screen privacy") {
+                        Toggle("Show project name", isOn: setting(\.showProjectNameOnLockScreen))
+                        Toggle("Show session intention", isOn: setting(\.showIntentionOnLockScreen))
+                    }
+                    #endif
                     Section {
                         Button("Export Backup") {
                             do {

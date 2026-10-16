@@ -83,5 +83,8 @@ struct FocusWidget: Widget {
 }
 
 @main struct PomodoroWidgets: WidgetBundle {
-    var body: some Widget { FocusWidget() }
+    var body: some Widget {
+        FocusWidget()
+        FocusActivityWidget()
+    }
 }
