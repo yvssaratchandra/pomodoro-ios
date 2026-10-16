@@ -101,7 +101,6 @@ struct RootView: View {
             SettingsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
         }
         .onOpenURL { navigation.receive($0) }
-        .environment(navigation)
         .onChange(of: store.pendingDeletion?.count) { _, count in
             if count != nil, let pending = store.pendingDeletion {
                 UIAccessibility.post(notification: .announcement, argument: "\(pending.message). Undo available.")
@@ -115,6 +114,7 @@ struct RootView: View {
             store.refreshExternalSurfaces()
         }
         .sheet(isPresented: $navigation.showingProjectCreation) { ProjectEditor(store: store, project: nil) }
+        .environment(navigation)
         .alert("Quick Start", isPresented: Binding(get: { navigation.message != nil }, set: { if !$0 { navigation.message = nil } })) {
             Button("OK", role: .cancel) { navigation.message = nil }
         } message: { Text(navigation.message ?? "") }

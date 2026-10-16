@@ -191,7 +191,7 @@ final class PomodoroUITests: XCTestCase {
         app.buttons["thoughts.new"].tap()
         enterText("Review bibliography", into: "thought.text", in: app)
         app.buttons["thought.save"].tap()
-        let thought = app.staticTexts["Review bibliography"].firstMatch
+        let thought = app.buttons["Review bibliography"].firstMatch
         XCTAssertTrue(thought.waitForExistence(timeout: 5))
         let project = app.buttons["thoughts.project"]
         project.tap()
