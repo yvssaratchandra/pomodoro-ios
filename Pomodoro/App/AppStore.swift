@@ -3,33 +3,40 @@ import SwiftData
 import UserNotifications
 import Observation
 
-// A single versioned document makes a timer transition or restore one atomic database save.
-@Model final class AppDocument {
-    var payload: Data
-    init(payload: Data) { self.payload = payload }
-}
-
 @MainActor @Observable final class AppStore {
     private(set) var state: AppSnapshot
     var errorMessage: String?
-    private let context: ModelContext
-    private let document: AppDocument
+    private let persistence: any SnapshotPersistence
+    private let now: () -> Date
+    private let publisher: any SnapshotPublishing
+    private let liveActivities: any LiveActivityManaging
+    private let notificationCenter: any TimerNotificationCenter
+    @ObservationIgnored private var activityTask: Task<Void, Never>?
+    @ObservationIgnored private var activityGeneration: UInt64 = 0
 
-    init(container: ModelContainer) throws {
-        context = ModelContext(container)
-        context.autosaveEnabled = false
-        let documents = try context.fetch(FetchDescriptor<AppDocument>())
-        if let existing = documents.first {
-            document = existing
-            state = try BackupService.decode(existing.payload, forBackup: false)
+    convenience init(container: ModelContainer) throws {
+        try self.init(persistence: SwiftDataSnapshotPersistence(container: container))
+    }
+
+    init(persistence: any SnapshotPersistence,
+         now: @escaping () -> Date = Date.init,
+         publisher: (any SnapshotPublishing)? = nil,
+         liveActivities: (any LiveActivityManaging)? = nil,
+         notificationCenter: (any TimerNotificationCenter)? = nil) throws {
+        self.persistence = persistence
+        self.now = now
+        self.publisher = publisher ?? NoOpSnapshotPublisher()
+        self.liveActivities = liveActivities ?? NoOpLiveActivityManager()
+        self.notificationCenter = notificationCenter ?? SystemTimerNotificationCenter()
+        if let payload = try persistence.load() {
+            state = try BackupService.decode(payload, forBackup: false)
         } else {
             let initialState = AppSnapshot()
             let initialPayload = try BackupService.encode(initialState, forBackup: false)
+            try persistence.save(initialPayload)
             state = initialState
-            document = AppDocument(payload: initialPayload)
-            context.insert(document)
-            try context.save()
         }
+        refreshExternalSurfaces()
     }
 
     @discardableResult
@@ -38,19 +45,30 @@ import Observation
             var candidate = state
             try edit(&candidate)
             let payload = try BackupService.encode(candidate, forBackup: false)
-            let previous = document.payload
-            document.payload = payload
-            do { try context.save() }
-            catch {
-                context.rollback()
-                document.payload = previous
-                throw error
-            }
+            try persistence.save(payload)
             state = candidate
+            refreshExternalSurfaces()
             return true
         } catch {
             errorMessage = error.localizedDescription
             return false
+        }
+    }
+
+    // Publish only after a durable commit, on launch, or on activation. A
+    // projection failure must not roll back authoritative, successfully saved work.
+    func refreshExternalSurfaces() {
+        do { try publisher.publish(state, now: now()) }
+        catch {
+            errorMessage = "Your data is saved, but an external display could not be updated: \(error.localizedDescription)"
+        }
+        activityGeneration &+= 1
+        let generation = activityGeneration
+        let previous = activityTask
+        activityTask = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, self.activityGeneration == generation else { return }
+            await self.liveActivities.synchronize(with: self.state)
         }
     }
 
@@ -82,23 +100,24 @@ import Observation
     }
 
     func startFocus(projectID: UUID, minutes: Int) {
-        if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, now: Date()) }) {
+        if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, now: now()) }) {
             scheduleNotification()
         }
     }
 
     func startBreak() {
-        if update({ try TimerEngine.startBreak(&$0, now: Date()) }) { scheduleNotification() }
+        if update({ try TimerEngine.startBreak(&$0, now: now()) }) { scheduleNotification() }
     }
 
     func endTimer() {
         guard let active = state.activeTimer else { return }
-        if update({ TimerEngine.finish(&$0, now: Date(), force: true) }) { cancelNotification(timerID: active.id) }
+        if update({ TimerEngine.finish(&$0, now: now(), force: true) }) { cancelNotification(timerID: active.id) }
     }
 
     func reconcile() {
-        guard let active = state.activeTimer, Date() >= active.deadline else { return }
-        if update({ TimerEngine.finish(&$0, now: Date()) }) {
+        let date = now()
+        guard let active = state.activeTimer, date >= active.deadline else { return }
+        if update({ TimerEngine.finish(&$0, now: date) }) {
             cancelNotification(timerID: active.id)
             if state.settings.haptics { UINotificationFeedbackGenerator().notificationOccurred(.success) }
         }
@@ -120,14 +139,14 @@ import Observation
         guard state.activeTimer == nil else { errorMessage = "End the timer before restoring a backup."; return false }
         guard backup.activeTimer == nil else { errorMessage = "A backup cannot contain an active timer."; return false }
         if update({ $0 = backup }) {
-            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+            notificationCenter.removeAllPendingNotificationRequests()
             return true
         }
         return false
     }
 
     private func cancelNotification(timerID: UUID) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["timer.\(timerID.uuidString)"])
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: ["timer.\(timerID.uuidString)"])
     }
 
     func scheduleNotification() {
@@ -137,10 +156,10 @@ import Observation
         let name = projectName(timer.projectID)
         Task {
             do {
-                let center = UNUserNotificationCenter.current()
+                let center = notificationCenter
                 let granted = try await center.requestAuthorization(options: [.alert, .sound])
                 guard granted, state.activeTimer?.id == timer.id else { return }
-                let remaining = timer.deadline.timeIntervalSinceNow
+                let remaining = timer.deadline.timeIntervalSince(now())
                 guard remaining > 0 else { reconcile(); return }
                 let content = UNMutableNotificationContent()
                 content.title = "\(timer.kind.title) complete"

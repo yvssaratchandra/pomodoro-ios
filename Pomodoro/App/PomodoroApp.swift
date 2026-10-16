@@ -79,6 +79,11 @@ struct RootView: View {
                 if scenePhase == .active { store.reconcile() }
             }
         }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { store.reconcile() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                store.reconcile()
+                store.refreshExternalSurfaces()
+            }
+        }
     }
 }
