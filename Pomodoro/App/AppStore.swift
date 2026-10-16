@@ -114,12 +114,25 @@ import Observation
     }
 
     @discardableResult
-    func startFocus(projectID: UUID, minutes: Int) -> Bool {
-        if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, now: now()) }) {
+    func startFocus(projectID: UUID, minutes: Int, intention: String? = nil) -> Bool {
+        if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, intention: intention, now: now()) }) {
             scheduleNotification()
             return true
         }
         return false
+    }
+
+    func editIntention(id: UUID, active: Bool, text: String) -> Bool {
+        update { state in
+            let intention = try SessionText.normalize(text)
+            if active {
+                guard state.activeTimer?.id == id else { throw AppError.invalid("This timer has already ended.") }
+                state.activeTimer?.intention = intention
+            } else {
+                guard let index = state.sessions.firstIndex(where: { $0.id == id }) else { throw AppError.invalid("This session is no longer available.") }
+                state.sessions[index].intention = intention
+            }
+        }
     }
 
     func startBreak() {

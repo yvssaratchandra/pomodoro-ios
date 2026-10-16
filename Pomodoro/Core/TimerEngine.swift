@@ -1,7 +1,7 @@
 import Foundation
 
 enum TimerEngine {
-    static func startFocus(_ state: inout AppSnapshot, projectID: UUID, minutes: Int, now: Date) throws {
+    static func startFocus(_ state: inout AppSnapshot, projectID: UUID, minutes: Int, intention: String? = nil, now: Date) throws {
         guard state.activeTimer == nil else { throw AppError.invalid("End the current timer first.") }
         guard (10...60).contains(minutes),
               let project = state.projects.first(where: { $0.id == projectID }), project.status == .ongoing else {
@@ -10,7 +10,8 @@ enum TimerEngine {
         state.breakOffer = nil
         state.activeTimer = ActiveTimer(projectID: projectID, kind: .focus, startedAt: now,
             plannedSeconds: minutes * 60, shortBreakMinutes: project.shortBreakMinutes,
-            longBreakMinutes: project.longBreakMinutes, longBreakInterval: state.settings.longBreakInterval)
+            longBreakMinutes: project.longBreakMinutes, longBreakInterval: state.settings.longBreakInterval,
+            intention: try SessionText.normalize(intention))
     }
 
     static func startBreak(_ state: inout AppSnapshot, now: Date) throws {
