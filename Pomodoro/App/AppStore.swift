@@ -3,9 +3,17 @@ import SwiftData
 import UserNotifications
 import Observation
 
+struct PendingSessionDeletion {
+    var sessions: [FocusSession]
+    var expiresAt: TimeInterval
+}
+
 @MainActor @Observable final class AppStore {
     private(set) var state: AppSnapshot
     var errorMessage: String?
+    private(set) var pendingSessionDeletion: PendingSessionDeletion?
+    private let uptime: () -> TimeInterval
+    private let voiceOver: () -> Bool
     private let persistence: any SnapshotPersistence
     private let now: () -> Date
     private let publisher: any SnapshotPublishing
@@ -21,10 +29,14 @@ import Observation
     init(persistence: any SnapshotPersistence,
          now: @escaping () -> Date = Date.init,
          calendar: Calendar = .current,
+         uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         voiceOver: (() -> Bool)? = nil,
          publisher: (any SnapshotPublishing)? = nil,
          liveActivities: (any LiveActivityManaging)? = nil,
          notificationCenter: (any TimerNotificationCenter)? = nil) throws {
         self.persistence = persistence
+        self.uptime = uptime
+        self.voiceOver = voiceOver ?? { UIAccessibility.isVoiceOverRunning }
         self.now = now
         #if NATIVE_INTEGRATIONS
         self.publisher = publisher ?? NativeSnapshotPublisher()
@@ -60,6 +72,9 @@ import Observation
             try edit(&candidate)
             let payload = try BackupService.encode(candidate, forBackup: false)
             try persistence.save(payload)
+            if !Set(state.projects.map(\.id)).isSubset(of: Set(candidate.projects.map(\.id))) {
+                pendingSessionDeletion = nil
+            }
             state = candidate
             refreshExternalSurfaces()
             return true
@@ -162,13 +177,41 @@ import Observation
 
     @discardableResult
     func deleteSession(_ sessionID: UUID) -> Bool {
-        update { TimerEngine.deleteSession(&$0, sessionID: sessionID) }
+        expireSessionUndo()
+        guard let session = state.sessions.first(where: { $0.id == sessionID }) else { return false }
+        guard update({ TimerEngine.deleteSession(&$0, sessionID: sessionID) }) else { return false }
+        var sessions = pendingSessionDeletion?.sessions ?? []
+        sessions.append(session)
+        pendingSessionDeletion = PendingSessionDeletion(sessions: sessions, expiresAt: uptime() + (voiceOver() ? 30 : 10))
+        return true
+    }
+
+    func expireSessionUndo() {
+        if let pendingSessionDeletion, uptime() >= pendingSessionDeletion.expiresAt { self.pendingSessionDeletion = nil }
+    }
+
+    func dismissSessionUndo() { pendingSessionDeletion = nil }
+
+    @discardableResult func undoSessionDeletion() -> Bool {
+        expireSessionUndo()
+        guard let pending = pendingSessionDeletion else { return false }
+        let success = update { state in
+            let existing = Set(state.sessions.map(\.id))
+            let projects = Set(state.projects.map(\.id))
+            guard pending.sessions.allSatisfy({ !existing.contains($0.id) && projects.contains($0.projectID) }) else {
+                throw AppError.invalid("These sessions cannot be restored because their project or history has changed.")
+            }
+            state.sessions.append(contentsOf: pending.sessions)
+        }
+        if success { pendingSessionDeletion = nil }
+        return success
     }
 
     func restore(_ backup: AppSnapshot) -> Bool {
         guard state.activeTimer == nil else { errorMessage = "End the timer before restoring a backup."; return false }
         guard backup.activeTimer == nil else { errorMessage = "A backup cannot contain an active timer."; return false }
         if update({ $0 = backup }) {
+            pendingSessionDeletion = nil
             notificationCenter.removeAllPendingNotificationRequests()
             return true
         }
