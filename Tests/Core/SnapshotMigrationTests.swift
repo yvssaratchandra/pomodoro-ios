@@ -36,6 +36,7 @@ final class SnapshotMigrationTests: XCTestCase {
         settings.removeValue(forKey: "focusCompletionSound")
         settings.removeValue(forKey: "breakCompletionSound")
         json["settings"] = settings
+        json.removeValue(forKey: "thoughts")
         json.removeValue(forKey: "goalPlan")
         json["schemaVersion"] = 1
         XCTAssertTrue(NSDictionary(dictionary: json).isEqual(to: try object(original)))

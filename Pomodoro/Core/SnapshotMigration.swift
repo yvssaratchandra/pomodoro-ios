@@ -59,6 +59,10 @@ enum SnapshotMigration {
             case 4:
                 current = 5
                 document["schemaVersion"] = current
+            case 5:
+                document["thoughts"] = []
+                current = 6
+                document["schemaVersion"] = current
             default:
                 throw AppError.invalid("This data version is not supported.")
             }

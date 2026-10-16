@@ -88,10 +88,11 @@ struct Settings: Codable, Equatable {
 }
 
 struct AppSnapshot: Codable, Equatable {
-    static let currentSchemaVersion = 5
+    static let currentSchemaVersion = 6
     var schemaVersion = AppSnapshot.currentSchemaVersion
     var projects: [Project] = []
     var sessions: [FocusSession] = []
+    var thoughts: [CapturedThought] = []
     var settings = Settings()
     var goalPlan = GoalPlan()
     var activeTimer: ActiveTimer?

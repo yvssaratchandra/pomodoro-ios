@@ -159,6 +159,20 @@ struct PendingSessionDeletion {
         update { try GoalEngine.setDaily(&$0.goalPlan, minutes: minutes, now: now()) }
     }
 
+    func captureThought(context: ThoughtCaptureContext, text: String) -> Bool {
+        update { try ThoughtEngine.capture(&$0, context: context, text: text, now: now()) }
+    }
+    func editThought(id: UUID, text: String) -> Bool { update { try ThoughtEngine.edit(&$0, id: id, text: text) } }
+    func setThoughtCompleted(id: UUID, completed: Bool) -> Bool {
+        update { try ThoughtEngine.setCompleted(&$0, id: id, completed: completed, now: now()) }
+    }
+    func deleteThought(id: UUID) -> Bool {
+        update { state in
+            guard state.thoughts.contains(where: { $0.id == id }) else { throw AppError.invalid("Thought unavailable.") }
+            state.thoughts.removeAll { $0.id == id }
+        }
+    }
+
     func saveWeeklyGoal(projectID: UUID, minutes: Int?) -> Bool {
         update { state in
             guard state.projects.contains(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }

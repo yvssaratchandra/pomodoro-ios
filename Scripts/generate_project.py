@@ -51,7 +51,7 @@ TARGETS = [
     ("PomodoroNative", ["Pomodoro/**/*.swift", "Shared/Native/**/*.swift"], "application"),
     ("PomodoroWidgets", ["PomodoroWidgets/**/*.swift", "Shared/Native/**/*.swift",
                          "Pomodoro/Core/Models.swift", "Pomodoro/Core/ExternalSurfaces.swift",
-                         "Pomodoro/Core/WidgetSnapshotFile.swift", "Pomodoro/Core/LiveActivityProjection.swift", "Pomodoro/Core/CompletionSound.swift", "Pomodoro/Core/GoalEngine.swift", "Pomodoro/Core/Breadcrumb.swift"], "app-extension"),
+                         "Pomodoro/Core/WidgetSnapshotFile.swift", "Pomodoro/Core/LiveActivityProjection.swift", "Pomodoro/Core/CompletionSound.swift", "Pomodoro/Core/GoalEngine.swift", "Pomodoro/Core/Breadcrumb.swift", "Pomodoro/Core/CapturedThought.swift"], "app-extension"),
     ("PomodoroTests", ["Tests/Core/*.swift", "Tests/App/*.swift"], "bundle.unit-test"),
     ("PomodoroNativeTests", ["Tests/Native/*.swift"], "bundle.unit-test"),
     ("PomodoroUITests", ["Tests/UI/*.swift"], "bundle.ui-testing"),

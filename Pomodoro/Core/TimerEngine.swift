@@ -71,6 +71,7 @@ enum TimerEngine {
         for index in state.sessions.indices where state.sessions[index].projectID == source {
             state.sessions[index].projectID = destination
         }
+        for index in state.thoughts.indices where state.thoughts[index].projectID == source { state.thoughts[index].projectID = destination }
         if state.breakOffer?.projectID == source { state.breakOffer?.projectID = destination }
         state.projects.removeAll { $0.id == source }
         state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == source }

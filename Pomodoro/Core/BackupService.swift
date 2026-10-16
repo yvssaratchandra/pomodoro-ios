@@ -40,6 +40,14 @@ enum BackupService {
               (1...12).contains(settings.longBreakInterval),
               (0...11).contains(state.completedInCycle) else { throw AppError.invalid("Invalid timer settings.") }
         let projectIDs = Set(state.projects.map(\.id))
+        guard Set(state.thoughts.map(\.id)).count == state.thoughts.count else { throw AppError.invalid("Duplicate thought identifiers.") }
+        for thought in state.thoughts {
+            guard projectIDs.contains(thought.projectID), try SessionText.normalize(thought.text, limit: 500) != nil,
+                  thought.createdAt.timeIntervalSince1970.isFinite,
+                  thought.completedAt == nil || (thought.completedAt!.timeIntervalSince1970.isFinite && thought.completedAt! >= thought.createdAt) else {
+                throw AppError.invalid("Invalid captured thought.")
+            }
+        }
         try GoalEngine.validate(state.goalPlan, projectIDs: projectIDs)
         guard projectIDs.count == state.projects.count,
               Set(state.sessions.map(\.id)).count == state.sessions.count else {
