@@ -19,6 +19,7 @@ private struct AppScreen: ViewModifier {
             .background(AppTheme.background.ignoresSafeArea())
             .toolbarBackground(AppTheme.background, for: .navigationBar, .tabBar)
             .toolbarBackground(colorScheme == .dark ? .visible : .automatic, for: .navigationBar, .tabBar)
+            .toolbarColorScheme(colorScheme, for: .navigationBar, .tabBar)
     }
 }
 
