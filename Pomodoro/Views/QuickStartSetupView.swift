@@ -4,6 +4,7 @@ struct QuickStartSetupView: View {
     @Bindable var store: AppStore
     @State private var projectID: UUID?
     @State private var copiedMessage: String?
+    @FocusState private var launchURLFocused: Bool
     @AppStorage("quickStart.liveContainerLaunchURL") private var copiedLaunchURL = ""
     @AppStorage("quickStart.useLiveContainer") private var useLiveContainer = true
 
@@ -59,6 +60,9 @@ struct QuickStartSetupView: View {
                     TextField("LiveContainer launch URL", text: $copiedLaunchURL)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .keyboardType(.URL)
+                        .focused($launchURLFocused)
+                        .submitLabel(.done)
+                        .onSubmit { launchURLFocused = false }
                         .accessibilityIdentifier("quickstart.launchURL")
                     if !copiedLaunchURL.isEmpty && launch == nil {
                         Text("Paste the launch URL copied from Pomodoro's LiveContainer menu.")
@@ -106,6 +110,7 @@ struct QuickStartSetupView: View {
     }
 
     private func copy(_ url: URL, message: String) {
+        launchURLFocused = false
         UIPasteboard.general.string = url.absoluteString
         copiedMessage = message
     }
