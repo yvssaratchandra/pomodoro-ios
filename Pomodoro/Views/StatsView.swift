@@ -28,6 +28,7 @@ struct StatsView: View {
                 let now = timeline.date
                 let interval = selectedInterval(now: now)
                 let sessions = savedSessions(in: interval)
+                let active = matchingActiveTimer(in: interval, now: now)
                 List {
                     Section {
                         Picker("Range", selection: $range) {
@@ -63,12 +64,10 @@ struct StatsView: View {
                         periodOverview(period: period, interval: interval, now: now)
                     }
                     Section("Recent sessions") {
-                        if let active = store.state.activeTimer, active.kind == .focus,
-                           (projectID == nil || projectID == active.projectID),
-                           (interval == nil || Statistics.overlap(start: active.startedAt, end: active.startedAt.addingTimeInterval(active.elapsed(at: now)), interval: interval!) > 0) {
+                        if let active {
                             LabeledContent(store.projectName(active.projectID), value: "In progress")
                         }
-                        if sessions.isEmpty {
+                        if sessions.isEmpty && active == nil {
                             ContentUnavailableView("No sessions in this selection", systemImage: "timer")
                         } else {
                             ForEach(grouped(Array(sessions.prefix(5)))) { group in
@@ -127,7 +126,7 @@ struct StatsView: View {
                 Text(period == .week
                      ? "\(interval.start.formatted(.dateTime.month(.abbreviated).day())) – \(interval.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day()))"
                      : interval.start.formatted(.dateTime.month(.wide).year()))
-                    .font(.subheadline).lineLimit(1).minimumScaleFactor(0.8)
+                    .font(.subheadline).multilineTextAlignment(.center)
                 Spacer()
                 Button("Next", systemImage: "chevron.right") { move(1) }
                     .labelStyle(.iconOnly).disabled(interval.end > now)
@@ -241,6 +240,15 @@ struct StatsView: View {
         return groups.keys.sorted(by: >).map {
             HistoryDay(date: $0, sessions: groups[$0]!.sorted { $0.startedAt > $1.startedAt })
         }
+    }
+    private func matchingActiveTimer(in interval: DateInterval?, now: Date) -> ActiveTimer? {
+        guard let timer = store.state.activeTimer, timer.kind == .focus,
+              projectID == nil || projectID == timer.projectID else { return nil }
+        if let interval {
+            let end = timer.startedAt.addingTimeInterval(timer.elapsed(at: now))
+            guard Statistics.overlap(start: timer.startedAt, end: end, interval: interval) > 0 else { return nil }
+        }
+        return timer
     }
     private func selectedInterval(now: Date) -> DateInterval? {
         switch range {

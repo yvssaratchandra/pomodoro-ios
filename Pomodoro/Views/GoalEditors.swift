@@ -45,6 +45,7 @@ private enum DailyMode: String, CaseIterable, Identifiable {
 struct DailyGoalsEditor: View {
     let store: AppStore
     @Environment(\.dismiss) private var dismiss
+    @State private var reviewing = false
     @State private var mode: DailyMode
     @State private var everyDay: Int
     @State private var weekdays: Int
@@ -106,14 +107,15 @@ struct DailyGoalsEditor: View {
                     }
                 }
             }
-            DisclosureGroup("Review week") {
+            DisclosureGroup("Review week", isExpanded: $reviewing) {
                 ForEach(0..<7) { index in
                     LabeledContent(days[index], value: goalLabel(draft[index]))
                 }
             }
         }
         .listRowBackground(AppTheme.surface)
-        .appScreen().navigationTitle("Daily Goals")
+        .appScreen().navigationTitle("Daily goals")
+        .onChange(of: mode) { _, _ in reviewing = true }
         .toolbar {
             Button("Save") {
                 if store.saveDailyGoals(draft) { dismiss() }

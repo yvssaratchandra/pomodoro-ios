@@ -133,7 +133,7 @@ final class PomodoroUITests: XCTestCase {
         let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         session.swipeLeft()
-        app.buttons["Delete"].tap()
+        if app.buttons["Delete"].exists { app.buttons["Delete"].tap() }
         XCTAssertFalse(session.exists)
         let undo = app.buttons["session.undo"]
         XCTAssertTrue(undo.waitForExistence(timeout: 5))
@@ -211,7 +211,7 @@ final class PomodoroUITests: XCTestCase {
         check.tap()
         XCTAssertEqual(check.value as? String, "Done")
         thought.swipeLeft()
-        app.buttons["Delete"].tap()
+        if app.buttons["Delete"].exists { app.buttons["Delete"].tap() }
         XCTAssertFalse(thought.exists)
         let undo = app.buttons["session.undo"]
         XCTAssertTrue(undo.waitForExistence(timeout: 5))

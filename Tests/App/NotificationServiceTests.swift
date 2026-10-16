@@ -140,6 +140,7 @@ import UserNotifications
         service.schedule(timer: timer, project: "Writing", isCurrent: { true }, expired: {}, failed: { XCTFail($0) })
         await fulfillment(of: [adding], timeout: 2)
         clock.date = timer.deadline.addingTimeInterval(1)
+        service.naturalCompletion(timerID: timer.id)
         center.release()
         await fulfillment(of: [removed], timeout: 2)
         XCTAssertTrue(center.pending.isEmpty)
@@ -171,6 +172,20 @@ import UserNotifications
         XCTAssertEqual(center.pending.keys.sorted(), ["timer.\(newer.id.uuidString)"])
         XCTAssertTrue(center.pending.values.first?.content.body.contains("New") == true)
         XCTAssertNotNil(center.pending.values.first?.content.sound)
+    }
+
+    func testDeniedAuthorizationReportsAnExplicitAudioUpdateFailure() async {
+        let center = PreviewNotificationCenter()
+        center.granted = false
+        let service = NotificationService(center: center, now: Date.init)
+        let failed = expectation(description: "Audio update reports disabled notifications")
+        service.schedule(timer: makeTimer(now: Date(), sound: .silent), project: "Writing", isCurrent: { true },
+                         expired: {}, failed: { message in
+            XCTAssertTrue(message.contains("Notifications are off"))
+            failed.fulfill()
+        }, reportAuthorizationFailure: true)
+        await fulfillment(of: [failed], timeout: 2)
+        XCTAssertTrue(center.pending.isEmpty)
     }
 
     private func makeTimer(now: Date, sound: CompletionSound) -> ActiveTimer {

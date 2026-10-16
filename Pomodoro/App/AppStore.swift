@@ -230,10 +230,14 @@ struct PendingDeletion {
             errorMessage = "This project still has content. Put it on hold or merge it with another project."
             return false
         }
-        return update { state in
+        expireUndo()
+        let pending = pendingDeletion
+        let saved = update { state in
             state.projects.removeAll { $0.id == id }
             state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == id }
         }
+        if saved { pendingDeletion = pending }
+        return saved
     }
 
     func startBreak() {
@@ -335,12 +339,13 @@ struct PendingDeletion {
 
     private func cancelNotification(timerID: UUID) { notifications.cancel(timerID: timerID) }
 
-    func scheduleNotification() {
+    func scheduleNotification(reportAuthorizationFailure: Bool = false) {
         guard !ProcessInfo.processInfo.arguments.contains("--disable-notifications"), let timer = state.activeTimer else { return }
         notifications.schedule(timer: timer, project: projectName(timer.projectID),
             isCurrent: { [weak self] in self?.state.activeTimer?.id == timer.id },
             expired: { [weak self] in self?.reconcile() },
-            failed: { [weak self] in self?.errorMessage = $0 })
+            failed: { [weak self] in self?.errorMessage = $0 },
+            reportAuthorizationFailure: reportAuthorizationFailure)
     }
 
     func testCompletionAlert(kind: TimerKind) async -> String {
@@ -365,7 +370,7 @@ struct PendingDeletion {
             }
         }) else { return false }
         if let timer = state.activeTimer, timer.completionSound != oldTimer?.completionSound {
-            scheduleNotification()
+            scheduleNotification(reportAuthorizationFailure: true)
         }
         return true
     }

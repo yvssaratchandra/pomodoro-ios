@@ -27,7 +27,8 @@ import UserNotifications
     }
 
     func schedule(timer: ActiveTimer, project: String, isCurrent: @escaping () -> Bool,
-                  expired: @escaping () -> Void, failed: @escaping (String) -> Void) {
+                  expired: @escaping () -> Void, failed: @escaping (String) -> Void,
+                  reportAuthorizationFailure: Bool = false) {
         guard timer.deadline > now() else { expired(); return }
         generation += 1
         let requestGeneration = generation
@@ -39,7 +40,11 @@ import UserNotifications
             guard timer.deadline > now() else { expired(); return }
             do {
                 let granted = try await center.requestAuthorization(options: [.alert, .sound])
-                guard granted, requestGeneration == generation, isCurrent() else { return }
+                guard requestGeneration == generation, isCurrent() else { return }
+                guard granted else {
+                    if reportAuthorizationFailure { failed("Notifications are off. Enable them in Notification Settings to hear completion alerts.") }
+                    return
+                }
                 let remaining = timer.deadline.timeIntervalSince(now())
                 guard remaining > 0 else { expired(); return }
                 let content = UNMutableNotificationContent()
@@ -51,7 +56,7 @@ import UserNotifications
                 scheduled.insert(timer.id)
                 try await center.add(UNNotificationRequest(identifier: id, content: content,
                     trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, remaining), repeats: false)))
-                if timer.deadline <= now(), !completed.contains(timer.id) {
+                if timer.deadline <= now() {
                     center.removePendingNotificationRequests(withIdentifiers: [id])
                     if requestGeneration == generation, isCurrent() { expired() }
                     return

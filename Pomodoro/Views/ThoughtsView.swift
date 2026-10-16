@@ -191,7 +191,11 @@ struct ThoughtsView: View {
                 .accessibilityLabel(selecting ? "Select thought" : (thought.completedAt == nil ? "Mark thought done" : "Mark thought open"))
                 .accessibilityValue(selecting ? (selection.contains(thought.id) ? "Selected" : "Not selected") : (thought.completedAt == nil ? "Open" : "Done"))
                 .accessibilityIdentifier("thought.check")
-            Button { editing = thought } label: {
+            Button {
+                if selecting {
+                    if selection.contains(thought.id) { selection.remove(thought.id) } else { selection.insert(thought.id) }
+                } else { editing = thought }
+            } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(thought.text).strikethrough(thought.completedAt != nil).foregroundStyle(.primary)
                     if navigation.thoughtProjectFilter == .all, let project = thought.projectID {
