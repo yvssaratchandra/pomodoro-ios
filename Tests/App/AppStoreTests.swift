@@ -35,7 +35,8 @@ import UserNotifications
         let id = try XCTUnwrap(store.createThought(
             context: ThoughtCaptureContext(projectID: nil, originSessionID: nil), text: "Saved"))
         XCTAssertEqual(store.state.thoughts.map(\.id), [id])
-        XCTAssertNotNil(store.errorMessage)
+        XCTAssertNotNil(store.widgetUpdateError)
+        XCTAssertNil(store.errorMessage)
     }
 
     func makeContainer() throws -> ModelContainer {
@@ -427,12 +428,31 @@ import UserNotifications
         publisher.failPublish = true
         XCTAssertTrue(store.saveProject(Project(name: "Saved despite display failure")))
         XCTAssertEqual(try AppStore(persistence: persistence).state, store.state)
-        XCTAssertNotNil(store.errorMessage)
+        XCTAssertNotNil(store.widgetUpdateError)
+        XCTAssertNil(store.errorMessage)
+        store.errorMessage = "A separate persistence error"
+        store.refreshExternalSurfaces()
+        XCTAssertEqual(store.errorMessage, "A separate persistence error")
         let saves = persistence.saveAttempts
         publisher.failPublish = false
         store.refreshExternalSurfaces()
         XCTAssertEqual(publisher.states.last, store.state)
         XCTAssertEqual(persistence.saveAttempts, saves)
+        XCTAssertNil(store.widgetUpdateError)
+        XCTAssertEqual(store.errorMessage, "A separate persistence error")
+    }
+
+    func testWidgetFailureStillSynchronizesLiveActivities() async throws {
+        let activities = RecordingLiveActivityManager()
+        let publisher = RecordingSnapshotPublisher()
+        publisher.failPublish = true
+        let synchronized = expectation(description: "Live Activity synchronized despite widget failure")
+        activities.onSynchronize = { _ in synchronized.fulfill() }
+        let store = try AppStore(persistence: MemorySnapshotPersistence(), publisher: publisher, liveActivities: activities)
+        await fulfillment(of: [synchronized], timeout: 2)
+        XCTAssertNotNil(store.widgetUpdateError)
+        XCTAssertNil(store.errorMessage)
+        XCTAssertEqual(activities.states.last, store.state)
     }
 
     func testActivitySynchronizationIsSerializedAndSkipsSupersededCommits() async throws {

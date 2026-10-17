@@ -5,7 +5,7 @@ import WidgetKit
 @MainActor struct NativeSnapshotPublisher: SnapshotPublishing {
     func publish(_ state: AppSnapshot, now: Date) throws {
         guard let directory = SharedWidgetContainer.directory() else {
-            throw AppError.invalid("The shared App Group is unavailable. Check the native app's signing configuration.")
+            throw AppError.invalid("Widget storage is unavailable for this installation.")
         }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current

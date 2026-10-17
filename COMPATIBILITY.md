@@ -47,8 +47,29 @@ Dim Focus state, capture URL parsing, and daily widget projection rules have loc
 | Dim Focus capture at completion | Thought draft survives; mode exits and normal break-ready state appears | Not tested |
 | Widget across midnight or time-zone changes | Old saved totals are not presented as current-day totals | Not tested |
 
-The manual Codemagic **Native IPA** workflow produces an unsigned native artifact. Preserve its widget extension in SideStore. App Group identifiers after signing must match the app and extension's `PomodoroAppGroup` configuration; a successful unsigned build cannot establish this. Record the exact SideStore version and signing method when checking installation.
+The manual Codemagic **Native IPA** workflow produces a native artifact that requires installation signing. Preserve its widget extension in SideStore. App Group identifiers after signing must match the app and extension's `PomodoroAppGroup` configuration; a successful unsigned build cannot establish this. Record the exact SideStore version and signing method when checking installation.
 
 ### Container dim-display investigation
 
 A user reported that the current container build's Dim Focus toggle turned purple but did not show the dim display. Presentation checks now inspect the app's own controller subtree, and foreground checks use its attached window rather than requiring SwiftUI scene-phase delivery. This avoids treating a host controller as an editor inside Pomodoro. Regression tests cover container-owned presentations and app-owned nested editors. Rechecking the behavior inside the installed LiveContainer version remains pending; the exact version number has not been recorded.
+
+### Native updates through SideStore
+
+Install the updated `Pomodoro-Native.ipa` over the existing native app using the
+same Apple account, bundle identifiers, and extension options. Keep its widget
+extension. An update is expected to replace the installed app rather than occupy
+another active app slot; the separate weekly App ID registration limit still
+applies. Export a backup before changing installation or signing methods.
+
+Native packaging now applies ad hoc signatures containing the resolved App Group
+before SideStore performs installation signing. At runtime the app and widget
+read their own signing permissions and select either the configured group or its
+exact signing-team suffix. They do not use private storage as a sharing fallback.
+Failures appear under Settings → Widgets & shortcuts, with retry and connection
+details, instead of blocking normal saves. Live Activity synchronization remains
+independent of widget publication.
+
+The reported installation used LiveContainer+SideStore, with `v3.8.11 nightly`
+shown in SideStore Settings, and retained extensions. Actual signed App Group
+access, widget updates, and Live Activities on that installation remain pending
+device verification. Local parser and packaging tests do not establish them.

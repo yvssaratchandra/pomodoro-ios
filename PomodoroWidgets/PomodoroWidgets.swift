@@ -109,7 +109,7 @@ private struct FocusWidgetView: View {
                     .font(.subheadline)
             }
         } else {
-            Text("Open Pomodoro to connect this widget.").font(.subheadline)
+            Text("Open Pomodoro to set up widgets").font(.subheadline)
         }
     }
 }

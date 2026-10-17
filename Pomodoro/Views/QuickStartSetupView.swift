@@ -41,6 +41,20 @@ struct QuickStartSetupView: View {
     var body: some View {
         Form {
             #if NATIVE_INTEGRATIONS
+            if let error = store.widgetUpdateError {
+                Section("Widget connection") {
+                    Text("Widgets couldn’t update. Your data is saved.").foregroundStyle(.secondary)
+                    Button("Retry") { store.refreshExternalSurfaces() }
+                    DisclosureGroup("Connection details") {
+                        let details = SharedWidgetContainer.diagnostics()
+                        LabeledContent("Configured group", value: details.configuredGroup ?? "Missing")
+                        LabeledContent("Declared groups", value: details.declaredGroups.joined(separator: "\n"))
+                        LabeledContent("Selected group", value: details.selectedGroup ?? "None")
+                        Text(details.failure ?? error).foregroundStyle(.secondary)
+                    }
+                    .font(.footnote)
+                }
+            }
             Section("Home Screen widget") {
                 Text("Add the Pomodoro widget from your iPhone's widget gallery, then choose a project.")
                     .foregroundStyle(.secondary)

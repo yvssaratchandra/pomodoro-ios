@@ -17,6 +17,7 @@ struct PendingDeletion {
 
 @MainActor @Observable final class AppStore {
     private(set) var state: AppSnapshot
+    private(set) var widgetUpdateError: String?
     var errorMessage: String?
     private(set) var lastFinishedSessionID: UUID?
     private(set) var pendingDeletion: PendingDeletion?
@@ -98,9 +99,11 @@ struct PendingDeletion {
     // Publish only after a durable commit, on launch, or on activation. A
     // projection failure must not roll back authoritative, successfully saved work.
     func refreshExternalSurfaces() {
-        do { try publisher.publish(state, now: now()) }
-        catch {
-            errorMessage = "Your data is saved, but an external display could not be updated: \(error.localizedDescription)"
+        do {
+            try publisher.publish(state, now: now())
+            widgetUpdateError = nil
+        } catch {
+            widgetUpdateError = error.localizedDescription
         }
         activityGeneration &+= 1
         let generation = activityGeneration
