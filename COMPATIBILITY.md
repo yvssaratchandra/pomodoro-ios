@@ -33,3 +33,18 @@ Use a disposable test installation for backup restoration. Export a representati
 | Export and restore through Files, then relaunch | Representative saved content and totals are preserved | Not tested |
 
 Record the iOS version, LiveContainer version, build commit, and results when performing these checks. For audible checks, enable notification sounds and turn off Silent mode and Focus restrictions first. An unsigned build alone cannot establish these results.
+
+## Dim Focus and capture shortcuts
+
+Dim Focus state, capture URL parsing, and daily widget projection rules have local automated coverage. Screen-awake ownership, background transitions, native menus, keyboard behavior, and rendering require iOS verification; portable tests do not run UIKit or SwiftUI.
+
+| Phone check | Expected result | Status |
+| --- | --- | --- |
+| Native IPA installed through SideStore, retaining the extension | Widget appears and reads the same App Group snapshot as the app | Not tested |
+| Home Screen capture shortcut, app closed/open | Opens capture for current focus; idle/break opens unassigned; existing draft remains | Not tested |
+| Medium widget and Lock Screen/expanded Island Thought links | Opens capture directly; pinned old session never attaches to a newer one | Not tested |
+| Dim Focus enabled, revealed, disabled, backgrounded, and expired | Five-second return only on unobstructed Focus; screen-awake ownership released elsewhere | Not tested |
+| Dim Focus capture at completion | Thought draft survives; mode exits and normal break-ready state appears | Not tested |
+| Widget across midnight or time-zone changes | Old saved totals are not presented as current-day totals | Not tested |
+
+The manual Codemagic **Native IPA** workflow produces an unsigned native artifact. Preserve its widget extension in SideStore. App Group identifiers after signing must match the app and extension's `PomodoroAppGroup` configuration; a successful unsigned build cannot establish this. Record the exact SideStore version and signing method when checking installation.

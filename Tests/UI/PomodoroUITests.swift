@@ -1,6 +1,60 @@
 import XCTest
 
 final class PomodoroUITests: XCTestCase {
+    func testColdCaptureLinkWorksWithoutProjectsAndSavesUnassignedThought() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.open(URL(string: "pomodoro://thoughts/new")!)
+        XCTAssertTrue(app.buttons["thought.capture.done"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["thought.project"].exists)
+        enterText("Remember this before creating a project", into: "thought.text", in: app)
+        app.buttons["thought.capture.add"].tap()
+        app.buttons["thought.capture.done"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Thoughts"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Thoughts"].tap()
+        XCTAssertTrue(app.buttons["Remember this before creating a project"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["timer.countdown"].exists)
+    }
+
+    func testDimFocusCaptureAndTemporaryRevealRespectSheetAndTab() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launch()
+        createProject("Writing", in: app)
+        openFocus(in: app)
+        app.buttons["focus.start"].tap()
+        let toggle = app.buttons["dimFocusToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        let reveal = app.buttons["dimFocusReveal"]
+        XCTAssertTrue(reveal.waitForExistence(timeout: 5))
+        app.buttons["dimFocusCapture"].tap()
+        XCTAssertTrue(app.buttons["thought.capture.done"].waitForExistence(timeout: 5))
+        enterText("Preserve capture while focus is dimmed", into: "thought.text", in: app)
+        let prematureDim = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
+        prematureDim.isInverted = true
+        wait(for: [prematureDim], timeout: 6)
+        XCTAssertTrue((thoughtInput(in: app).value as? String)?.contains("Preserve capture") == true)
+        app.buttons["thought.capture.add"].tap()
+        app.buttons["thought.capture.done"].tap()
+        XCTAssertTrue(reveal.waitForExistence(timeout: 5))
+        reveal.tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        app.tabBars.buttons["Thoughts"].tap()
+        let dimOnOtherTab = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
+        dimOnOtherTab.isInverted = true
+        wait(for: [dimOnOtherTab], timeout: 6)
+        XCTAssertTrue(app.buttons["Preserve capture while focus is dimmed"].exists)
+        app.tabBars.buttons["Focus"].tap()
+        XCTAssertTrue(reveal.waitForExistence(timeout: 7))
+        reveal.tap()
+        toggle.tap()
+        let dimAfterDisable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
+        dimAfterDisable.isInverted = true
+        wait(for: [dimAfterDisable], timeout: 6)
+        XCTAssertTrue(app.staticTexts["timer.countdown"].exists)
+    }
+
     func testURLProjectCreationAndTimerRecoveryAcrossRelaunch() {
         continueAfterFailure = false
         let app = newApp()
@@ -227,7 +281,7 @@ final class PomodoroUITests: XCTestCase {
         openFocus(in: app)
         XCTAssertFalse(app.buttons["focus.intention"].exists)
         app.buttons["focus.more"].tap()
-        app.buttons["focus.intention"].tap()
+        app.buttons["Plan this session"].tap()
         addPlanTasks("Draft introduction", in: app)
         app.buttons["plan.done"].tap()
         openSettings(in: app)
@@ -279,7 +333,7 @@ final class PomodoroUITests: XCTestCase {
         createProject("Writing", in: app)
         openFocus(in: app)
         app.buttons["focus.more"].tap()
-        app.buttons["focus.intention"].tap()
+        app.buttons["Plan this session"].tap()
         let composer = planInput(in: app)
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         XCTAssertTrue(app.navigationBars["Session plan"].exists)
@@ -393,7 +447,7 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["focus.intention.edit"].exists)
         app.buttons["focus.more"].tap()
-        app.buttons["focus.intention.edit"].tap()
+        app.buttons["Plan this session"].tap()
         addPlanTasks("Write first draft", in: app)
         app.buttons["plan.done"].tap()
         assertPlanSummary("focus.intention.edit", count: 1, in: app)
@@ -543,7 +597,7 @@ final class PomodoroUITests: XCTestCase {
             }
             attachScreenshot("\(name) · Focus ready", app: app)
             app.buttons["focus.more"].tap()
-            app.buttons["focus.intention"].tap()
+            app.buttons["Plan this session"].tap()
             addPlanTasks("Draft the introduction\nReview references", in: app)
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
             attachScreenshot("\(name) · Session plan with keyboard", app: app)
@@ -628,7 +682,7 @@ final class PomodoroUITests: XCTestCase {
     private func openProjects(in app: XCUIApplication) {
         openFocus(in: app)
         app.buttons["focus.more"].tap()
-        app.buttons["focus.projects"].tap()
+        app.buttons["Manage projects"].tap()
         XCTAssertTrue(app.navigationBars["Projects"].waitForExistence(timeout: 5))
     }
 

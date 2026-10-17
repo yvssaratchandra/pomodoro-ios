@@ -90,3 +90,42 @@ workflows:
       - build/Pomodoro.ipa
       - build/TestResults.zip
       - build/*.log
+
+  native-ipa:
+    name: Native IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 25
+    environment:
+      xcode: latest
+    scripts:
+      - name: Check project and core logic
+        script: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild -version | tee build/native-toolchain.log
+          python3 -m unittest discover -s Tests/Build -v
+          git diff --exit-code -- Pomodoro.xcodeproj
+          swift test 2>&1 | tee build/native-core-tests.log
+      - name: Build native iPhone app and widget extension
+        script: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Pomodoro.xcodeproj -scheme PomodoroNative \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build/NativeRelease \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/native-release.log
+          python3 Scripts/verify_native_bundle.py \
+            build/NativeRelease/Build/Products/Release-iphoneos/PomodoroNative.app
+      - name: Package native IPA
+        script: |
+          set -euo pipefail
+          APP_PATH=build/NativeRelease/Build/Products/Release-iphoneos/PomodoroNative.app
+          test -f "$APP_PATH/PomodoroNative"
+          test -d "$APP_PATH/PlugIns/PomodoroWidgets.appex"
+          mkdir -p build/NativeIPA/Payload
+          ditto "$APP_PATH" build/NativeIPA/Payload/PomodoroNative.app
+          cd build/NativeIPA
+          ditto -c -k --keepParent Payload ../Pomodoro-Native.ipa
+    artifacts:
+      - build/Pomodoro-Native.ipa
+      - build/native-*.log

@@ -123,6 +123,8 @@ struct RootView: View {
                 .tabItem { Label("Thoughts", systemImage: "text.bubble") }.tag(AppNavigation.Tab.thoughts)
             StatsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
         }
+        .accessibilityHidden(dimFocus.isDimmed)
+        .allowsHitTesting(!dimFocus.isDimmed)
         .overlay {
             if dimFocus.isDimmed, let timer = store.state.activeTimer, timer.kind == .focus {
                 DimFocusView(timer: timer, reveal: dimFocus.reveal) {
