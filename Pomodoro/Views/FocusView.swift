@@ -211,7 +211,7 @@ struct FocusView: View {
                                useAsIntention: { navigation.sessionNoteDrafts[project.id] = $0 })
             } else if let id = store.lastFinishedSessionID,
                       let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == project.id && $0.nextStep == nil }) {
-                Button("Plan next time") { breadcrumbSession = session }
+                Button("Plan next session") { breadcrumbSession = session }
                     .accessibilityIdentifier("focus.nextStep")
             }
         }
@@ -264,7 +264,7 @@ struct FocusView: View {
                 BreadcrumbCard(store: store, project: project)
             } else if let id = store.lastFinishedSessionID,
                       let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == offer.projectID && $0.nextStep == nil }) {
-                Button("Plan next time") { breadcrumbSession = session }
+                Button("Plan next session") { breadcrumbSession = session }
                     .accessibilityIdentifier("focus.nextStep")
             }
         }

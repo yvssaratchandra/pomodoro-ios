@@ -88,7 +88,7 @@ struct ProjectDetail: View {
                             if project.breadcrumb != nil {
                                 BreadcrumbCard(store: store, project: project)
                             } else {
-                                Button("Plan next time", systemImage: "arrow.turn.down.right") { editingNextStep = true }
+                                Button("Plan next session", systemImage: "arrow.turn.down.right") { editingNextStep = true }
                             }
                             Button("Thoughts", systemImage: "text.bubble") { navigation.showThoughts(projectID: project.id) }
                         }

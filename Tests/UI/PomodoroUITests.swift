@@ -33,25 +33,38 @@ final class PomodoroUITests: XCTestCase {
         enterText("Preserve capture while focus is dimmed", into: "thought.text", in: app)
         let prematureDim = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
         prematureDim.isInverted = true
-        wait(for: [prematureDim], timeout: 6)
+        wait(for: [prematureDim], timeout: 11)
         XCTAssertTrue((thoughtInput(in: app).value as? String)?.contains("Preserve capture") == true)
         app.buttons["thought.capture.add"].tap()
         app.buttons["thought.capture.done"].tap()
-        XCTAssertTrue(reveal.waitForExistence(timeout: 5))
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        let dimImmediatelyAfterSave = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
+        dimImmediatelyAfterSave.isInverted = true
+        wait(for: [dimImmediatelyAfterSave], timeout: 6)
+        XCTAssertTrue(reveal.waitForExistence(timeout: 10))
+
+        app.buttons["dimFocusCapture"].tap()
+        XCTAssertTrue(app.buttons["thought.capture.done"].waitForExistence(timeout: 5))
+        app.buttons["thought.capture.done"].tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        let dimImmediatelyAfterEmptyCapture = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
+        dimImmediatelyAfterEmptyCapture.isInverted = true
+        wait(for: [dimImmediatelyAfterEmptyCapture], timeout: 6)
+        XCTAssertTrue(reveal.waitForExistence(timeout: 10))
         reveal.tap()
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         app.tabBars.buttons["Thoughts"].tap()
         let dimOnOtherTab = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
         dimOnOtherTab.isInverted = true
-        wait(for: [dimOnOtherTab], timeout: 6)
+        wait(for: [dimOnOtherTab], timeout: 11)
         XCTAssertTrue(app.buttons["Preserve capture while focus is dimmed"].exists)
         app.tabBars.buttons["Focus"].tap()
-        XCTAssertTrue(reveal.waitForExistence(timeout: 7))
+        XCTAssertTrue(reveal.waitForExistence(timeout: 15))
         reveal.tap()
         toggle.tap()
         let dimAfterDisable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
         dimAfterDisable.isInverted = true
-        wait(for: [dimAfterDisable], timeout: 6)
+        wait(for: [dimAfterDisable], timeout: 11)
         XCTAssertTrue(app.staticTexts["timer.countdown"].exists)
     }
 

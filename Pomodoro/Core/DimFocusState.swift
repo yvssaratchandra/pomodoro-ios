@@ -2,7 +2,7 @@ import Foundation
 
 /// Presentation state only. Session timing and persistence remain owned by the store.
 struct DimFocusState: Equatable {
-    static let revealDuration: TimeInterval = 5
+    static let revealDuration: TimeInterval = 10
 
     private(set) var sessionID: UUID?
     private(set) var isDimmed = false
@@ -81,15 +81,6 @@ struct DimFocusState: Equatable {
               canPresent, !accessibilityActive, let returnDeadline, uptime >= returnDeadline else { return }
         isDimmed = true
         invalidateReturn()
-    }
-
-    /// The capture owner calls this only after removing its presentation blocker.
-    mutating func captureDismissed(sessionID expectedID: UUID?, returnDirectlyToDim: Bool, uptime: TimeInterval) {
-        guard expectedID == sessionID, isEnabled else { return }
-        if returnDirectlyToDim && canPresent {
-            isDimmed = true
-            invalidateReturn()
-        } else { reveal(uptime: uptime) }
     }
 
     private mutating func invalidateReturn() {

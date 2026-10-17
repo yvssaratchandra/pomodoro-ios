@@ -58,11 +58,11 @@ struct SessionDetailView: View {
                     }
                     Section("This session") {
                         if let note = session.intention { SessionPlanPreview(text: note) }
-                        Button(session.intention == nil ? "Plan this session" : "Edit this session") { editingIntention = true }
+                        Button(session.intention == nil ? "Plan this session" : "Edit session plan") { editingIntention = true }
                     }
-                    Section("Next time") {
+                    Section("Next session") {
                         if let note = session.nextStep { Text(note) }
-                        Button(session.nextStep == nil ? "Plan next time" : "Edit next time") { editingBreadcrumb = true }
+                        Button(session.nextStep == nil ? "Plan next session" : "Edit next session plan") { editingBreadcrumb = true }
                         if let note = session.nextStep {
                             Button("Set as project reminder") {
                                 if !store.saveNextStep(sessionID: session.id, text: note, promote: true) {

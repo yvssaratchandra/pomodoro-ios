@@ -58,12 +58,6 @@ final class DimFocusCoordinator: ObservableObject {
         let eventUptime = uptime
         change { $0.endInteraction(uptime: eventUptime) }
     }
-    func captureDismissed(sessionID: UUID?, returnDirectlyToDim: Bool) {
-        let eventUptime = uptime
-        change { $0.captureDismissed(sessionID: sessionID, returnDirectlyToDim: returnDirectlyToDim,
-                                     uptime: eventUptime) }
-    }
-
     private func change(_ event: (inout DimFocusState) -> Void) {
         var candidate = state
         event(&candidate)

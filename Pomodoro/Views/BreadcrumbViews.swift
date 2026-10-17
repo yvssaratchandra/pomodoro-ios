@@ -22,11 +22,11 @@ struct BreadcrumbEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Where will you pick up?", text: $draft, axis: .vertical)
+                TextField("What will you work on next?", text: $draft, axis: .vertical)
                     .lineLimit(3...8).focused($focused).accessibilityIdentifier("breadcrumb.text")
                 if draft.count >= 230 { Text("\(draft.count) / 280").foregroundStyle(.secondary) }
                 if let error { Text(error).font(.footnote).foregroundStyle(.red) }
-            }.appScreen().navigationTitle("Next time")
+            }.appScreen().navigationTitle("Next session")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { if draft == original { dismiss() } else { confirmingDiscard = true } }
@@ -61,7 +61,7 @@ struct BreadcrumbCard: View {
         if let breadcrumb = project.breadcrumb {
             Button { showingDetails = true } label: {
                 HStack {
-                    Label("Next time", systemImage: "arrow.turn.down.right")
+                    Label("Next session", systemImage: "arrow.turn.down.right")
                     Spacer()
                     Text(breadcrumb.text).lineLimit(1).foregroundStyle(.secondary)
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
@@ -93,7 +93,7 @@ private struct BreadcrumbDetailSheet: View {
         NavigationStack {
             Form {
                 if let breadcrumb {
-                    Section("Next time") { Text(breadcrumb.text) }
+                    Section("Next session") { Text(breadcrumb.text) }
                     Section {
                         if let useAsIntention {
                             Button("Use for this session") {
@@ -107,17 +107,17 @@ private struct BreadcrumbDetailSheet: View {
                 }
             }
             .appScreen()
-            .navigationTitle("Next time")
+            .navigationTitle("Next session")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $editing) { BreadcrumbEditor(store: store, projectID: projectID) }
-            .confirmationDialog("Clear next-time reminder?", isPresented: $confirmingClear) {
-                Button("Clear reminder", role: .destructive) {
+            .confirmationDialog("Clear next session plan?", isPresented: $confirmingClear) {
+                Button("Clear plan", role: .destructive) {
                     if store.editProjectBreadcrumb(projectID: projectID, text: "") { dismiss() }
                     else { error = store.errorMessage; store.errorMessage = nil }
                 }
             }
-            .alert("Unable to clear reminder", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .alert("Unable to clear plan", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }
             } message: { Text(error ?? "") }
         }

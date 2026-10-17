@@ -99,8 +99,6 @@ struct RootView: View {
     @State private var navigation = AppNavigation(scheme: AppInstallation.scheme)
     @StateObject private var dimFocus = DimFocusCoordinator()
     @StateObject private var presentation = AppPresentationContext()
-    @State private var dimCaptureSessionID: UUID?
-    @State private var captureReturnsToDim = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var testing: Bool { ProcessInfo.processInfo.arguments.contains("--ui-testing") }
@@ -146,8 +144,6 @@ struct RootView: View {
             .overlay {
                 if dimFocus.isDimmed, let timer = store.state.activeTimer, timer.kind == .focus {
                     DimFocusView(timer: timer, reveal: dimFocus.reveal) {
-                        dimCaptureSessionID = timer.id
-                        captureReturnsToDim = true
                         navigation.requestThoughtCapture(context: ThoughtCaptureContext(
                             projectID: timer.projectID, originSessionID: timer.id))
                     }
@@ -155,6 +151,7 @@ struct RootView: View {
                 }
             }
             .statusBarHidden(dimFocus.isDimmed)
+            .persistentSystemOverlays(dimFocus.isDimmed ? .hidden : .automatic)
             .onOpenURL { url in
                 // An external link reveals the app rather than covering its destination.
                 if dimFocus.isDimmed { dimFocus.reveal() }
@@ -276,16 +273,6 @@ struct RootView: View {
                         focusVisible: navigation.selectedTab == .focus && navigation.focusPath.isEmpty,
                         sceneActive: presentation.isActive,
                         accessibilityActive: UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning)
-        if captureReturnsToDim, navigation.thoughtCaptureContext == nil {
-            if dimFocus.state.sessionID != dimCaptureSessionID {
-                dimCaptureSessionID = nil
-                captureReturnsToDim = false
-            } else if dimFocus.state.canPresent {
-                dimFocus.captureDismissed(sessionID: dimCaptureSessionID, returnDirectlyToDim: true)
-                dimCaptureSessionID = nil
-                captureReturnsToDim = false
-            }
-        }
     }
 
     private func captureDidDismiss() {
