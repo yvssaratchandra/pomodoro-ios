@@ -1,7 +1,34 @@
 import Foundation
 
 struct WidgetSnapshot: Codable, Equatable {
-    static let currentFormatVersion = 1
+    static let currentFormatVersion = 2
+
+    struct SavedFocus: Codable, Equatable {
+        let dayStart: Date
+        let dayEnd: Date
+        let timeZoneIdentifier: String
+        let seconds: TimeInterval
+
+        var isValid: Bool {
+            dayStart.timeIntervalSince1970.isFinite && dayEnd.timeIntervalSince1970.isFinite &&
+            dayEnd > dayStart && TimeZone(identifier: timeZoneIdentifier) != nil &&
+            seconds.isFinite && seconds >= 0
+        }
+
+        func isFresh(at date: Date, timeZone: TimeZone = .current) -> Bool {
+            guard isValid, timeZone.identifier == timeZoneIdentifier,
+                  date >= dayStart, date < dayEnd else { return false }
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = timeZone
+            guard let day = calendar.dateInterval(of: .day, for: date) else { return false }
+            return day.start == dayStart && day.end == dayEnd
+        }
+
+        var wholeMinutes: Int {
+            guard seconds.isFinite, seconds >= 0 else { return 0 }
+            return Int(min(floor(seconds / 60), Double(Int.max / 2)))
+        }
+    }
 
     struct Project: Codable, Equatable, Identifiable {
         let id: UUID
@@ -21,10 +48,12 @@ struct WidgetSnapshot: Codable, Equatable {
     let generatedAt: Date
     let projects: [Project]
     let activeTimer: Timer?
+    let savedFocus: SavedFocus?
 
-    init(state: AppSnapshot, now: Date) {
+    init(state: AppSnapshot, now: Date, savedFocus: SavedFocus? = nil) {
         formatVersion = Self.currentFormatVersion
         generatedAt = now
+        self.savedFocus = savedFocus
         projects = state.projects.filter { $0.status == .ongoing }.map {
             Project(id: $0.id, name: $0.name, preferredFocusMinutes: $0.preferredFocusMinutes)
         }
@@ -33,6 +62,15 @@ struct WidgetSnapshot: Codable, Equatable {
                   projectName: state.projects.first { $0.id == timer.projectID }?.name ?? "Project",
                   startedAt: timer.startedAt, deadline: timer.deadline)
         }
+    }
+
+    var thoughtRoute: AppRoute {
+        .captureThought(sessionID: activeTimer.flatMap { $0.kind == .focus ? $0.id : nil })
+    }
+
+    static func nextRefresh(after date: Date, calendar: Calendar = .current) -> Date {
+        let regular = date.addingTimeInterval(900)
+        return calendar.dateInterval(of: .day, for: date).map { min(regular, $0.end) } ?? regular
     }
 
     func route(for projectID: UUID?) -> AppRoute {

@@ -7,7 +7,13 @@ import WidgetKit
         guard let directory = SharedWidgetContainer.directory() else {
             throw AppError.invalid("The shared App Group is unavailable. Check the native app's signing configuration.")
         }
-        try WidgetSnapshotFile.write(WidgetSnapshot(state: state, now: now), in: directory)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let day = Statistics.today(now, calendar: calendar)
+        let summary = WidgetSnapshot.SavedFocus(dayStart: day.start, dayEnd: day.end,
+            timeZoneIdentifier: calendar.timeZone.identifier,
+            seconds: Statistics.total(state, interval: day, now: now))
+        try WidgetSnapshotFile.write(WidgetSnapshot(state: state, now: now, savedFocus: summary), in: directory)
         WidgetCenter.shared.reloadAllTimelines()
     }
 }

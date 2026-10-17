@@ -19,6 +19,7 @@ enum WidgetSnapshotFile {
               snapshot.generatedAt.timeIntervalSince1970.isFinite,
               Set(snapshot.projects.map(\.id)).count == snapshot.projects.count,
               snapshot.projects.allSatisfy({ !$0.name.isEmpty && (10...60).contains($0.preferredFocusMinutes) }) else { return nil }
+        if let summary = snapshot.savedFocus, !summary.isValid { return nil }
         if let timer = snapshot.activeTimer {
             guard timer.startedAt.timeIntervalSince1970.isFinite,
                   timer.deadline.timeIntervalSince1970.isFinite,

@@ -17,7 +17,7 @@ final class ExternalSurfacesTests: XCTestCase {
         let state = AppSnapshot(projects: [writing, suspended, study, completed])
         let snapshot = WidgetSnapshot(state: state, now: now)
         XCTAssertEqual(snapshot.formatVersion, WidgetSnapshot.currentFormatVersion)
-        XCTAssertEqual(snapshot.formatVersion, 1)
+        XCTAssertEqual(snapshot.formatVersion, 2)
         XCTAssertEqual(state.schemaVersion, AppSnapshot.currentSchemaVersion)
         XCTAssertEqual(snapshot.generatedAt, now)
         XCTAssertEqual(snapshot.projects.map(\.id), [writing.id, study.id])
