@@ -34,24 +34,40 @@ final class PomodoroUITests: XCTestCase {
         let app = newApp()
         app.launch()
         createProject("Writing", in: app)
-        app.tabBars.buttons["Settings"].tap()
+        openSettings(in: app)
         app.buttons["settings.quickstart"].tap()
-        let toggle = app.switches["quickstart.useContainer"]
-        if toggle.exists {
+        let connection = app.buttons["quickstart.connection"]
+        if connection.exists {
+            connection.tap()
+            let toggle = app.switches["quickstart.useContainer"]
             if toggle.value as? String == "0" { toggle.tap() }
             let field = app.textFields["quickstart.launchURL"]
             XCTAssertTrue(field.waitForExistence(timeout: 5))
             field.tap()
             replaceText(in: field, with: "https://example.com")
+            app.buttons["quickstart.connection.save"].tap()
             XCTAssertTrue(app.staticTexts["quickstart.invalidURL"].waitForExistence(timeout: 5))
-            replaceText(in: field, with: "livecontainer2://livecontainer-launch?bundle-name=Pomodoro.app&container-folder-name=test")
+            let validURL = "livecontainer2://livecontainer-launch?bundle-name=Pomodoro.app&container-folder-name=test"
+            field.tap()
+            replaceText(in: field, with: validURL)
+            app.buttons["quickstart.connection.save"].tap()
+            XCTAssertTrue(app.buttons["quickstart.copy"].waitForExistence(timeout: 5))
+            connection.tap()
+            field.tap()
+            replaceText(in: field, with: "https://invalid.example.com")
+            app.buttons["quickstart.connection.save"].tap()
+            XCTAssertTrue(app.staticTexts["quickstart.invalidURL"].waitForExistence(timeout: 5))
+            app.navigationBars.buttons.firstMatch.tap()
+            connection.tap()
+            XCTAssertEqual(field.value as? String, validURL)
+            app.navigationBars.buttons.firstMatch.tap()
         }
         let copy = app.buttons["quickstart.copy"]
         reveal(copy, in: app, scrollingUp: true)
         XCTAssertTrue(copy.isEnabled)
         copy.tap()
         XCTAssertTrue(app.staticTexts["quickstart.copied"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
         XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["timer.countdown"].exists)
     }
@@ -59,8 +75,11 @@ final class PomodoroUITests: XCTestCase {
     func testCreateFocusEndAndReviewSession() {
         let app = newApp()
         app.launch()
+        XCTAssertEqual(app.tabBars.buttons.count, 3)
+        XCTAssertFalse(app.tabBars.buttons["Projects"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Settings"].exists)
         createProject("Writing", in: app)
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
         app.buttons["focus.start"].tap()
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         app.buttons["timer.end"].tap()
@@ -69,7 +88,17 @@ final class PomodoroUITests: XCTestCase {
         let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         XCTAssertTrue(session.label.contains("Writing"))
-        app.tabBars.buttons["Settings"].tap()
+        app.buttons["stats.dailyGoal"].tap()
+        XCTAssertTrue(app.navigationBars["Daily goals"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["stats.more"].tap()
+        app.buttons["Goals"].tap()
+        XCTAssertTrue(app.navigationBars["Goals"].waitForExistence(timeout: 5))
+        app.buttons["Consistency"].tap()
+        app.buttons["consistency.target"].tap()
+        app.buttons["7 days"].tap()
+        XCTAssertTrue(app.staticTexts["0 of 7 focused days"].waitForExistence(timeout: 5))
+        openSettings(in: app)
         XCTAssertTrue(app.navigationBars["Settings"].exists)
     }
 
@@ -79,12 +108,12 @@ final class PomodoroUITests: XCTestCase {
         app.launch()
         createProject("Writing", in: app)
         createProject("Study", in: app)
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
         chooseProject("Writing", in: app)
         setDuration("40 min", in: app)
         assertDuration("40 min", in: app)
         app.tabBars.buttons["Stats"].tap()
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
         assertDuration("40 min", in: app)
         chooseProject("Study", in: app)
         assertDuration("25 min", in: app)
@@ -98,6 +127,13 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["focus.duration"].exists)
         attachScreenshot("Focus running", app: app)
+        openProjects(in: app)
+        app.buttons["Study"].tap()
+        XCTAssertTrue(app.navigationBars["Study"].waitForExistence(timeout: 5))
+        openSettings(in: app)
+        openFocus(in: app)
+        XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Writing"].exists)
         app.buttons["timer.end"].tap()
         app.alerts["End focus?"].buttons["Save Session"].tap()
         assertDuration("40 min", in: app)
@@ -110,7 +146,7 @@ final class PomodoroUITests: XCTestCase {
         let app = newApp()
         app.launch()
         createProject("Writing", in: app)
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
         app.buttons["focus.start"].tap()
         app.buttons["timer.end"].tap()
         let endAlert = app.alerts["End focus?"]
@@ -125,7 +161,7 @@ final class PomodoroUITests: XCTestCase {
         app.tabBars.buttons["Stats"].tap()
         XCTAssertTrue(app.staticTexts["No sessions in this selection"].waitForExistence(timeout: 5))
 
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
         app.buttons["focus.start"].tap()
         app.buttons["timer.end"].tap()
         endAlert.buttons["Save Session"].tap()
@@ -146,10 +182,18 @@ final class PomodoroUITests: XCTestCase {
         let app = newApp()
         app.launch()
         createProject("Writing", in: app)
-        app.tabBars.buttons["Focus"].tap()
+        openFocus(in: app)
+        XCTAssertFalse(app.buttons["focus.intention"].exists)
+        app.buttons["focus.more"].tap()
         app.buttons["focus.intention"].tap()
         enterText("Draft introduction", into: "intention.text", in: app)
         app.buttons["intention.save"].tap()
+        openSettings(in: app)
+        openFocus(in: app)
+        openProjects(in: app)
+        app.tabBars.buttons["Thoughts"].tap()
+        openFocus(in: app)
+        XCTAssertTrue(app.buttons["focus.intention"].label.contains("Draft introduction"))
         app.buttons["focus.start"].tap()
         let capture = app.buttons["focus.captureThought"]
         reveal(capture, in: app, scrollingUp: false)
@@ -174,12 +218,13 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(check.waitForExistence(timeout: 5))
         XCTAssertEqual(check.value as? String, "Open")
         check.tap()
+        XCTAssertTrue(app.staticTexts["All caught up"].waitForExistence(timeout: 5))
+        app.buttons["View completed"].tap()
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
         XCTAssertEqual(check.value as? String, "Done")
-        app.buttons["Done"].firstMatch.tap()
-        XCTAssertTrue(check.exists)
         check.tap()
         XCTAssertTrue(app.staticTexts["No matching thoughts"].waitForExistence(timeout: 5))
-        app.buttons["Open"].tap()
+        filterThoughts("Open", in: app)
         XCTAssertTrue(check.waitForExistence(timeout: 5))
     }
 
@@ -193,22 +238,25 @@ final class PomodoroUITests: XCTestCase {
         app.buttons["thought.save"].tap()
         let thought = app.buttons["Review bibliography"].firstMatch
         XCTAssertTrue(thought.waitForExistence(timeout: 5))
-        let project = app.buttons["thoughts.project"]
-        project.tap()
+        app.buttons["thoughts.filters"].tap()
+        app.buttons["thoughts.project"].tap()
         app.buttons["Unassigned"].tap()
         XCTAssertTrue(thought.exists)
         let search = app.searchFields.firstMatch
+        reveal(search, in: app, scrollingUp: false)
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
         search.typeText("bibliography")
         XCTAssertTrue(thought.exists)
         replaceText(in: search, with: "missing")
         XCTAssertTrue(app.staticTexts["No matching thoughts"].waitForExistence(timeout: 5))
-        reveal(app.buttons["Clear filters"], in: app)
-        app.buttons["Clear filters"].tap()
+        reveal(app.buttons["thoughts.reset"], in: app)
+        app.buttons["thoughts.reset"].tap()
+        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() }
         XCTAssertTrue(thought.waitForExistence(timeout: 5))
         let check = app.buttons["thought.check"].firstMatch
         check.tap()
+        filterThoughts("Done", in: app)
         XCTAssertEqual(check.value as? String, "Done")
         thought.swipeLeft()
         if app.buttons["Delete"].exists { app.buttons["Delete"].tap() }
@@ -218,6 +266,15 @@ final class PomodoroUITests: XCTestCase {
         undo.tap()
         XCTAssertTrue(thought.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["thought.check"].firstMatch.value as? String, "Done")
+        app.buttons["thoughts.more"].tap()
+        app.buttons["thoughts.select"].tap()
+        app.buttons["thought.check"].firstMatch.tap()
+        app.buttons["Mark"].tap()
+        app.buttons["Open"].tap()
+        XCTAssertFalse(thought.exists)
+        app.buttons["thoughts.reset"].tap()
+        XCTAssertTrue(thought.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["thought.check"].firstMatch.value as? String, "Open")
     }
 
     func testVisualStatesLightDarkAndAccessibilityText() {
@@ -232,7 +289,7 @@ final class PomodoroUITests: XCTestCase {
             app.launchEnvironment["POMODORO_TEST_DYNAMIC_TYPE"] = textSize
             app.launch()
             createProject("A long project name for layout checks", in: app)
-            app.tabBars.buttons["Focus"].tap()
+            openFocus(in: app)
             XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
             if textSize == "standard" {
                 XCTAssertTrue(app.buttons["focus.start"].isHittable)
@@ -251,9 +308,17 @@ final class PomodoroUITests: XCTestCase {
             attachScreenshot("\(name) · Focus after saving", app: app)
             app.tabBars.buttons["Stats"].tap()
             attachScreenshot("\(name) · Stats", app: app)
+            app.buttons["Week"].tap()
+            attachScreenshot("\(name) · Weekly stats", app: app)
+            app.buttons["Month"].tap()
+            attachScreenshot("\(name) · Monthly stats", app: app)
+            let details = app.buttons["Details"]
+            reveal(details, in: app)
+            details.tap()
+            XCTAssertTrue(app.navigationBars["Details"].waitForExistence(timeout: 5))
             app.tabBars.buttons["Thoughts"].tap()
             attachScreenshot("\(name) · Thoughts", app: app)
-            app.tabBars.buttons["Settings"].tap()
+            openSettings(in: app)
             attachScreenshot("\(name) · Settings", app: app)
             app.terminate()
             let breakApp = newApp()
@@ -279,13 +344,36 @@ final class PomodoroUITests: XCTestCase {
     }
 
     private func createProject(_ name: String, in app: XCUIApplication) {
-        app.tabBars.buttons["Projects"].tap()
+        openProjects(in: app)
         app.buttons["projects.new"].tap()
         let field = app.textFields["project.name"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText(name)
         app.buttons["project.save"].tap()
+    }
+
+    private func openFocus(in app: XCUIApplication) {
+        if app.tabBars.buttons["Focus"].isSelected { app.tabBars.buttons["Thoughts"].tap() }
+        app.tabBars.buttons["Focus"].tap()
+    }
+
+    private func openProjects(in app: XCUIApplication) {
+        openFocus(in: app)
+        app.buttons["focus.more"].tap()
+        app.buttons["focus.projects"].tap()
+        XCTAssertTrue(app.navigationBars["Projects"].waitForExistence(timeout: 5))
+    }
+
+    private func openSettings(in app: XCUIApplication) {
+        openFocus(in: app)
+        app.buttons["focus.settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+    }
+
+    private func filterThoughts(_ status: String, in app: XCUIApplication) {
+        app.buttons["thoughts.filters"].tap()
+        app.buttons[status].tap()
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, scrollingUp: Bool = true) {
