@@ -37,3 +37,56 @@ workflows:
     artifacts:
       - build/Pomodoro.ipa
       - build/*.log
+
+  livecontainer-verification:
+    name: LiveContainer verification
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    environment:
+      xcode: latest
+    scripts:
+      - name: Check project and core logic
+        script: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild -version | tee build/toolchain.log
+          python3 -m unittest discover -s Tests/Build -v
+          git diff --exit-code -- Pomodoro.xcodeproj
+          swift test 2>&1 | tee build/core-tests.log
+      - name: Run app and UI tests on iPhone simulator
+        script: |
+          set -euo pipefail
+          trap 'if [ -d build/Tests.xcresult ]; then ditto -c -k --keepParent build/Tests.xcresult build/TestResults.zip; fi' EXIT
+          SIMULATOR_ID=$(python3 Scripts/select_simulator.py)
+          xcrun simctl boot "$SIMULATOR_ID" || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcodebuild test \
+            -project Pomodoro.xcodeproj -scheme Pomodoro \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath build/DerivedData \
+            -resultBundlePath build/Tests.xcresult \
+            -parallel-testing-enabled NO \
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/simulator.log
+      - name: Build unsigned iPhone app
+        script: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Pomodoro.xcodeproj -scheme Pomodoro \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build/Release \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee build/release.log
+      - name: Package LiveContainer IPA
+        script: |
+          set -euo pipefail
+          APP_PATH=build/Release/Build/Products/Release-iphoneos/Pomodoro.app
+          test -f "$APP_PATH/Pomodoro"
+          test ! -d "$APP_PATH/PlugIns"
+          mkdir -p build/IPA/Payload
+          ditto "$APP_PATH" build/IPA/Payload/Pomodoro.app
+          cd build/IPA
+          ditto -c -k --keepParent Payload ../Pomodoro.ipa
+    artifacts:
+      - build/Pomodoro.ipa
+      - build/TestResults.zip
+      - build/*.log
