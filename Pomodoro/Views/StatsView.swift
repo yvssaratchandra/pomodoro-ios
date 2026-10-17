@@ -311,7 +311,9 @@ struct SessionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             if !hideProject { Text(name).font(.headline).lineLimit(1) }
-            if let intention = session.intention { Text(intention).font(.subheadline).lineLimit(1) }
+            if let firstTask = SessionPlanText.items(from: session.intention).first {
+                Text(firstTask).font(.subheadline).lineLimit(1)
+            }
             HStack {
                 Text("\(session.startedAt.formatted(date: .omitted, time: .shortened)) · \(DurationText.summary(session.duration))")
                 if session.outcome != .completed { Text("Ended early") }

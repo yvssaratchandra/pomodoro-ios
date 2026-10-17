@@ -150,7 +150,7 @@ struct FocusView: View {
                     draftNoteProject = project
                 } label: {
                     HStack {
-                        Label(preview, systemImage: "square.and.pencil").lineLimit(1)
+                        SessionPlanPreview(text: preview, maximumItems: 2)
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     }
@@ -191,7 +191,8 @@ struct FocusView: View {
             if active.kind == .focus {
                 if let note = active.intention {
                     Button { noteTimer = active } label: {
-                        Label(note, systemImage: "square.and.pencil").lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                        SessionPlanPreview(text: note, maximumItems: 2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }.accessibilityIdentifier("focus.intention.edit")
                 }
                 Button(role: .destructive) { confirmingEnd = true } label: {

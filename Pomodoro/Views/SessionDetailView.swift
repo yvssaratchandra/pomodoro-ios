@@ -3,40 +3,45 @@ import SwiftUI
 struct DraftSessionNoteEditor: View {
     @Binding var text: String
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-    @State private var draft: String
+    @State private var rows: [SessionPlanRow]
+    @State private var edited = false
+    @State private var error: String?
     @State private var confirmingDiscard = false
 
     init(text: Binding<String>) {
         _text = text
-        _draft = State(initialValue: text.wrappedValue)
+        _rows = State(initialValue: SessionPlanRow.initialRows(from: text.wrappedValue))
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("What will you work on?", text: $draft, axis: .vertical)
-                    .lineLimit(3...8).focused($focused).accessibilityIdentifier("intention.text")
-                if draft.count >= 230 { Text("\(draft.count) / 280").foregroundStyle(.secondary) }
+                SessionPlanFields(rows: $rows, edited: $edited)
+                if let error { Text(error).foregroundStyle(.red).font(.footnote) }
             }
             .appScreen().navigationTitle("This session")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { cancel() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { if edited { confirmingDiscard = true } else { dismiss() } }
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { text = draft; dismiss() }
-                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).count > 280)
-                        .accessibilityIdentifier("intention.save")
+                    Button("Save") { save() }.accessibilityIdentifier("intention.save")
                 }
             }
             .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
                 Button("Discard Changes", role: .destructive) { dismiss() }
             }
-            .interactiveDismissDisabled(draft != text)
-            .onAppear { focused = true }
+            .interactiveDismissDisabled(edited)
         }
     }
 
-    private func cancel() { if draft == text { dismiss() } else { confirmingDiscard = true } }
+    private func save() {
+        guard edited else { dismiss(); return }
+        do {
+            text = try SessionPlanText.serialize(rows.map(\.text)) ?? ""
+            dismiss()
+        } catch { self.error = error.localizedDescription }
+    }
 }
 
 struct IntentionEditor: View {
@@ -44,9 +49,8 @@ struct IntentionEditor: View {
     let sessionID: UUID
     let active: Bool
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-    @State private var draft: String
-    @State private var original: String
+    @State private var rows: [SessionPlanRow]
+    @State private var edited = false
     @State private var error: String?
     @State private var confirmingDiscard = false
 
@@ -55,36 +59,38 @@ struct IntentionEditor: View {
         self.sessionID = sessionID
         self.active = active
         let initial = active ? store.state.activeTimer?.intention ?? "" : store.state.sessions.first { $0.id == sessionID }?.intention ?? ""
-        _draft = State(initialValue: initial)
-        _original = State(initialValue: initial)
+        _rows = State(initialValue: SessionPlanRow.initialRows(from: initial))
     }
+
     var body: some View {
         NavigationStack {
             Form {
-                TextField("What will you work on?", text: $draft, axis: .vertical)
-                    .lineLimit(3...8).focused($focused).accessibilityIdentifier("intention.text")
-                if draft.count >= 230 { Text("\(draft.count) / 280").foregroundStyle(.secondary) }
+                SessionPlanFields(rows: $rows, edited: $edited)
                 if let error { Text(error).foregroundStyle(.red).font(.footnote) }
             }
             .appScreen().navigationTitle("This session")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if draft == original { dismiss() } else { confirmingDiscard = true } }
+                    Button("Cancel") { if edited { confirmingDiscard = true } else { dismiss() } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        if store.editIntention(id: sessionID, active: active, text: draft) { dismiss() }
-                        else { error = store.errorMessage; store.errorMessage = nil }
-                    }.disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).count > 280)
-                        .accessibilityIdentifier("intention.save")
+                    Button("Save") { save() }.accessibilityIdentifier("intention.save")
                 }
             }
             .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
                 Button("Discard Changes", role: .destructive) { dismiss() }
             }
-            .interactiveDismissDisabled(draft != original)
-            .onAppear { focused = true }
+            .interactiveDismissDisabled(edited)
         }
+    }
+
+    private func save() {
+        guard edited else { dismiss(); return }
+        do {
+            let value = try SessionPlanText.serialize(rows.map(\.text))
+            if store.editIntention(id: sessionID, active: active, text: value ?? "") { dismiss() }
+            else { error = store.errorMessage; store.errorMessage = nil }
+        } catch { self.error = error.localizedDescription }
     }
 }
 
@@ -107,7 +113,7 @@ struct SessionDetailView: View {
                         if session.outcome == .interrupted { Text("Ended early").foregroundStyle(.secondary) }
                     }
                     Section("This session") {
-                        if let note = session.intention { Text(note) }
+                        if let note = session.intention { SessionPlanPreview(text: note) }
                         Button(session.intention == nil ? "Plan this session" : "Edit this session") { editingIntention = true }
                     }
                     Section("Next time") {
