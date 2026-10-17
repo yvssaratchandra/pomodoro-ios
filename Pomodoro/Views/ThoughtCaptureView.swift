@@ -4,7 +4,6 @@ struct ThoughtCaptureView: View {
     let store: AppStore
     let context: ThoughtCaptureContext
     @State private var draft = ""
-    @State private var composerVisible = true
     @State private var projectID: UUID?
     @State private var createdIDs: Set<UUID> = []
     @State private var editing: CapturedThought?
@@ -19,7 +18,9 @@ struct ThoughtCaptureView: View {
         _projectID = State(initialValue: context.projectID)
     }
 
-    private var hasDraft: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var normalized: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var hasDraft: Bool { !normalized.isEmpty }
+    private var canAdd: Bool { hasDraft && normalized.count <= 500 }
     private var thoughts: [CapturedThought] {
         store.state.thoughts.filter { thought in
             if let origin = context.originSessionID { return thought.originSessionID == origin }
@@ -32,84 +33,105 @@ struct ThoughtCaptureView: View {
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                Form {
-                    if !thoughts.isEmpty {
-                        Section {
-                            ForEach(thoughts) { thought in thoughtRow(thought) }
+                List {
+                    ForEach(thoughts) { thought in
+                        thoughtRow(thought).id(thought.id)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    composer {
+                        guard let id = saveDraft() else { return }
+                        Task { @MainActor in
+                            await Task.yield()
+                            textFocused = true
+                            withAnimation { proxy.scrollTo(id, anchor: .bottom) }
                         }
                     }
-                    Section {
-                        if composerVisible {
-                            TextField("What’s on your mind?", text: $draft, axis: .vertical)
-                                .lineLimit(3...12)
-                                .focused($textFocused)
-                                .accessibilityIdentifier("thought.text")
-                            if draft.count >= 450 {
-                                Text("\(draft.count) / 500")
-                                    .foregroundStyle(draft.count > 500 ? .red : .secondary)
-                            }
-                            if context.originSessionID == nil {
-                                Picker("Project", selection: $projectID) {
-                                    Text("Unassigned").tag(Optional<UUID>.none)
-                                    ForEach(store.state.projects) { Text($0.name).tag(Optional($0.id)) }
-                                }.accessibilityIdentifier("thought.project")
-                            }
-                            HStack {
-                                Button {
-                                    if hasDraft { confirmingDiscard = true } else { discardDraft() }
-                                } label: {
-                                    Text("Cancel").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                                }
-                                Spacer()
-                                Button { _ = saveDraft() } label: {
-                                    Text("Add").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                                }
-                                    .disabled(!hasDraft)
-                                    .accessibilityIdentifier("thought.capture.add")
-                            }.buttonStyle(.borderless)
-                        } else {
-                            Button {
-                                composerVisible = true
-                                Task { @MainActor in
-                                    await Task.yield()
-                                    textFocused = true
-                                }
-                            } label: {
-                                Label("Add a thought", systemImage: "plus")
-                                    .frame(minHeight: 44)
-                            }.accessibilityIdentifier("thought.capture.new")
-                        }
-                        if let error { Text(error).foregroundStyle(.red) }
-                    }.id("thought.composer")
-                }
-                .onChange(of: composerVisible) { _, visible in
-                    if visible { withAnimation { proxy.scrollTo("thought.composer", anchor: .bottom) } }
-                }
-                .onChange(of: textFocused) { _, focused in
-                    if focused { withAnimation { proxy.scrollTo("thought.composer", anchor: .bottom) } }
-                }
-                .onChange(of: error) { _, message in
-                    if message != nil { withAnimation { proxy.scrollTo("thought.composer", anchor: .bottom) } }
                 }
             }
             .appScreen()
             .navigationTitle(context.originSessionID == nil ? "New thoughts" : "Session thoughts")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        if !hasDraft || saveDraft() { dismiss() }
+                        if hasDraft { confirmingDiscard = true } else { dismiss() }
                     }.accessibilityIdentifier("thought.capture.done")
                 }
             }
             .interactiveDismissDisabled(hasDraft)
-            .sheet(item: $editing) { ThoughtEditor(store: store, thoughtID: $0.id) }
-            .confirmationDialog("Discard this thought?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
-                Button("Discard thought", role: .destructive) { discardDraft() }
-                Button("Keep editing", role: .cancel) { }
+            .sheet(item: $editing, onDismiss: restoreFocus) {
+                ThoughtEditor(store: store, thoughtID: $0.id)
+            }
+            .confirmationDialog("Discard this draft?", isPresented: $confirmingDiscard, titleVisibility: .visible) {
+                Button("Discard draft", role: .destructive) {
+                    draft = ""
+                    dismiss()
+                }
+                Button("Keep editing", role: .cancel, action: restoreFocus)
             }
             .task { textFocused = true }
         }
+    }
+
+    private func composer(onAdd: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if context.originSessionID == nil {
+                Menu {
+                    Picker("Project", selection: $projectID) {
+                        Text("Unassigned").tag(Optional<UUID>.none)
+                        ForEach(store.state.projects) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                } label: {
+                    Label(projectID.map { store.projectName($0) } ?? "Unassigned", systemImage: "folder")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Project")
+                .accessibilityValue(projectID.map { store.projectName($0) } ?? "Unassigned")
+                .accessibilityIdentifier("thought.project")
+            }
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("Add a thought…", text: $draft, axis: .vertical)
+                    .lineLimit(1...4)
+                    .focused($textFocused)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityIdentifier("thought.text")
+                Button(action: onAdd) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 30))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .disabled(!canAdd)
+                .accessibilityLabel("Add thought")
+                .accessibilityIdentifier("thought.capture.add")
+            }
+            if normalized.count >= 450 {
+                Text("\(normalized.count) / 500")
+                    .font(.caption)
+                    .foregroundStyle(normalized.count > 500 ? .red : .secondary)
+            }
+            if normalized.count > 500 {
+                Text("Thoughts can contain up to 500 characters.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if let error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial)
     }
 
     private func thoughtRow(_ thought: CapturedThought) -> some View {
@@ -126,7 +148,10 @@ struct ThoughtCaptureView: View {
             .accessibilityLabel(thought.completedAt == nil ? "Mark thought done" : "Mark thought open")
             .accessibilityValue(thought.completedAt == nil ? "Open" : "Done")
             .accessibilityIdentifier("thought.check")
-            Button { editing = thought } label: {
+            Button {
+                textFocused = false
+                editing = thought
+            } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(thought.text).strikethrough(thought.completedAt != nil).foregroundStyle(.primary)
                     if context.originSessionID == nil, let project = thought.projectID {
@@ -137,27 +162,28 @@ struct ThoughtCaptureView: View {
         }
     }
 
-    private func saveDraft() -> Bool {
+    private func saveDraft() -> UUID? {
+        guard canAdd else { return nil }
         let capture = ThoughtCaptureContext(
             projectID: context.originSessionID == nil ? projectID : context.projectID,
             originSessionID: context.originSessionID)
         guard let id = store.createThought(context: capture, text: draft) else {
             consumeError()
-            return false
+            restoreFocus()
+            return nil
         }
         createdIDs.insert(id)
         draft = ""
         error = nil
-        composerVisible = false
-        textFocused = false
-        return true
+        textFocused = true
+        return id
     }
 
-    private func discardDraft() {
-        draft = ""
-        error = nil
-        composerVisible = false
-        textFocused = false
+    private func restoreFocus() {
+        Task { @MainActor in
+            await Task.yield()
+            textFocused = true
+        }
     }
 
     private func consumeError() {
