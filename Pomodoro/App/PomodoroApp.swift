@@ -125,7 +125,15 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
             store.refreshExternalSurfaces()
         }
-        .sheet(isPresented: $navigation.showingProjectCreation) { ProjectEditor(store: store, project: nil) }
+        .sheet(isPresented: $navigation.showingProjectCreation, onDismiss: {
+            navigation.setCapturePresentationBlocked(false, owner: "project-creation")
+        }) { ProjectEditor(store: store, project: nil) }
+        .sheet(item: $navigation.thoughtCaptureContext, onDismiss: navigation.thoughtCaptureDidDismiss) { context in
+            ThoughtCaptureView(store: store, context: context)
+        }
+        .onChange(of: navigation.showingProjectCreation) { _, showing in
+            if showing { navigation.setCapturePresentationBlocked(true, owner: "project-creation") }
+        }
         .environment(navigation)
         .alert("Quick Start", isPresented: Binding(get: { navigation.message != nil }, set: { if !$0 { navigation.message = nil } })) {
             Button("OK", role: .cancel) { navigation.message = nil }
@@ -136,11 +144,16 @@ struct RootView: View {
             Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: { Text(store.errorMessage ?? "") }
         .task {
+            navigation.canPresentThoughtCapture = { [weak store] in
+                UIApplication.shared.applicationState == .active && store?.errorMessage == nil &&
+                    !PresentationAvailability.hasPresentedContent
+            }
             navigation.connect(to: store)
             store.reconcile()
             if store.state.activeTimer != nil { store.scheduleNotification() }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
+                navigation.resumePendingThoughtCapture()
                 store.expireUndo()
                 if scenePhase == .active { store.reconcile() }
             }

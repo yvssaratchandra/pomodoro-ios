@@ -5,6 +5,7 @@ struct QuickStartSetupView: View {
     @Environment(AppNavigation.self) private var navigation
     @State private var projectID: UUID?
     @State private var copiedMessage: String?
+    @State private var thoughtLinkCopied = false
     @AppStorage("quickStart.liveContainerLaunchURL") private var savedLaunchURL = ""
     @AppStorage("quickStart.useLiveContainer") private var useLiveContainer = true
 
@@ -29,6 +30,11 @@ struct QuickStartSetupView: View {
     private var shortcutURL: URL? {
         guard let project else { return nil }
         let guest = AppURLRouter(scheme: AppInstallation.scheme).url(for: .startFocus(projectID: project.id))
+        return isContainer ? launch?.url(forwarding: guest) : guest
+    }
+
+    private var thoughtShortcutURL: URL? {
+        let guest = AppURLRouter(scheme: AppInstallation.scheme).url(for: .captureThought(sessionID: nil))
         return isContainer ? launch?.url(forwarding: guest) : guest
     }
 
@@ -93,6 +99,25 @@ struct QuickStartSetupView: View {
                 }
             }
             Section {
+                if let thoughtShortcutURL {
+                    Button("Copy Add thought link") {
+                        UIPasteboard.general.string = thoughtShortcutURL.absoluteString
+                        thoughtLinkCopied = true
+                    }
+                    .accessibilityIdentifier("quickstart.thought.copy")
+                    Button("Test Add thought") { UIApplication.shared.open(thoughtShortcutURL) }
+                        .accessibilityIdentifier("quickstart.thought.test")
+                    if thoughtLinkCopied { Text("Add thought link copied.").foregroundStyle(.secondary) }
+                } else {
+                    Text("Connect LiveContainer above to create an Add thought link.")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Add thought")
+            } footer: {
+                Text("In Shortcuts, add Open URLs and paste this link. Name it Add thought and add it to your Home Screen. It opens capture for your current focus session, or a new unassigned thought when idle or on a break.")
+            }
+            Section {
                 NavigationLink("Troubleshooting") { QuickStartTroubleshootingView(store: store) }
             }
         }
@@ -102,8 +127,8 @@ struct QuickStartSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { if projectID == nil { projectID = projects.first?.id } }
         .onChange(of: projectID) { _, _ in copiedMessage = nil }
-        .onChange(of: savedLaunchURL) { _, _ in copiedMessage = nil }
-        .onChange(of: useLiveContainer) { _, _ in copiedMessage = nil }
+        .onChange(of: savedLaunchURL) { _, _ in copiedMessage = nil; thoughtLinkCopied = false }
+        .onChange(of: useLiveContainer) { _, _ in copiedMessage = nil; thoughtLinkCopied = false }
     }
 
     private func copy(_ url: URL) {

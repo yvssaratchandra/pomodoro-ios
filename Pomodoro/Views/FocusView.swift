@@ -16,7 +16,6 @@ struct FocusView: View {
     @State private var confirmingEnd = false
     @State private var noteTimer: ActiveTimer?
     @State private var breadcrumbSession: FocusSession?
-    @State private var thoughtContext: ThoughtCaptureContext?
 
     private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID && $0.status == .ongoing } }
     private var activeProjects: [Project] { store.state.projects.filter { $0.status == .ongoing } }
@@ -28,6 +27,14 @@ struct FocusView: View {
         if let offer = store.state.breakOffer { return .breakReady(offer) }
         if let selected { return .ready(selected) }
         return .empty
+    }
+
+    private var hasEditor: Bool {
+        durationProject != nil || draftNoteProject != nil || noteTimer != nil || breadcrumbSession != nil
+    }
+
+    private func editorDismissed() {
+        navigation.setCapturePresentationBlocked(hasEditor, owner: "focus-editor")
     }
 
     var body: some View {
@@ -76,15 +83,14 @@ struct FocusView: View {
                 case .settings: SettingsView(store: store)
                 }
             }
-            .sheet(item: $durationProject) { FocusDurationSheet(store: store, project: $0) }
-            .sheet(item: $draftNoteProject) { project in
+            .sheet(item: $durationProject, onDismiss: editorDismissed) { FocusDurationSheet(store: store, project: $0) }
+            .sheet(item: $draftNoteProject, onDismiss: editorDismissed) { project in
                 DraftSessionNoteEditor(text: Binding(
                     get: { navigation.sessionNoteDrafts[project.id] ?? "" },
                     set: { navigation.sessionNoteDrafts[project.id] = $0 }))
             }
-            .sheet(item: $noteTimer) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
-            .sheet(item: $breadcrumbSession) { BreadcrumbEditor(store: store, sessionID: $0.id, promote: true) }
-            .sheet(item: $thoughtContext) { ThoughtCaptureView(store: store, context: $0) }
+            .sheet(item: $noteTimer, onDismiss: editorDismissed) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
+            .sheet(item: $breadcrumbSession, onDismiss: editorDismissed) { BreadcrumbEditor(store: store, sessionID: $0.id, promote: true) }
             .alert("End focus?", isPresented: $confirmingEnd) {
                 Button("Save Session") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
@@ -92,6 +98,12 @@ struct FocusView: View {
                 }
                 Button("Keep Focusing", role: .cancel) { }
             } message: { Text("Save the time you’ve focused, or discard this session.") }
+            .onChange(of: hasEditor) { _, showing in
+                if showing { navigation.setCapturePresentationBlocked(true, owner: "focus-editor") }
+            }
+            .onChange(of: confirmingEnd) { _, showing in
+                navigation.setCapturePresentationBlocked(showing, owner: "focus-end-confirmation")
+            }
             .onChange(of: store.state.activeTimer?.id) { _, _ in confirmingEnd = false }
             .onChange(of: navigation.focusRequestID) { _, _ in
                 durationProject = nil
@@ -192,7 +204,7 @@ struct FocusView: View {
                         .accessibilityIdentifier("focus.intention.edit")
                 }
                 Button("Add a thought", systemImage: "text.bubble") {
-                    thoughtContext = ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id)
+                    navigation.requestThoughtCapture(context: ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id))
                 }.accessibilityIdentifier("focus.captureThought")
             } else {
                 Button("End Break", systemImage: "stop.fill") { store.endTimer() }

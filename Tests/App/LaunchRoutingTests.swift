@@ -10,7 +10,7 @@ import UserNotifications
         let project = Project(name: "Writing", lastFocusMinutes: 40)
         let persistence = try RoutePersistence(AppSnapshot(projects: [project]))
         let store = try makeStore(persistence)
-        let navigation = AppNavigation(scheme: .container)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
         let url = router.url(for: .startFocus(projectID: project.id))
         navigation.receive(url)
         navigation.receive(url)
@@ -40,7 +40,7 @@ import UserNotifications
             let original = AppSnapshot(projects: [first, second], activeTimer: timer)
             let persistence = try RoutePersistence(original)
             let store = try makeStore(persistence)
-            let navigation = AppNavigation(scheme: .container)
+            let navigation = AppNavigation(scheme: .container, now: { self.now })
             navigation.connect(to: store)
             navigation.showSettings()
             navigation.receive(router.url(for: .startFocus(projectID: second.id)))
@@ -57,7 +57,7 @@ import UserNotifications
         for status in [ProjectStatus.suspended, .completed] {
             let unavailable = Project(name: "Unavailable", status: status)
             let store = try makeStore(RoutePersistence(AppSnapshot(projects: [ongoing, unavailable])))
-            let navigation = AppNavigation(scheme: .container)
+            let navigation = AppNavigation(scheme: .container, now: { self.now })
             navigation.connect(to: store)
             navigation.selectedProjectID = ongoing.id
             navigation.receive(router.url(for: .startFocus(projectID: unavailable.id)))
@@ -76,7 +76,7 @@ import UserNotifications
         try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 10, now: now.addingTimeInterval(-1200))
         let persistence = try RoutePersistence(snapshot)
         let store = try makeStore(persistence)
-        let navigation = AppNavigation(scheme: .container)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
         navigation.connect(to: store)
         navigation.showSettings()
         navigation.receive(try XCTUnwrap(URL(string: "pomodoro://focus?action=delete")))
@@ -94,7 +94,7 @@ import UserNotifications
         try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 10, now: now.addingTimeInterval(-1200))
         let oldID = try XCTUnwrap(snapshot.activeTimer?.id)
         let store = try makeStore(RoutePersistence(snapshot))
-        let navigation = AppNavigation(scheme: .container)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
         navigation.connect(to: store)
         navigation.receive(router.url(for: .startFocus(projectID: project.id)))
         XCTAssertEqual(store.state.sessions.map(\.id), [oldID])
@@ -115,7 +115,7 @@ import UserNotifications
             let persistence = try RoutePersistence(snapshot)
             persistence.failSave = true
             let store = try makeStore(persistence)
-            let navigation = AppNavigation(scheme: .container)
+            let navigation = AppNavigation(scheme: .container, now: { self.now })
             navigation.connect(to: store)
             navigation.receive(router.url(for: .startFocus(projectID: project.id)))
             XCTAssertEqual(store.state, snapshot)
@@ -128,7 +128,7 @@ import UserNotifications
         let project = Project(name: "Writing")
         let persistence = try RoutePersistence(AppSnapshot(projects: [project]))
         let store = try makeStore(persistence)
-        let navigation = AppNavigation(scheme: .container)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
         navigation.connect(to: store)
         XCTAssertNil(store.state.activeTimer)
         navigation.receive(router.url(for: .timer))
@@ -145,7 +145,7 @@ import UserNotifications
         try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 25, now: now)
         let persistence = try RoutePersistence(snapshot)
         let store = try makeStore(persistence)
-        let navigation = AppNavigation(scheme: .container)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
         navigation.connect(to: store)
         navigation.selectedProjectID = project.id
         navigation.sessionNoteDrafts[project.id] = "Revise introduction"
@@ -167,6 +167,122 @@ import UserNotifications
         XCTAssertEqual(navigation.sessionNoteDrafts[project.id], "Revise introduction")
         XCTAssertEqual(store.state, snapshot)
         XCTAssertEqual(persistence.saves, 0)
+    }
+
+    func testCaptureResolvesCurrentSavedAndMissingSessionWithoutChangingTimer() throws {
+        let project = Project(name: "Writing")
+        var snapshot = AppSnapshot(projects: [project])
+        try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 25, now: now)
+        let timer = try XCTUnwrap(snapshot.activeTimer)
+        let saved = FocusSession(id: UUID(), projectID: project.id, startedAt: now.addingTimeInterval(-600),
+                                 endedAt: now, plannedSeconds: 600, outcome: .completed)
+        snapshot.sessions = [saved]
+        let store = try makeStore(RoutePersistence(snapshot))
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
+        navigation.connect(to: store)
+        for (request, expected) in [(Optional<UUID>.none, Optional(timer.id)),
+                                     (Optional(timer.id), Optional(timer.id)),
+                                     (Optional(saved.id), Optional(saved.id)),
+                                     (Optional(UUID()), Optional<UUID>.none)] {
+            navigation.receive(router.url(for: .captureThought(sessionID: request)))
+            XCTAssertEqual(navigation.thoughtCaptureContext?.originSessionID, expected)
+            XCTAssertEqual(navigation.thoughtCaptureContext?.projectID, expected == nil ? nil : project.id)
+            XCTAssertEqual(store.state, snapshot)
+            navigation.thoughtCaptureDidDismiss()
+        }
+    }
+
+    func testCaptureRequestsPreserveExistingContextAndWaitForEditors() throws {
+        let project = Project(name: "Writing")
+        let store = try makeStore(RoutePersistence(AppSnapshot(projects: [project])))
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
+        navigation.connect(to: store)
+        navigation.showSettings()
+        navigation.setCapturePresentationBlocked(true, owner: "editor")
+        navigation.receive(router.url(for: .captureThought(sessionID: UUID())))
+        XCTAssertNil(navigation.thoughtCaptureContext)
+        XCTAssertEqual(navigation.focusPath, [.settings])
+        let supplied = ThoughtCaptureContext(projectID: project.id, originSessionID: nil)
+        navigation.requestThoughtCapture(context: supplied)
+        navigation.setCapturePresentationBlocked(false, owner: "editor")
+        XCTAssertEqual(navigation.thoughtCaptureContext, supplied)
+        navigation.receive(router.url(for: .captureThought(sessionID: nil)))
+        XCTAssertEqual(navigation.thoughtCaptureContext, supplied)
+        navigation.thoughtCaptureDidDismiss()
+        XCTAssertNil(navigation.thoughtCaptureContext)
+    }
+
+    func testPendingCaptureWaitsForPresentationHostAndResolvesOnRetry() throws {
+        let project = Project(name: "Writing")
+        let store = try makeStore(RoutePersistence(AppSnapshot(projects: [project])))
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
+        navigation.connect(to: store)
+        navigation.showSettings()
+        var editorVisible = true
+        navigation.canPresentThoughtCapture = { !editorVisible }
+        navigation.receive(router.url(for: .captureThought(sessionID: nil)))
+        XCTAssertNil(navigation.thoughtCaptureContext)
+        XCTAssertEqual(navigation.focusPath, [.settings])
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 25))
+        editorVisible = false
+        navigation.resumePendingThoughtCapture()
+        let context = try XCTUnwrap(navigation.thoughtCaptureContext)
+        XCTAssertEqual(context.originSessionID, store.state.activeTimer?.id)
+        XCTAssertTrue(navigation.focusPath.isEmpty)
+        editorVisible = true
+        navigation.receive(router.url(for: .captureThought(sessionID: UUID())))
+        XCTAssertEqual(navigation.thoughtCaptureContext, context)
+    }
+
+    func testBreakCaptureIsUnassignedAndExpiredFocusResolvesSavedContext() throws {
+        let project = Project(name: "Writing")
+        for kind in [TimerKind.shortBreak, .longBreak, .focus] {
+            let timer = ActiveTimer(projectID: project.id, kind: kind,
+                                    startedAt: kind == .focus ? now.addingTimeInterval(-1200) : now,
+                                    plannedSeconds: 600, shortBreakMinutes: 5, longBreakMinutes: 15, longBreakInterval: 4)
+            let store = try makeStore(RoutePersistence(AppSnapshot(projects: [project], activeTimer: timer)))
+            let navigation = AppNavigation(scheme: .container, now: { self.now })
+            navigation.connect(to: store)
+            navigation.receive(router.url(for: .captureThought(sessionID: timer.id)))
+            XCTAssertEqual(navigation.thoughtCaptureContext?.originSessionID, kind == .focus ? timer.id : nil)
+            XCTAssertEqual(store.state.activeTimer?.id, kind == .focus ? nil : timer.id)
+        }
+    }
+
+    func testFailedExpirySaveDoesNotAttachGenericCaptureToExpiredTimer() throws {
+        let project = Project(name: "Writing")
+        var snapshot = AppSnapshot(projects: [project])
+        try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 10,
+                                   now: now.addingTimeInterval(-1200))
+        let persistence = try RoutePersistence(snapshot)
+        persistence.failSave = true
+        let store = try makeStore(persistence)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
+        navigation.connect(to: store)
+        navigation.receive(router.url(for: .captureThought(sessionID: nil)))
+        XCTAssertNil(navigation.thoughtCaptureContext?.originSessionID)
+        XCTAssertEqual(store.state, snapshot)
+    }
+
+    func testReconciliationErrorDefersCaptureUntilAlertIsHandled() throws {
+        let project = Project(name: "Writing")
+        var snapshot = AppSnapshot(projects: [project])
+        try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 10,
+                                   now: now.addingTimeInterval(-1200))
+        let persistence = try RoutePersistence(snapshot)
+        persistence.failSave = true
+        let store = try makeStore(persistence)
+        let navigation = AppNavigation(scheme: .container, now: { self.now })
+        navigation.connect(to: store)
+        navigation.canPresentThoughtCapture = { store.errorMessage == nil }
+        navigation.receive(router.url(for: .captureThought(sessionID: nil)))
+        XCTAssertNotNil(store.errorMessage)
+        XCTAssertNil(navigation.thoughtCaptureContext)
+        persistence.failSave = false
+        store.errorMessage = nil
+        navigation.resumePendingThoughtCapture()
+        XCTAssertNotNil(navigation.thoughtCaptureContext)
+        XCTAssertNil(navigation.thoughtCaptureContext?.originSessionID)
     }
 
     private func makeStore(_ persistence: RoutePersistence) throws -> AppStore {

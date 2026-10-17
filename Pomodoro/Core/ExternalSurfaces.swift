@@ -49,6 +49,7 @@ enum AppRoute: Equatable {
     case startFocus(projectID: UUID)
     case timer
     case newProject
+    case captureThought(sessionID: UUID?)
 }
 
 enum AppURLScheme: String, CaseIterable {
@@ -77,6 +78,13 @@ struct AppURLRouter {
         case "timer":
             guard components.path.isEmpty, components.query == nil else { return nil }
             return .timer
+        case "thoughts":
+            guard components.path == "/new" else { return nil }
+            guard components.query != nil else { return .captureThought(sessionID: nil) }
+            guard let items = components.queryItems, items.count == 1,
+                  items[0].name == "session", let value = items[0].value,
+                  let sessionID = UUID(uuidString: value) else { return nil }
+            return .captureThought(sessionID: sessionID)
         case "projects":
             guard components.path == "/new", components.query == nil else { return nil }
             return .newProject
@@ -95,6 +103,12 @@ struct AppURLRouter {
                                      URLQueryItem(name: "action", value: "start")]
         case .timer:
             components.host = "timer"
+        case .captureThought(let sessionID):
+            components.host = "thoughts"
+            components.path = "/new"
+            if let sessionID {
+                components.queryItems = [URLQueryItem(name: "session", value: sessionID.uuidString)]
+            }
         case .newProject:
             components.host = "projects"
             components.path = "/new"

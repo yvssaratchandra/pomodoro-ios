@@ -76,7 +76,6 @@ struct ThoughtsView: View {
     @Bindable var store: AppStore
     @Bindable var navigation: AppNavigation
     @State private var editing: CapturedThought?
-    @State private var capture: ThoughtCaptureContext?
     @State private var selecting = false
     @State private var selection: Set<UUID> = []
     @State private var confirmingBulkDelete = false
@@ -190,8 +189,15 @@ struct ThoughtsView: View {
                     }.padding().background(.regularMaterial)
                 }
             }
-            .sheet(item: $editing) { ThoughtEditor(store: store, thoughtID: $0.id) }
-            .sheet(item: $capture) { ThoughtCaptureView(store: store, context: $0) }
+            .sheet(item: $editing, onDismiss: {
+                navigation.setCapturePresentationBlocked(false, owner: "thought-editor")
+            }) { ThoughtEditor(store: store, thoughtID: $0.id) }
+            .onChange(of: editing?.id) { _, id in
+                if id != nil { navigation.setCapturePresentationBlocked(true, owner: "thought-editor") }
+            }
+            .onChange(of: confirmingBulkDelete) { _, showing in
+                navigation.setCapturePresentationBlocked(showing, owner: "thought-delete-confirmation")
+            }
             .confirmationDialog("Delete \(selection.count) thoughts?", isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
                 Button("Delete thoughts", role: .destructive) {
                     if store.deleteThoughts(ids: selection) { selection.removeAll(); selecting = false }
@@ -237,7 +243,7 @@ struct ThoughtsView: View {
     private func createThought() {
         let project: UUID?
         if case .project(let id) = navigation.thoughtProjectFilter { project = id } else { project = nil }
-        capture = ThoughtCaptureContext(projectID: project, originSessionID: nil)
+        navigation.requestThoughtCapture(context: ThoughtCaptureContext(projectID: project, originSessionID: nil))
     }
     private func clearFilters() {
         navigation.thoughtFilter = .open; navigation.thoughtProjectFilter = .all; navigation.thoughtSearch = ""
