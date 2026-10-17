@@ -38,36 +38,79 @@ private struct FocusProvider: AppIntentTimelineProvider {
     }
     func timeline(for configuration: FocusConfiguration, in context: Context) async -> Timeline<FocusEntry> {
         let entry = await snapshot(for: configuration, in: context)
-        return Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(900)))
+        var entries = [entry]
+        if let midnight = Calendar.current.dateInterval(of: .day, for: entry.date)?.end {
+            entries.append(FocusEntry(date: midnight, snapshot: entry.snapshot, selectedID: entry.selectedID))
+        }
+        return Timeline(entries: entries, policy: .after(WidgetSnapshot.nextRefresh(after: entry.date)))
     }
 }
 
 private struct FocusWidgetView: View {
     let entry: FocusEntry
+    @Environment(\.widgetFamily) private var family
+
+    private var router: AppURLRouter { AppURLRouter(scheme: .native) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Pomodoro", systemImage: "timer").font(.headline)
-            if let timer = entry.snapshot?.activeTimer {
-                Text(timer.kind.title).font(.subheadline)
-                Text(timer.projectName).lineLimit(2)
-                Text(timerInterval: timer.startedAt...timer.deadline, countsDown: true)
-                    .font(.title2.monospacedDigit())
-                Text("Open timer").font(.caption).foregroundStyle(.secondary)
-            } else if let snapshot = entry.snapshot {
-                if let project = snapshot.projects.first(where: { $0.id == entry.selectedID }) {
-                    Text(project.name).font(.subheadline).lineLimit(2)
-                    Text("Start \(project.preferredFocusMinutes) min").font(.title3.weight(.semibold))
-                } else {
-                    Text(snapshot.projects.isEmpty ? "Create a project" : "Choose a project in Edit Widget")
-                        .font(.subheadline)
+        VStack(alignment: .leading, spacing: 10) {
+            if family == .systemSmall { Label("Pomodoro", systemImage: "timer").font(.headline) }
+            primaryContent
+            if family == .systemMedium {
+                Spacer(minLength: 0)
+                HStack {
+                    if let summary = entry.snapshot?.savedFocus,
+                       summary.isFresh(at: entry.date) {
+                        Text("Today · \(DurationText.summary(min(summary.seconds, Double(Int.max / 2)))) saved")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Link(destination: router.url(for: entry.snapshot?.thoughtRoute ?? .captureThought(sessionID: nil))) {
+                        Label("Thought", systemImage: "square.and.pencil")
+                            .font(.caption.weight(.medium))
+                            .padding(.vertical, 8).padding(.horizontal, 10)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .accessibilityLabel("Add a thought")
                 }
-            } else {
-                Text("Open Pomodoro to connect this widget.").font(.subheadline)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .containerBackground(.background, for: .widget)
-        .widgetURL(AppURLRouter(scheme: .native).url(for: entry.snapshot?.route(for: entry.selectedID) ?? .timer))
+        .widgetURL(router.url(for: entry.snapshot?.route(for: entry.selectedID) ?? .timer))
+    }
+
+    @ViewBuilder private var primaryContent: some View {
+        if let timer = entry.snapshot?.activeTimer {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(timer.kind.title).font(.subheadline)
+                    if family == .systemMedium {
+                        Text("·").foregroundStyle(.secondary)
+                        Text(timer.projectName).font(.subheadline).lineLimit(1)
+                    }
+                }
+                if family == .systemSmall { Text(timer.projectName).font(.caption).lineLimit(1) }
+                if timer.deadline <= entry.date {
+                    Text("00:00").font(.title2.monospacedDigit())
+                } else {
+                    Text(timerInterval: timer.startedAt...timer.deadline, countsDown: true)
+                        .font(.title2.monospacedDigit())
+                }
+                if family == .systemSmall { Text("Open timer").font(.caption).foregroundStyle(.secondary) }
+            }
+        } else if let snapshot = entry.snapshot {
+            if let project = snapshot.projects.first(where: { $0.id == entry.selectedID }) {
+                Text(project.name).font(.subheadline).lineLimit(2)
+                Text("Start \(project.preferredFocusMinutes) min").font(.title3.weight(.semibold))
+            } else {
+                Text(snapshot.projects.isEmpty ? "Create a project" : "Choose a project in Edit Widget")
+                    .font(.subheadline)
+            }
+        } else {
+            Text("Open Pomodoro to connect this widget.").font(.subheadline)
+        }
     }
 }
 
