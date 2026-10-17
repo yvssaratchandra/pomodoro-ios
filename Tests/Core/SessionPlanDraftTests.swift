@@ -6,114 +6,116 @@ import XCTest
 #endif
 
 final class SessionPlanDraftTests: XCTestCase {
-    func testInitializationKeepsOneTrailingPlaceholder() {
-        let empty = SessionPlanDraft(text: " \n ")
-        XCTAssertEqual(empty.rows.map(\.text), [""])
-        XCTAssertFalse(empty.hasChanges)
-        let populated = SessionPlanDraft(text: " First\n\nSecond ")
-        XCTAssertEqual(populated.rows.map(\.text), ["First", "Second", ""])
-        XCTAssertFalse(populated.hasChanges)
+    private struct SaveFailure: Error {}
+
+    func testInitializationContainsOnlyAcceptedTasks() {
+        XCTAssertTrue(SessionPlanDraft(text: " \n ").rows.isEmpty)
+        let draft = SessionPlanDraft(text: " First\n\nSecond ")
+        XCTAssertEqual(draft.rows.map(\.text), ["First", "Second"])
     }
 
-    func testTypingPreservesIdentityAndAppendsOnlyOnePlaceholder() {
-        var draft = SessionPlanDraft(text: "")
-        let first = draft.rows[0].id
-        XCTAssertNil(draft.applyEdit(id: first, text: "A"))
-        let placeholder = draft.rows[1].id
-        XCTAssertNil(draft.applyEdit(id: first, text: "A task"))
-        XCTAssertEqual(draft.rows.map(\.id), [first, placeholder])
-        XCTAssertTrue(draft.hasChanges)
+    func testBlankAddNeverCallsCommit() {
+        var draft = SessionPlanDraft(text: "First")
+        let original = draft.rows
+        XCTAssertThrowsError(try draft.apply(.add(" \r\n \t")) { _ in
+            XCTFail("Blank additions must not be committed")
+            return .success(())
+        })
+        XCTAssertEqual(draft.rows, original)
     }
 
-    func testRepeatedWhitespaceReturnDoesNotAddRows() {
-        var draft = SessionPlanDraft(text: "")
-        let id = draft.rows[0].id
-        XCTAssertNil(draft.applyEdit(id: id, text: " \t"))
-        for _ in 0..<4 { XCTAssertNil(draft.applyEdit(id: id, text: " \t\n")) }
-        XCTAssertEqual(draft.rows.map(\.id), [id])
-        XCTAssertEqual(draft.rows[0].text, " \t")
-        XCTAssertFalse(draft.hasChanges)
+    func testMultilineAddIsNormalizedAndCommittedTogether() throws {
+        var draft = SessionPlanDraft(text: "Before")
+        let firstID = draft.rows[0].id
+        var commits: [String] = []
+        let destination = try draft.apply(.add(" One\r\n \r\nTwo\rThree\n")) {
+            commits.append($0)
+            return .success(())
+        }
+        XCTAssertEqual(commits, ["Before\nOne\nTwo\nThree"])
+        XCTAssertEqual(draft.rows.map(\.text), ["Before", "One", "Two", "Three"])
+        XCTAssertEqual(draft.rows[0].id, firstID)
+        XCTAssertEqual(destination, draft.rows.last?.id)
     }
 
-    func testReturnAdvancesToExistingNextRow() {
+    func testFailedMutationsPreserveAcceptedRowsAndIDs() {
         var draft = SessionPlanDraft(text: "First\nSecond")
-        let ids = draft.rows.map(\.id)
-        XCTAssertEqual(draft.applyEdit(id: ids[0], text: "First\n"), ids[1])
-        XCTAssertEqual(draft.applyEdit(id: ids[1], text: "Second\n"), ids[2])
-        XCTAssertEqual(draft.rows.map(\.id), ids)
-        XCTAssertFalse(draft.hasChanges)
+        let original = draft.rows
+        for mutation in [SessionPlanDraft.Mutation.add("Third"), .edit(original[0].id, "Changed\nExtra"), .delete(original[1].id)] {
+            XCTAssertThrowsError(try draft.apply(mutation) { _ in .failure(SaveFailure()) })
+            XCTAssertEqual(draft.rows, original)
+        }
     }
 
-    func testMiddleSplitPreservesBothFragmentsAndOtherIDs() throws {
-        var draft = SessionPlanDraft(text: "First second\nLast")
-        let ids = draft.rows.map(\.id)
-        let target = draft.applyEdit(id: ids[0], text: "First\n second")
-        XCTAssertEqual(draft.rows.map(\.text), ["First", " second", "Last", ""])
-        XCTAssertEqual(target, draft.rows[1].id)
-        XCTAssertEqual([draft.rows[0].id, draft.rows[2].id, draft.rows[3].id], ids)
-        XCTAssertEqual(try draft.serialized(), "First\nsecond\nLast")
+    func testEditKeepsTargetAndUnaffectedIDsWhenSplitting() throws {
+        var draft = SessionPlanDraft(text: "First\nLast")
+        let original = draft.rows
+        try draft.apply(.edit(original[0].id, " Changed\n\nAdditional ")) { text in
+            XCTAssertEqual(text, "Changed\nAdditional\nLast")
+            return .success(())
+        }
+        XCTAssertEqual(draft.rows.map(\.text), ["Changed", "Additional", "Last"])
+        XCTAssertEqual(draft.rows[0].id, original[0].id)
+        XCTAssertEqual(draft.rows[2].id, original[1].id)
+        XCTAssertFalse(original.map(\.id).contains(draft.rows[1].id))
     }
 
-    func testMultilinePasteDropsBlankLinesAndPreservesPlaceholder() throws {
-        var draft = SessionPlanDraft(text: "Before\nAfter")
-        let first = draft.rows[0].id
-        let placeholder = draft.rows.last!.id
-        _ = draft.applyEdit(id: first, text: "\n One\r\n \r\nTwo\rThree\n")
-        XCTAssertEqual(draft.rows.map(\.text), [" One", "Two", "Three", "After", ""])
-        XCTAssertEqual(draft.rows.last?.id, placeholder)
-        XCTAssertEqual(try draft.serialized(), "One\nTwo\nThree\nAfter")
+    func testBlankEditRequiresExplicitDeletion() {
+        var draft = SessionPlanDraft(text: "First")
+        let original = draft.rows
+        XCTAssertThrowsError(try draft.apply(.edit(original[0].id, " \n")) { _ in
+            XCTFail("Blank edits must not be committed")
+            return .success(())
+        })
+        XCTAssertEqual(draft.rows, original)
     }
 
-    func testClearedRowSurvivesUntilEditingEnds() {
-        var draft = SessionPlanDraft(text: "First\nSecond")
-        let first = draft.rows[0].id
-        let second = draft.rows[1].id
-        let placeholder = draft.rows[2].id
-        _ = draft.applyEdit(id: first, text: " ")
-        XCTAssertEqual(draft.rows.map(\.id), [first, second, placeholder])
-        draft.endEditing(id: first)
-        XCTAssertEqual(draft.rows.map(\.id), [second, placeholder])
-        draft.endEditing(id: placeholder)
-        XCTAssertEqual(draft.rows.map(\.id), [second, placeholder])
+    func testDeletingLastTaskCommitsEmptyIntention() throws {
+        var draft = SessionPlanDraft(text: "Only task")
+        try draft.apply(.delete(draft.rows[0].id)) { text in
+            XCTAssertEqual(text, "")
+            return .success(())
+        }
+        XCTAssertTrue(draft.rows.isEmpty)
     }
 
-    func testEndingEditingOnlyRemovesOutgoingBlankRow() {
-        var draft = SessionPlanDraft(text: "First\nSecond")
-        let ids = draft.rows.map(\.id)
-        _ = draft.applyEdit(id: ids[0], text: "")
-        _ = draft.applyEdit(id: ids[1], text: " ")
-        draft.endEditing(id: ids[0])
-        XCTAssertEqual(draft.rows.map(\.id), [ids[1], ids[2]])
-    }
-
-    func testDeletionReturnsSurvivingFocusAndProtectsPlaceholder() {
-        var draft = SessionPlanDraft(text: "First\nSecond")
-        let ids = draft.rows.map(\.id)
-        XCTAssertEqual(draft.remove(id: ids[0]), ids[1])
-        XCTAssertEqual(draft.remove(id: ids[1]), ids[2])
-        XCTAssertEqual(draft.remove(id: ids[2]), ids[2])
-        XCTAssertEqual(draft.rows.map(\.id), [ids[2]])
-    }
-
-    func testRevertingChangesRestoresCleanState() throws {
-        var draft = SessionPlanDraft(text: " First \n\nSecond ")
-        let id = draft.rows[0].id
-        _ = draft.applyEdit(id: id, text: "Changed")
-        XCTAssertTrue(draft.hasChanges)
-        _ = draft.applyEdit(id: id, text: "  First  ")
-        XCTAssertFalse(draft.hasChanges)
-        XCTAssertEqual(try draft.serialized(), "First\nSecond")
-    }
-
-    func testSerializationCountsSeparatorsWithoutTruncation() throws {
+    func testCombinedLimitCountsSeparatorsAndSwiftCharacters() throws {
         var draft = SessionPlanDraft(text: String(repeating: "a", count: 139))
-        let placeholder = draft.rows.last!.id
-        _ = draft.applyEdit(id: placeholder, text: String(repeating: "🧠", count: 140))
+        let original = draft.rows
+        let candidate = try draft.candidate(for: .add(String(repeating: "🧠", count: 140)))
+        XCTAssertEqual(candidate.text.count, 280)
+        XCTAssertEqual(draft.rows, original, "Validation must not adopt a candidate")
+        XCTAssertThrowsError(try draft.apply(.add(String(repeating: "🧠", count: 141))) { _ in
+            XCTFail("Overlong additions must not be committed")
+            return .success(())
+        })
+        XCTAssertEqual(draft.rows, original)
+        try draft.apply(.add(String(repeating: "🧠", count: 140))) { _ in .success(()) }
         XCTAssertEqual(draft.characterCount, 280)
-        XCTAssertEqual(try draft.serialized()?.count, 280)
-        _ = draft.applyEdit(id: placeholder, text: String(repeating: "🧠", count: 141))
-        XCTAssertEqual(draft.characterCount, 281)
-        XCTAssertThrowsError(try draft.serialized())
-        XCTAssertEqual(draft.rows[1].text.count, 141)
+        XCTAssertThrowsError(try draft.candidate(for: .edit(draft.rows[0].id, String(repeating: "a", count: 140))))
+    }
+
+    func testReconciliationPreservesSurvivingDuplicateIDsInOrder() {
+        var draft = SessionPlanDraft(text: "Same\nRemove\nSame\nLast")
+        let original = draft.rows
+        draft.reconcile(text: "Last\nSame\nNew\nSame")
+        XCTAssertEqual(draft.rows.map(\.text), ["Last", "Same", "New", "Same"])
+        XCTAssertEqual(draft.rows[0].id, original[3].id)
+        XCTAssertEqual(draft.rows[1].id, original[0].id)
+        XCTAssertEqual(draft.rows[3].id, original[2].id)
+        XCTAssertFalse(original.map(\.id).contains(draft.rows[2].id))
+    }
+
+    func testStaleTargetCannotEditAnotherTask() {
+        var draft = SessionPlanDraft(text: "Original")
+        let removedID = draft.rows[0].id
+        draft.reconcile(text: "Replacement")
+        for mutation in [SessionPlanDraft.Mutation.edit(removedID, "Changed"), .delete(removedID)] {
+            XCTAssertThrowsError(try draft.apply(mutation) { _ in
+                XCTFail("A stale target must not be committed")
+                return .success(())
+            })
+        }
+        XCTAssertEqual(draft.rows.map(\.text), ["Replacement"])
     }
 }

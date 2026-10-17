@@ -2,47 +2,12 @@ import SwiftUI
 
 struct DraftSessionNoteEditor: View {
     @Binding var text: String
-    @Environment(\.dismiss) private var dismiss
-    @State private var draft: SessionPlanDraft
-    @State private var error: String?
-    @State private var confirmingDiscard = false
-
-    init(text: Binding<String>) {
-        _text = text
-        _draft = State(initialValue: SessionPlanDraft(text: text.wrappedValue))
-    }
 
     var body: some View {
-        NavigationStack {
-            List {
-                SessionPlanFields(draft: $draft)
-                if let error { Text(error).foregroundStyle(.red).font(.footnote) }
-            }
-            .listStyle(.insetGrouped)
-            .appScreen().navigationTitle("This session")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if draft.hasChanges { confirmingDiscard = true } else { dismiss() } }
-                        .accessibilityIdentifier("intention.cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.accessibilityIdentifier("intention.save")
-                }
-            }
-            .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
-                Button("Discard Changes", role: .destructive) { dismiss() }
-            }
-            .interactiveDismissDisabled(draft.hasChanges)
+        SessionPlanEditor(text: text) { value in
+            text = value
+            return .success(())
         }
-    }
-
-    private func save() {
-        guard draft.hasChanges else { dismiss(); return }
-        do {
-            text = try draft.serialized() ?? ""
-            dismiss()
-        } catch { self.error = error.localizedDescription }
     }
 }
 
@@ -50,52 +15,27 @@ struct IntentionEditor: View {
     let store: AppStore
     let sessionID: UUID
     let active: Bool
-    @Environment(\.dismiss) private var dismiss
-    @State private var draft: SessionPlanDraft
-    @State private var error: String?
-    @State private var confirmingDiscard = false
 
-    init(store: AppStore, sessionID: UUID, active: Bool) {
-        self.store = store
-        self.sessionID = sessionID
-        self.active = active
-        let initial = active ? store.state.activeTimer?.intention ?? "" : store.state.sessions.first { $0.id == sessionID }?.intention ?? ""
-        _draft = State(initialValue: SessionPlanDraft(text: initial))
+    private var text: String {
+        if active {
+            return store.state.activeTimer.flatMap { $0.id == sessionID ? $0.intention : nil } ?? ""
+        }
+        return store.state.sessions.first { $0.id == sessionID }?.intention ?? ""
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                SessionPlanFields(draft: $draft)
-                if let error { Text(error).foregroundStyle(.red).font(.footnote) }
-            }
-            .listStyle(.insetGrouped)
-            .appScreen().navigationTitle("This session")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if draft.hasChanges { confirmingDiscard = true } else { dismiss() } }
-                        .accessibilityIdentifier("intention.cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.accessibilityIdentifier("intention.save")
-                }
-            }
-            .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
-                Button("Discard Changes", role: .destructive) { dismiss() }
-            }
-            .interactiveDismissDisabled(draft.hasChanges)
+        SessionPlanEditor(text: text) { value in
+            if store.editIntention(id: sessionID, active: active, text: value) { return .success(()) }
+            let error = PlanSaveError(message: store.errorMessage ?? "Your changes could not be saved. Try again.")
+            store.errorMessage = nil
+            return .failure(error)
         }
     }
+}
 
-    private func save() {
-        guard draft.hasChanges else { dismiss(); return }
-        do {
-            let value = try draft.serialized()
-            if store.editIntention(id: sessionID, active: active, text: value ?? "") { dismiss() }
-            else { error = store.errorMessage; store.errorMessage = nil }
-        } catch { self.error = error.localizedDescription }
-    }
+private struct PlanSaveError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
 }
 
 struct SessionDetailView: View {
