@@ -3,26 +3,28 @@ import SwiftUI
 struct DraftSessionNoteEditor: View {
     @Binding var text: String
     @Environment(\.dismiss) private var dismiss
-    @State private var rows: [SessionPlanRow]
-    @State private var edited = false
+    @State private var draft: SessionPlanDraft
     @State private var error: String?
     @State private var confirmingDiscard = false
 
     init(text: Binding<String>) {
         _text = text
-        _rows = State(initialValue: SessionPlanRow.initialRows(from: text.wrappedValue))
+        _draft = State(initialValue: SessionPlanDraft(text: text.wrappedValue))
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                SessionPlanFields(rows: $rows, edited: $edited)
+            List {
+                SessionPlanFields(draft: $draft)
                 if let error { Text(error).foregroundStyle(.red).font(.footnote) }
             }
+            .listStyle(.insetGrouped)
             .appScreen().navigationTitle("This session")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if edited { confirmingDiscard = true } else { dismiss() } }
+                    Button("Cancel") { if draft.hasChanges { confirmingDiscard = true } else { dismiss() } }
+                        .accessibilityIdentifier("intention.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }.accessibilityIdentifier("intention.save")
@@ -31,14 +33,14 @@ struct DraftSessionNoteEditor: View {
             .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
                 Button("Discard Changes", role: .destructive) { dismiss() }
             }
-            .interactiveDismissDisabled(edited)
+            .interactiveDismissDisabled(draft.hasChanges)
         }
     }
 
     private func save() {
-        guard edited else { dismiss(); return }
+        guard draft.hasChanges else { dismiss(); return }
         do {
-            text = try SessionPlanText.serialize(rows.map(\.text)) ?? ""
+            text = try draft.serialized() ?? ""
             dismiss()
         } catch { self.error = error.localizedDescription }
     }
@@ -49,8 +51,7 @@ struct IntentionEditor: View {
     let sessionID: UUID
     let active: Bool
     @Environment(\.dismiss) private var dismiss
-    @State private var rows: [SessionPlanRow]
-    @State private var edited = false
+    @State private var draft: SessionPlanDraft
     @State private var error: String?
     @State private var confirmingDiscard = false
 
@@ -59,19 +60,22 @@ struct IntentionEditor: View {
         self.sessionID = sessionID
         self.active = active
         let initial = active ? store.state.activeTimer?.intention ?? "" : store.state.sessions.first { $0.id == sessionID }?.intention ?? ""
-        _rows = State(initialValue: SessionPlanRow.initialRows(from: initial))
+        _draft = State(initialValue: SessionPlanDraft(text: initial))
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                SessionPlanFields(rows: $rows, edited: $edited)
+            List {
+                SessionPlanFields(draft: $draft)
                 if let error { Text(error).foregroundStyle(.red).font(.footnote) }
             }
+            .listStyle(.insetGrouped)
             .appScreen().navigationTitle("This session")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if edited { confirmingDiscard = true } else { dismiss() } }
+                    Button("Cancel") { if draft.hasChanges { confirmingDiscard = true } else { dismiss() } }
+                        .accessibilityIdentifier("intention.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }.accessibilityIdentifier("intention.save")
@@ -80,14 +84,14 @@ struct IntentionEditor: View {
             .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
                 Button("Discard Changes", role: .destructive) { dismiss() }
             }
-            .interactiveDismissDisabled(edited)
+            .interactiveDismissDisabled(draft.hasChanges)
         }
     }
 
     private func save() {
-        guard edited else { dismiss(); return }
+        guard draft.hasChanges else { dismiss(); return }
         do {
-            let value = try SessionPlanText.serialize(rows.map(\.text))
+            let value = try draft.serialized()
             if store.editIntention(id: sessionID, active: active, text: value ?? "") { dismiss() }
             else { error = store.errorMessage; store.errorMessage = nil }
         } catch { self.error = error.localizedDescription }
