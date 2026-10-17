@@ -186,7 +186,9 @@ import UserNotifications
     func testFailedEndDiscardAndRestoreLeaveTimerAndNotificationsIntact() throws {
         let project = Project(name: "Writing")
         var snapshot = AppSnapshot(projects: [project])
-        try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 25, now: Date())
+        snapshot.settings.haptics = false
+        let start = Date(timeIntervalSince1970: 1_750_000_000.125)
+        try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 25, now: start)
         let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot, forBackup: false))
         let publisher = RecordingSnapshotPublisher()
         let notifications = RecordingNotificationCenter()
@@ -194,14 +196,36 @@ import UserNotifications
         let store = try AppStore(persistence: persistence, now: { deadline }, publisher: publisher,
                                  notificationCenter: notifications)
         publisher.states.removeAll()
+        let originalBytes = persistence.payload
         persistence.failSave = true
         store.endTimer()
         store.discardFocus(timerID: try XCTUnwrap(snapshot.activeTimer?.id))
         store.reconcile()
         XCTAssertEqual(store.state, snapshot)
+        XCTAssertEqual(persistence.payload, originalBytes)
+        XCTAssertEqual(Statistics.total(store.state, now: deadline), 0)
         XCTAssertEqual(try BackupService.decode(XCTUnwrap(persistence.payload), forBackup: false), snapshot)
         XCTAssertTrue(publisher.states.isEmpty)
         XCTAssertEqual(notifications.effectCount, 0)
+
+        persistence.failSave = false
+        store.reconcile()
+        let completed = store.state
+        XCTAssertNil(completed.activeTimer)
+        XCTAssertEqual(completed.sessions.map(\.id), [try XCTUnwrap(snapshot.activeTimer?.id)])
+        XCTAssertEqual(completed.sessions.first?.endedAt, deadline)
+        XCTAssertEqual(Statistics.total(completed, now: deadline), 1500)
+        let committedBytes = persistence.payload
+        let saves = persistence.saveAttempts
+        store.reconcile()
+        XCTAssertEqual(store.state, completed)
+        XCTAssertEqual(persistence.payload, committedBytes)
+        XCTAssertEqual(persistence.saveAttempts, saves)
+        let reloaded = try AppStore(persistence: persistence, now: { deadline },
+                                    notificationCenter: RecordingNotificationCenter())
+        reloaded.reconcile()
+        XCTAssertEqual(reloaded.state, completed)
+        XCTAssertEqual(persistence.saveAttempts, saves)
 
         let idle = AppSnapshot(projects: [project])
         let idlePersistence = MemorySnapshotPersistence(payload: try BackupService.encode(idle))
@@ -246,6 +270,120 @@ import UserNotifications
         XCTAssertEqual(store.state.sessions.last?.duration, 42.25)
         XCTAssertEqual(store.state.sessions.last?.outcome, .interrupted)
         XCTAssertEqual(publisher.dates.last, date)
+    }
+
+    func testDurableTimerReloadBeforeAndAfterExpirySavesOnceAtOriginalDeadline() throws {
+        let container = try makeContainer()
+        let start = Date(timeIntervalSince1970: 1_750_000_000.125)
+        var date = start
+        let project = Project(name: "Writing", createdAt: start)
+        var initial = AppSnapshot(projects: [project])
+        initial.settings.haptics = false
+        try SwiftDataSnapshotPersistence(container: container).save(BackupService.encode(initial))
+        let store = try AppStore(persistence: SwiftDataSnapshotPersistence(container: container), now: { date },
+                                 notificationCenter: RecordingNotificationCenter())
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 10, intention: "Resume this draft"))
+        let timer = try XCTUnwrap(store.state.activeTimer)
+        let runningBytes = try SwiftDataSnapshotPersistence(container: container).load()
+
+        date = start.addingTimeInterval(599)
+        let beforeExpiry = try AppStore(persistence: SwiftDataSnapshotPersistence(container: container), now: { date },
+                                        notificationCenter: RecordingNotificationCenter())
+        beforeExpiry.reconcile()
+        XCTAssertEqual(beforeExpiry.state.activeTimer, timer)
+        XCTAssertEqual(beforeExpiry.state.activeTimer?.deadline, timer.deadline)
+        XCTAssertTrue(beforeExpiry.state.sessions.isEmpty)
+        XCTAssertEqual(Statistics.total(beforeExpiry.state, now: date), 0)
+        XCTAssertEqual(try SwiftDataSnapshotPersistence(container: container).load(), runningBytes)
+
+        date = timer.deadline.addingTimeInterval(3600)
+        let afterExpiry = try AppStore(persistence: SwiftDataSnapshotPersistence(container: container), now: { date },
+                                       notificationCenter: RecordingNotificationCenter())
+        XCTAssertEqual(afterExpiry.state.activeTimer, timer)
+        XCTAssertEqual(Statistics.total(afterExpiry.state, now: date), 0)
+        afterExpiry.reconcile()
+        let saved = afterExpiry.state
+        XCTAssertNil(saved.activeTimer)
+        XCTAssertEqual(saved.sessions.map(\.id), [timer.id])
+        XCTAssertEqual(saved.sessions.first?.startedAt, start)
+        XCTAssertEqual(saved.sessions.first?.endedAt, timer.deadline)
+        XCTAssertEqual(saved.sessions.first?.intention, timer.intention)
+        XCTAssertEqual(saved.sessions.first?.outcome, .completed)
+        XCTAssertEqual(saved.completedInCycle, 1)
+        XCTAssertEqual(saved.breakOffer, BreakOffer(projectID: project.id, kind: .shortBreak, minutes: 5))
+        XCTAssertEqual(Statistics.total(saved, now: date), 600)
+        let savedBytes = try SwiftDataSnapshotPersistence(container: container).load()
+        afterExpiry.reconcile()
+        let reloaded = try AppStore(persistence: SwiftDataSnapshotPersistence(container: container), now: { date },
+                                    notificationCenter: RecordingNotificationCenter())
+        reloaded.reconcile()
+        XCTAssertEqual(afterExpiry.state, saved)
+        XCTAssertEqual(reloaded.state, saved)
+        XCTAssertEqual(try SwiftDataSnapshotPersistence(container: container).load(), savedBytes)
+    }
+
+    func testFullIdleBackupRestoresAndReloadsExactContentThroughSwiftData() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let date = Date(timeIntervalSince1970: 1_750_000_000.125)
+        var writing = Project(name: "Writing", lastFocusMinutes: 40, createdAt: date.addingTimeInterval(-7200))
+        let study = Project(name: "Study", status: .suspended, focusMinutes: 30, createdAt: date.addingTimeInterval(-7200))
+        let complete = FocusSession(id: UUID(), projectID: writing.id, startedAt: date.addingTimeInterval(-3600),
+                                    endedAt: date.addingTimeInterval(-3000), plannedSeconds: 600, outcome: .completed,
+                                    intention: "Draft introduction", nextStep: "Check the examples")
+        let interrupted = FocusSession(id: UUID(), projectID: study.id, startedAt: date.addingTimeInterval(-1800),
+                                       endedAt: date.addingTimeInterval(-1727.75), plannedSeconds: 1800, outcome: .interrupted,
+                                       intention: "Read chapter two", nextStep: "Resume section three")
+        writing.breadcrumb = ProjectBreadcrumb(text: "Check the examples", updatedAt: date, originSessionID: complete.id)
+        let thoughts = [
+            CapturedThought(projectID: writing.id, originSessionID: complete.id, createdAt: date.addingTimeInterval(-3300),
+                            text: "Find the citation", completedAt: date),
+            CapturedThought(projectID: study.id, originSessionID: interrupted.id, createdAt: date.addingTimeInterval(-1750),
+                            text: "Compare the second explanation"),
+            CapturedThought(createdAt: date.addingTimeInterval(-900), text: "Unassigned reminder", completedAt: date),
+            CapturedThought(createdAt: date.addingTimeInterval(-600), text: "Unassigned open thought")
+        ]
+        var snapshot = AppSnapshot(projects: [writing, study], sessions: [complete, interrupted], thoughts: thoughts)
+        snapshot.settings.dailyGoalMinutes = 180
+        snapshot.settings.defaultFocusMinutes = 35
+        snapshot.settings.defaultShortBreakMinutes = 7
+        snapshot.settings.defaultLongBreakMinutes = 20
+        snapshot.settings.longBreakInterval = 3
+        snapshot.settings.notificationSound = false
+        snapshot.settings.focusCompletionSound = .silent
+        snapshot.settings.breakCompletionSound = .systemDefault
+        snapshot.settings.haptics = false
+        snapshot.settings.appearance = .dark
+        snapshot.settings.showProjectNameOnLockScreen = true
+        snapshot.settings.showIntentionOnLockScreen = true
+        snapshot.settings.consistencyTargetDays = 5
+        let monday = GoalEngine.week(containing: date, calendar: calendar).start
+        snapshot.goalPlan = GoalPlan(
+            dailyRevisions: [DailyGoalRevision(effectiveFrom: LocalDay(monday, calendar: calendar), minutes: [120, 180, 0, 60, 120, 0, 90])],
+            weeklyProjectRevisions: [ProjectWeeklyGoalRevision(projectID: writing.id, effectiveFrom: LocalDay(monday, calendar: calendar), minutes: 300)])
+        snapshot.breakOffer = BreakOffer(projectID: writing.id, kind: .shortBreak, minutes: 7)
+        snapshot.completedInCycle = 2
+
+        let sourceContainer = try makeContainer()
+        try SwiftDataSnapshotPersistence(container: sourceContainer).save(BackupService.encode(snapshot))
+        let source = try AppStore(persistence: SwiftDataSnapshotPersistence(container: sourceContainer), now: { date },
+                                 notificationCenter: RecordingNotificationCenter())
+        let exported = try BackupService.encode(source.state)
+        let decoded = try BackupService.decode(exported, now: date, calendar: calendar)
+        XCTAssertEqual(decoded, snapshot)
+        let destinationContainer = try makeContainer()
+        let destination = try AppStore(persistence: SwiftDataSnapshotPersistence(container: destinationContainer), now: { date },
+                                      notificationCenter: RecordingNotificationCenter())
+        XCTAssertTrue(destination.saveProject(Project(name: "Replace this project")))
+        XCTAssertTrue(destination.restore(decoded))
+        let reloaded = try AppStore(persistence: SwiftDataSnapshotPersistence(container: destinationContainer), now: { date },
+                                    notificationCenter: RecordingNotificationCenter())
+        XCTAssertEqual(destination.state, snapshot)
+        XCTAssertEqual(reloaded.state, snapshot)
+        XCTAssertEqual(try BackupService.encode(reloaded.state), exported)
+        XCTAssertEqual(Statistics.total(reloaded.state, now: date), 672.25)
+        XCTAssertEqual(Statistics.total(reloaded.state, projectID: writing.id, now: date), 600)
+        XCTAssertEqual(Statistics.total(reloaded.state, projectID: study.id, now: date), 72.25)
     }
 
     func testProjectionFailureKeepsSavedWorkAndActivationCanRetry() throws {
