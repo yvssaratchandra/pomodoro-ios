@@ -17,6 +17,12 @@ TestFlight distribution requires Apple Developer Program membership and an addit
 
 The hosted runner and installed SDK versions are recorded in `toolchain.log`. The simulator selector chooses an available iPhone from the newest installed iOS runtime, avoiding dependence on a particular device name.
 
+## Build with Codemagic
+
+The root `codemagic.yaml` provides a manual **LiveContainer IPA** workflow on a Mac M2 runner. Connect this repository in Codemagic, select `main`, click **Check for configuration files**, then start **LiveContainer IPA**. Download `Pomodoro.ipa` from the build artifacts and import it into LiveContainer. This unsigned build does not require Apple signing credentials.
+
+This workflow runs the project checks and portable core tests, builds the container-compatible Release app, and saves its IPA and build logs. It omits simulator tests and the native widget variant to reduce build time. No push, pull request, or scheduled triggers are configured; start a build manually when needed.
+
 ## Native app and widget extension
 
 The **PomodoroNative** scheme builds a separate app with an embedded **PomodoroWidgets** extension. It shares the app's screens and core logic with **Pomodoro**, while using a separate bundle identifier and private data store. Move data between installations with export/restore. The existing **Pomodoro** scheme and **Pomodoro-IPA** artifact remain available for LiveContainer.
