@@ -8,12 +8,18 @@ private enum FocusScreenState {
     case onBreak(ActiveTimer)
 }
 
+private struct BreakDurationRequest: Identifiable {
+    let id = UUID()
+    let offer: BreakOffer
+}
+
 struct FocusView: View {
     @Bindable var store: AppStore
     @Bindable var navigation: AppNavigation
     @ObservedObject var dimFocus: DimFocusCoordinator
     @ObservedObject var presentation: AppPresentationContext
     @State private var durationProject: Project?
+    @State private var breakDuration: BreakDurationRequest?
     @State private var draftNoteProject: Project?
     @State private var confirmingEnd = false
     @State private var noteTimer: ActiveTimer?
@@ -32,7 +38,7 @@ struct FocusView: View {
     }
 
     private var hasEditor: Bool {
-        durationProject != nil || draftNoteProject != nil || noteTimer != nil || breadcrumbSession != nil
+        durationProject != nil || breakDuration != nil || draftNoteProject != nil || noteTimer != nil || breadcrumbSession != nil
     }
 
     private func editorDismissed() {
@@ -95,6 +101,9 @@ struct FocusView: View {
                 }
             }
             .sheet(item: $durationProject, onDismiss: editorDismissed) { FocusDurationSheet(store: store, project: $0) }
+            .sheet(item: $breakDuration, onDismiss: editorDismissed) { request in
+                BreakDurationSheet(store: store, offer: request.offer)
+            }
             .sheet(item: $draftNoteProject, onDismiss: editorDismissed) { project in
                 DraftSessionNoteEditor(text: Binding(
                     get: { navigation.sessionNoteDrafts[project.id] ?? "" },
@@ -126,6 +135,7 @@ struct FocusView: View {
             .onChange(of: store.state.activeTimer?.id) { _, _ in confirmingEnd = false }
             .onChange(of: navigation.focusRequestID) { _, _ in
                 durationProject = nil
+                breakDuration = nil
                 draftNoteProject = nil
                 confirmingEnd = false
             }
@@ -245,6 +255,10 @@ struct FocusView: View {
                 Button("End Break", systemImage: "stop.fill") { store.endTimer() }
                     .buttonStyle(.bordered).controlSize(.large)
                     .accessibilityIdentifier("timer.end")
+                Button("Plan next session", systemImage: "square.and.pencil") {
+                    navigation.requestNextSessionPlan(projectID: active.projectID)
+                }
+                .accessibilityIdentifier("focus.nextStep")
                 Button("Review thoughts") { navigation.showThoughts(projectID: active.projectID) }
             }
         }
@@ -254,19 +268,23 @@ struct FocusView: View {
         VStack(spacing: 18) {
             Text("Focus saved").font(.headline)
             TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
+            Button { breakDuration = BreakDurationRequest(offer: offer) } label: {
+                Label("\(offer.minutes) min", systemImage: "clock").frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("break.duration")
+            .accessibilityLabel("Break duration")
+            .accessibilityValue("\(offer.minutes) min")
             Button { store.startBreak() } label: {
                 Label("Start Break", systemImage: "cup.and.saucer.fill")
                     .foregroundStyle(AppTheme.breakButtonForeground)
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
             }.buttonStyle(.borderedProminent).controlSize(.large).tint(AppTheme.breakAccent)
+                .accessibilityIdentifier("break.start")
             Button("Skip Break") { store.update { $0.breakOffer = nil } }
-            if let project = store.state.projects.first(where: { $0.id == offer.projectID }), project.breadcrumb != nil {
-                BreadcrumbCard(store: store, project: project)
-            } else if let id = store.lastFinishedSessionID,
-                      let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == offer.projectID && $0.nextStep == nil }) {
-                Button("Plan next session") { breadcrumbSession = session }
-                    .accessibilityIdentifier("focus.nextStep")
+            Button("Plan next session", systemImage: "square.and.pencil") {
+                navigation.requestNextSessionPlan(projectID: offer.projectID)
             }
+            .accessibilityIdentifier("focus.nextStep")
         }
     }
 

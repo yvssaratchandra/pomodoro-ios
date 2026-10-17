@@ -219,13 +219,13 @@ import UserNotifications
         navigation.connect(to: store)
         navigation.showSettings()
         var editorVisible = true
-        navigation.canPresentThoughtCapture = { !editorVisible }
+        navigation.canPresentEditor = { !editorVisible }
         navigation.receive(router.url(for: .captureThought(sessionID: nil)))
         XCTAssertNil(navigation.thoughtCaptureContext)
         XCTAssertEqual(navigation.focusPath, [.settings])
         XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 25))
         editorVisible = false
-        navigation.resumePendingThoughtCapture()
+        navigation.resumePendingEditors()
         let context = try XCTUnwrap(navigation.thoughtCaptureContext)
         XCTAssertEqual(context.originSessionID, store.state.activeTimer?.id)
         XCTAssertTrue(navigation.focusPath.isEmpty)
@@ -274,15 +274,62 @@ import UserNotifications
         let store = try makeStore(persistence)
         let navigation = AppNavigation(scheme: .container, now: { self.now })
         navigation.connect(to: store)
-        navigation.canPresentThoughtCapture = { store.errorMessage == nil }
+        navigation.canPresentEditor = { store.errorMessage == nil }
         navigation.receive(router.url(for: .captureThought(sessionID: nil)))
         XCTAssertNotNil(store.errorMessage)
         XCTAssertNil(navigation.thoughtCaptureContext)
         persistence.failSave = false
         store.errorMessage = nil
-        navigation.resumePendingThoughtCapture()
+        navigation.resumePendingEditors()
         XCTAssertNotNil(navigation.thoughtCaptureContext)
         XCTAssertNil(navigation.thoughtCaptureContext?.originSessionID)
+    }
+
+    func testColdPlanLinkOpensProjectPlanWithoutChangingTimer() throws {
+        let project = Project(name: "Writing")
+        let timer = ActiveTimer(projectID: project.id, kind: .shortBreak, startedAt: now,
+                                plannedSeconds: 300, shortBreakMinutes: 0, longBreakMinutes: 0, longBreakInterval: 4)
+        let persistence = try RoutePersistence(AppSnapshot(projects: [project], activeTimer: timer))
+        let store = try makeStore(persistence)
+        let navigation = AppNavigation(scheme: .container)
+        let link = router.url(for: .planNextSession(projectID: project.id))
+        navigation.receive(link)
+        navigation.connect(to: store)
+        XCTAssertEqual(navigation.nextSessionPlanProject?.id, project.id)
+        XCTAssertEqual(store.state.activeTimer, timer)
+        XCTAssertEqual(persistence.saves, 0)
+        navigation.receive(link)
+        XCTAssertEqual(navigation.nextSessionPlanProject?.id, project.id)
+    }
+
+    func testPlanAndThoughtEditorsWaitForEachOtherAndForPresentationBlockers() throws {
+        let project = Project(name: "Writing")
+        let store = try makeStore(RoutePersistence(AppSnapshot(projects: [project])))
+        let navigation = AppNavigation(scheme: .container)
+        navigation.connect(to: store)
+        navigation.setCapturePresentationBlocked(true, owner: "duration")
+        navigation.requestNextSessionPlan(projectID: project.id)
+        XCTAssertNil(navigation.nextSessionPlanProject)
+        navigation.setCapturePresentationBlocked(false, owner: "duration")
+        XCTAssertEqual(navigation.nextSessionPlanProject?.id, project.id)
+        navigation.requestThoughtCapture()
+        XCTAssertNil(navigation.thoughtCaptureContext)
+        navigation.nextSessionPlanDidDismiss()
+        XCTAssertNotNil(navigation.thoughtCaptureContext)
+        navigation.requestNextSessionPlan(projectID: project.id)
+        XCTAssertNil(navigation.nextSessionPlanProject)
+        navigation.thoughtCaptureDidDismiss()
+        XCTAssertEqual(navigation.nextSessionPlanProject?.id, project.id)
+    }
+
+    func testMissingPlanProjectDoesNotOpenAnotherProject() throws {
+        let store = try makeStore(RoutePersistence(AppSnapshot(projects: [Project(name: "Other")])))
+        let navigation = AppNavigation(scheme: .container)
+        navigation.connect(to: store)
+        navigation.requestNextSessionPlan(projectID: UUID())
+        XCTAssertNil(navigation.nextSessionPlanProject)
+        XCTAssertNotNil(navigation.message)
+        XCTAssertNil(store.state.activeTimer)
     }
 
     private func makeStore(_ persistence: RoutePersistence) throws -> AppStore {

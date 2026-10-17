@@ -258,6 +258,11 @@ struct PendingDeletion {
         return saved
     }
 
+    @discardableResult
+    func setBreakDuration(offer: BreakOffer, minutes: Int) -> Bool {
+        update { try TimerEngine.setBreakDuration(&$0, offer: offer, minutes: minutes) }
+    }
+
     func startBreak() {
         if update({ try TimerEngine.startBreak(&$0, now: now()) }) { scheduleNotification() }
     }

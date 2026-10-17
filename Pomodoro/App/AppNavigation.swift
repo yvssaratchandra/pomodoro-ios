@@ -37,14 +37,19 @@ enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
     var thoughtFilter: ThoughtStatusFilter = .open
     var thoughtSearch = ""
     var thoughtCaptureContext: ThoughtCaptureContext?
+    var nextSessionPlanProject: Project?
     private(set) var captureRequestID = UUID()
     private(set) var capturePresentationBlockers: Set<String> = []
     private enum CaptureRequest {
         case session(UUID?)
         case context(ThoughtCaptureContext)
     }
-    @ObservationIgnored private var pendingCapture: CaptureRequest?
-    @ObservationIgnored var canPresentThoughtCapture: (() -> Bool)?
+    private enum EditorRequest {
+        case capture(CaptureRequest)
+        case plan(UUID)
+    }
+    @ObservationIgnored private var pendingEditor: EditorRequest?
+    @ObservationIgnored var canPresentEditor: (() -> Bool)?
     private(set) var focusRequestID = UUID()
     private let router: AppURLRouter
     @ObservationIgnored private let now: () -> Date
@@ -85,7 +90,7 @@ enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
         let queued = pendingURLs
         pendingURLs.removeAll()
         for url in queued { receive(url) }
-        presentPendingCaptureIfPossible()
+        presentPendingEditorIfPossible()
     }
 
     func receive(_ url: URL) {
@@ -99,9 +104,13 @@ enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
             requestThoughtCapture(sessionID: sessionID)
             return
         }
+        if case .planNextSession(let projectID) = route {
+            requestNextSessionPlan(projectID: projectID)
+            return
+        }
         showFocus()
         switch route {
-        case .captureThought:
+        case .captureThought, .planNextSession:
             break
         case .timer:
             store.reconcile()
@@ -138,12 +147,12 @@ enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
     func setCapturePresentationBlocked(_ blocked: Bool, owner: String) {
         if blocked { capturePresentationBlockers.insert(owner) }
         else { capturePresentationBlockers.remove(owner) }
-        presentPendingCaptureIfPossible()
+        presentPendingEditorIfPossible()
     }
 
     func thoughtCaptureDidDismiss() {
         thoughtCaptureContext = nil
-        presentPendingCaptureIfPossible()
+        presentPendingEditorIfPossible()
     }
 
     private func requestCapture(_ request: CaptureRequest) {
@@ -152,28 +161,52 @@ enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
             captureRequestID = UUID()
             return
         }
-        pendingCapture = request
-        presentPendingCaptureIfPossible()
+        pendingEditor = .capture(request)
+        presentPendingEditorIfPossible()
     }
 
-    func resumePendingThoughtCapture() { presentPendingCaptureIfPossible() }
+    func resumePendingEditors() { presentPendingEditorIfPossible() }
 
-    private func presentPendingCaptureIfPossible() {
-        guard thoughtCaptureContext == nil, capturePresentationBlockers.isEmpty,
-              canPresentThoughtCapture?() != false,
-              let request = pendingCapture, let store else { return }
-        let context: ThoughtCaptureContext
+    func requestNextSessionPlan(projectID: UUID) {
+        if nextSessionPlanProject?.id == projectID { return }
+        pendingEditor = .plan(projectID)
+        presentPendingEditorIfPossible()
+    }
+
+    func nextSessionPlanDidDismiss() {
+        nextSessionPlanProject = nil
+        presentPendingEditorIfPossible()
+    }
+
+    private func presentPendingEditorIfPossible() {
+        guard thoughtCaptureContext == nil, nextSessionPlanProject == nil, capturePresentationBlockers.isEmpty,
+              canPresentEditor?() != false,
+              let request = pendingEditor, let store else { return }
         switch request {
-        case .context(let supplied): context = supplied
-        case .session(let sessionID):
-            store.reconcile()
-            guard canPresentThoughtCapture?() != false else { return }
-            context = Self.captureContext(in: store.state, sessionID: sessionID, now: now())
+        case .plan(let projectID):
+            guard let project = store.state.projects.first(where: { $0.id == projectID }) else {
+                pendingEditor = nil
+                message = "This project is no longer available."
+                return
+            }
+            pendingEditor = nil
             showFocus()
+            selectedProjectID = projectID
+            nextSessionPlanProject = project
+        case .capture(let capture):
+            let context: ThoughtCaptureContext
+            switch capture {
+            case .context(let supplied): context = supplied
+            case .session(let sessionID):
+                store.reconcile()
+                guard canPresentEditor?() != false else { return }
+                context = Self.captureContext(in: store.state, sessionID: sessionID, now: now())
+                showFocus()
+            }
+            pendingEditor = nil
+            thoughtCaptureContext = context
+            captureRequestID = UUID()
         }
-        pendingCapture = nil
-        thoughtCaptureContext = context
-        captureRequestID = UUID()
     }
 
     static func captureContext(in state: AppSnapshot, sessionID: UUID?, now: Date) -> ThoughtCaptureContext {

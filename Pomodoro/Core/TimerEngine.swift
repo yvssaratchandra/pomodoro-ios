@@ -15,6 +15,17 @@ enum TimerEngine {
             intention: normalizedIntention, completionSound: state.settings.completionSound(for: .focus))
     }
 
+    static func setBreakDuration(_ state: inout AppSnapshot, offer: BreakOffer, minutes: Int) throws {
+        guard state.activeTimer == nil, state.breakOffer == offer, offer.kind != .focus,
+              (1...60).contains(minutes),
+              let index = state.projects.firstIndex(where: { $0.id == offer.projectID }) else {
+            throw AppError.invalid("This break is no longer available to change.")
+        }
+        state.breakOffer?.minutes = minutes
+        if offer.kind == .longBreak { state.projects[index].longBreakMinutes = minutes }
+        else { state.projects[index].shortBreakMinutes = minutes }
+    }
+
     static func startBreak(_ state: inout AppSnapshot, now: Date) throws {
         guard state.activeTimer == nil, let offer = state.breakOffer else {
             throw AppError.invalid("No break is ready to start.")

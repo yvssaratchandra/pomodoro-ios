@@ -16,6 +16,39 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["timer.countdown"].exists)
     }
 
+    func testBreakDurationIsEditableOnlyBeforeStartAndPlanningStaysAvailable() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launchEnvironment["POMODORO_TEST_SCENARIO"] = "break-ready"
+        app.launch()
+        let duration = app.buttons["break.duration"]
+        XCTAssertTrue(duration.waitForExistence(timeout: 5))
+        duration.tap()
+        let wheel = app.pickerWheels.firstMatch
+        XCTAssertTrue(wheel.waitForExistence(timeout: 5))
+        wheel.adjust(toPickerWheelValue: "8 min")
+        app.buttons["break.duration.cancel"].tap()
+        XCTAssertEqual(duration.value as? String, "5 min")
+        duration.tap()
+        XCTAssertTrue(wheel.waitForExistence(timeout: 5))
+        wheel.adjust(toPickerWheelValue: "8 min")
+        app.buttons["break.duration.done"].tap()
+        XCTAssertEqual(duration.value as? String, "8 min")
+        app.buttons["focus.nextStep"].tap()
+        enterText("Review chapter two", into: "breadcrumb.text", in: app)
+        app.buttons["breadcrumb.save"].tap()
+        app.buttons["break.start"].tap()
+        XCTAssertTrue(app.buttons["timer.end"].waitForExistence(timeout: 5))
+        XCTAssertFalse(duration.exists)
+        app.buttons["focus.nextStep"].tap()
+        let plan = app.descendants(matching: .any).matching(identifier: "breadcrumb.text").firstMatch
+        XCTAssertTrue(plan.waitForExistence(timeout: 5))
+        XCTAssertEqual(plan.value as? String, "Review chapter two")
+        app.buttons["breadcrumb.save"].tap()
+        XCTAssertTrue(app.buttons["timer.end"].waitForExistence(timeout: 5))
+        XCTAssertFalse(duration.exists)
+    }
+
     func testDimFocusCaptureAndTemporaryRevealRespectSheetAndTab() {
         continueAfterFailure = false
         let app = newApp()

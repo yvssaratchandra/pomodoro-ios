@@ -211,6 +211,9 @@ struct RootView: View {
             .sheet(item: $navigation.thoughtCaptureContext, onDismiss: captureDidDismiss) { context in
                 ThoughtCaptureView(store: store, context: context)
             }
+            .sheet(item: $navigation.nextSessionPlanProject, onDismiss: navigation.nextSessionPlanDidDismiss) { project in
+                BreadcrumbEditor(store: store, projectID: project.id)
+            }
             .onChange(of: navigation.showingProjectCreation) { _, showing in
                 if showing { navigation.setCapturePresentationBlocked(true, owner: "project-creation") }
             }
@@ -247,7 +250,7 @@ struct RootView: View {
 
     private func runLifecycle() async {
         presentation.refresh()
-        navigation.canPresentThoughtCapture = { [weak store, weak presentation] in
+        navigation.canPresentEditor = { [weak store, weak presentation] in
             presentation?.canPresent == true && store?.errorMessage == nil
         }
         navigation.connect(to: store)
@@ -257,7 +260,7 @@ struct RootView: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             presentation.refresh()
-            navigation.resumePendingThoughtCapture()
+            navigation.resumePendingEditors()
             store.expireUndo()
             if presentation.isActive { store.reconcile() }
             synchronizeDimFocus()

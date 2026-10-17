@@ -442,6 +442,20 @@ import UserNotifications
         XCTAssertEqual(store.errorMessage, "A separate persistence error")
     }
 
+    func testBreakDurationFailurePreservesOfferAndPreferences() throws {
+        let project = Project(name: "Writing")
+        let offer = BreakOffer(projectID: project.id, kind: .shortBreak, minutes: 5)
+        let initial = AppSnapshot(projects: [project], breakOffer: offer)
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(initial, forBackup: false))
+        let store = try AppStore(persistence: persistence)
+        persistence.failSave = true
+        XCTAssertFalse(store.setBreakDuration(offer: offer, minutes: 12))
+        XCTAssertEqual(store.state, initial)
+        persistence.failSave = false
+        XCTAssertTrue(store.setBreakDuration(offer: offer, minutes: 12))
+        XCTAssertEqual(try AppStore(persistence: persistence).state.breakOffer?.minutes, 12)
+    }
+
     func testWidgetFailureStillSynchronizesLiveActivities() async throws {
         let activities = RecordingLiveActivityManager()
         let publisher = RecordingSnapshotPublisher()
