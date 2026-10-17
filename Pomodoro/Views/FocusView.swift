@@ -144,20 +144,6 @@ struct FocusView: View {
             .accessibilityIdentifier("focus.duration")
             .accessibilityLabel("Focus duration")
             .accessibilityValue("\(minutes) min")
-            if let preview = navigation.sessionNoteDrafts[project.id]?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !preview.isEmpty {
-                Button {
-                    draftNoteProject = project
-                } label: {
-                    HStack {
-                        SessionPlanPreview(text: preview, maximumItems: 2)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
-                    }
-                    .frame(minHeight: 44)
-                }
-                .accessibilityIdentifier("focus.intention")
-            }
             Button {
                 if store.startFocus(projectID: project.id, minutes: minutes, intention: navigation.sessionNoteDrafts[project.id]) {
                     navigation.sessionNoteDrafts[project.id] = nil
@@ -168,6 +154,11 @@ struct FocusView: View {
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
             .accessibilityIdentifier("focus.start")
+            let taskCount = SessionPlanText.items(from: navigation.sessionNoteDrafts[project.id]).count
+            if taskCount > 0 {
+                SessionPlanSummaryRow(taskCount: taskCount) { draftNoteProject = project }
+                    .accessibilityIdentifier("focus.intention")
+            }
             if project.breadcrumb != nil {
                 BreadcrumbCard(store: store, project: project,
                                useAsIntention: { navigation.sessionNoteDrafts[project.id] = $0 })
@@ -189,18 +180,17 @@ struct FocusView: View {
                     isBreak: active.kind != .focus, isRunning: true)
             }
             if active.kind == .focus {
-                if let note = active.intention {
-                    Button { noteTimer = active } label: {
-                        SessionPlanPreview(text: note, maximumItems: 2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }.accessibilityIdentifier("focus.intention.edit")
-                }
                 Button(role: .destructive) { confirmingEnd = true } label: {
                     Label("End Focus", systemImage: "stop.fill")
                         .frame(maxWidth: .infinity).padding(.vertical, 8)
                 }
                 .buttonStyle(.bordered).controlSize(.large)
                 .accessibilityIdentifier("timer.end")
+                let taskCount = SessionPlanText.items(from: active.intention).count
+                if taskCount > 0 {
+                    SessionPlanSummaryRow(taskCount: taskCount) { noteTimer = active }
+                        .accessibilityIdentifier("focus.intention.edit")
+                }
                 Button("Add a thought", systemImage: "text.bubble") {
                     thoughtContext = ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id)
                 }.accessibilityIdentifier("focus.captureThought")
@@ -234,6 +224,30 @@ struct FocusView: View {
 
     private func repairSelection() {
         if selected == nil { navigation.selectedProjectID = activeProjects.first?.id }
+    }
+}
+
+private struct SessionPlanSummaryRow: View {
+    let taskCount: Int
+    let action: () -> Void
+
+    private var taskSummary: String { "\(taskCount) \(taskCount == 1 ? "task" : "tasks")" }
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text("Session plan · \(taskSummary)")
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open session plan")
+        .accessibilityValue(taskSummary)
     }
 }
 
