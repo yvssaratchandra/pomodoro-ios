@@ -27,7 +27,7 @@ struct ThoughtEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Save this thought for later", text: $draft, axis: .vertical)
+                    TextField("What’s on your mind?", text: $draft, axis: .vertical)
                         .lineLimit(4...12).focused($textFocused).accessibilityIdentifier("thought.text")
                     if draft.count >= 450 {
                         Text("\(draft.count) / 500").foregroundStyle(draft.count > 500 ? .red : .secondary)
@@ -95,25 +95,39 @@ struct ThoughtsView: View {
     private var thoughts: [CapturedThought] {
         store.state.thoughts.filter {
             navigation.thoughtProjectFilter.includes($0.projectID)
-                && (navigation.thoughtFilter == 0 || (navigation.thoughtFilter == 1 ? $0.completedAt == nil : $0.completedAt != nil))
+                && navigation.thoughtFilter.includes($0)
                 && (navigation.thoughtSearch.isEmpty || $0.text.localizedStandardContains(navigation.thoughtSearch))
         }.sorted { $0.createdAt == $1.createdAt ? $0.id.uuidString < $1.id.uuidString : $0.createdAt > $1.createdAt }
     }
     private var filtered: Bool {
-        navigation.thoughtProjectFilter != .all || navigation.thoughtFilter != 0 || !navigation.thoughtSearch.isEmpty
+        navigation.thoughtProjectFilter != .all || navigation.thoughtFilter != .open || !navigation.thoughtSearch.isEmpty
+    }
+    private var caughtUp: Bool {
+        navigation.thoughtFilter == .open && navigation.thoughtSearch.isEmpty
+            && store.state.thoughts.contains {
+                navigation.thoughtProjectFilter.includes($0.projectID) && $0.completedAt != nil
+            }
+    }
+    private var filterSummary: String {
+        var parts: [String] = []
+        if navigation.thoughtFilter != .open { parts.append(navigation.thoughtFilter.rawValue) }
+        switch navigation.thoughtProjectFilter {
+        case .all: break
+        case .unassigned: parts.append("Unassigned")
+        case .project(let id): parts.append(store.projectName(id))
+        }
+        if !navigation.thoughtSearch.isEmpty { parts.append("Search: \(navigation.thoughtSearch)") }
+        return parts.joined(separator: " · ")
     }
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    Picker("Thoughts", selection: $navigation.thoughtFilter) {
-                        Text("All").tag(0); Text("Open").tag(1); Text("Done").tag(2)
-                    }.pickerStyle(.segmented)
-                    Picker("Project", selection: $navigation.thoughtProjectFilter) {
-                        Text("All projects").tag(ThoughtProjectFilter.all)
-                        Text("Unassigned").tag(ThoughtProjectFilter.unassigned)
-                        ForEach(store.state.projects) { Text($0.name).tag(ThoughtProjectFilter.project($0.id)) }
-                    }.accessibilityIdentifier("thoughts.project")
+                if filtered {
+                    HStack {
+                        Text(filterSummary).font(.subheadline).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Reset") { clearFilters() }.accessibilityIdentifier("thoughts.reset")
+                    }
                 }
                 ForEach(thoughts) { thought in
                     thoughtRow(thought)
@@ -127,21 +141,47 @@ struct ThoughtsView: View {
                 }
                 if thoughts.isEmpty {
                     ContentUnavailableView {
-                        Label(filtered ? "No matching thoughts" : "No thoughts yet", systemImage: "text.bubble")
-                    } description: {
-                        Text(filtered ? "Try another search or filter." : "Save a thought now or capture one while focusing.")
+                        Label(caughtUp ? "All caught up" : (filtered ? "No matching thoughts" : "Save something for later."),
+                              systemImage: caughtUp ? "checkmark.circle" : "text.bubble")
                     } actions: {
-                        if filtered { Button("Clear filters") { clearFilters() } }
-                        else { Button("Add thought") { createThought() } }
+                        if caughtUp { Button("View completed") { navigation.thoughtFilter = .done } }
+                        else if !filtered { Button("Add thought") { createThought() } }
                     }
                 }
             }
             .appScreen().navigationTitle("Thoughts")
-            .searchable(text: $navigation.thoughtSearch, prompt: "Search thoughts")
+            .searchable(text: $navigation.thoughtSearch, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search thoughts")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(selecting ? "Done" : "Select") { selecting.toggle(); selection.removeAll() }
-                        .disabled(store.state.thoughts.isEmpty)
+                    Menu {
+                        Picker("Status", selection: $navigation.thoughtFilter) {
+                            ForEach(ThoughtStatusFilter.allCases) { status in
+                                Text(status.rawValue).tag(status)
+                                    .accessibilityIdentifier("thoughts.filter.\(status.rawValue.lowercased())")
+                            }
+                        }.pickerStyle(.inline)
+                        Menu("Project") {
+                            Picker("Project", selection: $navigation.thoughtProjectFilter) {
+                                Text("All projects").tag(ThoughtProjectFilter.all)
+                                Text("Unassigned").tag(ThoughtProjectFilter.unassigned)
+                                ForEach(store.state.projects) { Text($0.name).tag(ThoughtProjectFilter.project($0.id)) }
+                            }.pickerStyle(.inline)
+                        }.accessibilityIdentifier("thoughts.project")
+                    } label: {
+                        Label("Filter thoughts", systemImage: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    }.accessibilityIdentifier("thoughts.filters")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if selecting {
+                        Button("Done") { selecting = false; selection.removeAll() }
+                    } else {
+                        Menu {
+                            Button("Select") { selecting = true; selection.removeAll() }
+                                .disabled(thoughts.isEmpty).accessibilityIdentifier("thoughts.select")
+                        } label: {
+                            Label("More", systemImage: "ellipsis.circle")
+                        }.accessibilityIdentifier("thoughts.more")
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("New thought", systemImage: "plus") { createThought() }.accessibilityIdentifier("thoughts.new")
@@ -211,7 +251,8 @@ struct ThoughtsView: View {
         capture = ThoughtCaptureContext(projectID: project, originSessionID: nil)
     }
     private func clearFilters() {
-        navigation.thoughtFilter = 0; navigation.thoughtProjectFilter = .all; navigation.thoughtSearch = ""
+        navigation.thoughtFilter = .open; navigation.thoughtProjectFilter = .all; navigation.thoughtSearch = ""
+        selecting = false; selection.removeAll()
     }
     private func completeSelection(_ completed: Bool) {
         if store.setThoughtsCompleted(ids: selection, completed: completed) { selection.removeAll(); selecting = false }

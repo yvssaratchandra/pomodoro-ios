@@ -7,40 +7,38 @@ struct ProjectsView: View {
     @State private var showingCompleted = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                if store.state.projects.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Projects", systemImage: "folder")
-                    } description: {
-                        Text("Create a project to begin focusing.")
-                    } actions: {
-                        Button("Create Project") { navigation.showingProjectCreation = true }
-                    }
-                }
-                let active = store.state.projects.filter { $0.status == .ongoing }
-                if !active.isEmpty {
-                    Section("Active") {
-                        ForEach(active) { project in projectRow(project) }
-                    }
-                }
-                let onHold = store.state.projects.filter { $0.status == .suspended }
-                if !onHold.isEmpty {
-                    DisclosureGroup("On Hold (\(onHold.count))", isExpanded: $showingOnHold) {
-                        ForEach(onHold) { project in projectRow(project) }
-                    }
-                }
-                let completed = store.state.projects.filter { $0.status == .completed }
-                if !completed.isEmpty {
-                    DisclosureGroup("Completed (\(completed.count))", isExpanded: $showingCompleted) {
-                        ForEach(completed) { project in projectRow(project) }
-                    }
+        List {
+            if store.state.projects.isEmpty {
+                ContentUnavailableView {
+                    Label("No Projects", systemImage: "folder")
+                } description: {
+                    Text("Create a project to begin focusing.")
+                } actions: {
+                    Button("Create Project") { navigation.showingProjectCreation = true }
                 }
             }
-            .appScreen()
-            .navigationTitle("Projects")
-            .toolbar { Button("New Project", systemImage: "plus") { navigation.showingProjectCreation = true }.accessibilityIdentifier("projects.new") }
+            let active = store.state.projects.filter { $0.status == .ongoing }
+            if !active.isEmpty {
+                Section("Active") {
+                    ForEach(active) { project in projectRow(project) }
+                }
+            }
+            let onHold = store.state.projects.filter { $0.status == .suspended }
+            if !onHold.isEmpty {
+                DisclosureGroup("On Hold (\(onHold.count))", isExpanded: $showingOnHold) {
+                    ForEach(onHold) { project in projectRow(project) }
+                }
+            }
+            let completed = store.state.projects.filter { $0.status == .completed }
+            if !completed.isEmpty {
+                DisclosureGroup("Completed (\(completed.count))", isExpanded: $showingCompleted) {
+                    ForEach(completed) { project in projectRow(project) }
+                }
+            }
         }
+        .appScreen()
+        .navigationTitle("Projects")
+        .toolbar { Button("New Project", systemImage: "plus") { navigation.showingProjectCreation = true }.accessibilityIdentifier("projects.new") }
     }
 
     private func projectRow(_ project: Project) -> some View {
@@ -88,7 +86,7 @@ struct ProjectDetail: View {
                         if project.breadcrumb != nil {
                             BreadcrumbCard(store: store, project: project)
                         } else {
-                            Button("Add next step", systemImage: "arrow.turn.down.right") { editingNextStep = true }
+                            Button("Plan next time", systemImage: "arrow.turn.down.right") { editingNextStep = true }
                         }
                         Button("Thoughts", systemImage: "text.bubble") { navigation.showThoughts(projectID: project.id) }
                     }
@@ -214,7 +212,10 @@ struct ProjectEditor: View {
                     Button("Save") {
                         draft.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
                         if store.saveProject(draft, focusDuration: focusDuration == originalFocusDuration ? nil : focusDuration) {
-                            if isNew { navigation.selectedProjectID = draft.id; navigation.selectedTab = .focus }
+                            if isNew {
+                                navigation.selectedProjectID = draft.id
+                                navigation.showFocus()
+                            }
                             dismiss()
                         } else { error = store.errorMessage; store.errorMessage = nil }
                     }

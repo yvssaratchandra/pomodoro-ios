@@ -16,28 +16,26 @@ struct SettingsView: View {
     @Bindable var store: AppStore
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    NavigationLink("Goals") { GoalsView(store: store) }
-                    NavigationLink("Timer defaults") { TimerDefaultsView(store: store) }
-                    NavigationLink("Sounds & haptics") { SoundSettingsView(store: store) }
-                    NavigationLink("Widgets & shortcuts") { QuickStartSetupView(store: store) }
-                        .accessibilityIdentifier("settings.quickstart")
-                    NavigationLink("Appearance") { AppearanceSettingsView(store: store) }
-                    #if NATIVE_INTEGRATIONS
-                    NavigationLink("Lock Screen privacy") { LockScreenPrivacyView(store: store) }
-                    #endif
-                }
-                Section {
-                    NavigationLink("Backup & restore") { BackupSettingsView(store: store) }
-                    NavigationLink("Help") { SettingsHelpView(store: store) }
-                }
+        Form {
+            Section {
+                NavigationLink("Goals") { GoalsView(store: store) }
+                NavigationLink("Timer defaults") { TimerDefaultsView(store: store) }
+                NavigationLink("Sounds & haptics") { SoundSettingsView(store: store) }
+                NavigationLink("Widgets & shortcuts") { QuickStartSetupView(store: store) }
+                    .accessibilityIdentifier("settings.quickstart")
+                NavigationLink("Appearance") { AppearanceSettingsView(store: store) }
+                #if NATIVE_INTEGRATIONS
+                NavigationLink("Lock Screen privacy") { LockScreenPrivacyView(store: store) }
+                #endif
             }
-            .listRowBackground(AppTheme.surface)
-            .appScreen()
-            .navigationTitle("Settings")
+            Section {
+                NavigationLink("Backup & restore") { BackupSettingsView(store: store) }
+                NavigationLink("Help") { SettingsHelpView(store: store) }
+            }
         }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Settings")
     }
 }
 
@@ -187,7 +185,7 @@ private struct LockScreenPrivacyView: View {
     var body: some View {
         Form {
             Toggle("Show project name", isOn: settingsBinding(store, \.showProjectNameOnLockScreen))
-            Toggle("Show session note", isOn: settingsBinding(store, \.showIntentionOnLockScreen))
+            Toggle("Show session text", isOn: settingsBinding(store, \.showIntentionOnLockScreen))
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()

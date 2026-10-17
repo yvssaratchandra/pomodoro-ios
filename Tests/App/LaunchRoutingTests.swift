@@ -42,11 +42,12 @@ import UserNotifications
             let store = try makeStore(persistence)
             let navigation = AppNavigation(scheme: .container)
             navigation.connect(to: store)
-            navigation.selectedTab = .stats
+            navigation.showSettings()
             navigation.receive(router.url(for: .startFocus(projectID: second.id)))
             XCTAssertEqual(store.state, original)
             XCTAssertEqual(navigation.selectedProjectID, first.id)
             XCTAssertEqual(navigation.selectedTab, .focus)
+            XCTAssertTrue(navigation.focusPath.isEmpty)
             XCTAssertEqual(persistence.saves, 0)
         }
     }
@@ -77,11 +78,12 @@ import UserNotifications
         let store = try makeStore(persistence)
         let navigation = AppNavigation(scheme: .container)
         navigation.connect(to: store)
-        navigation.selectedTab = .settings
+        navigation.showSettings()
         navigation.receive(try XCTUnwrap(URL(string: "pomodoro://focus?action=delete")))
         XCTAssertEqual(store.state, snapshot)
         XCTAssertEqual(persistence.saves, 0)
-        XCTAssertEqual(navigation.selectedTab, .settings)
+        XCTAssertEqual(navigation.selectedTab, .focus)
+        XCTAssertEqual(navigation.focusPath, [.settings])
         XCTAssertNotNil(navigation.message)
     }
 
@@ -137,6 +139,36 @@ import UserNotifications
         XCTAssertNil(store.state.activeTimer)
         XCTAssertEqual(persistence.saves, 0)
     }
+    func testSecondaryNavigationPreservesPreparedNoteAndRunningTimer() throws {
+        let project = Project(name: "Writing")
+        var snapshot = AppSnapshot(projects: [project])
+        try TimerEngine.startFocus(&snapshot, projectID: project.id, minutes: 25, now: now)
+        let persistence = try RoutePersistence(snapshot)
+        let store = try makeStore(persistence)
+        let navigation = AppNavigation(scheme: .container)
+        navigation.connect(to: store)
+        navigation.selectedProjectID = project.id
+        navigation.sessionNoteDrafts[project.id] = "Revise introduction"
+        navigation.showProjects()
+        XCTAssertEqual(navigation.focusPath, [.projects])
+        navigation.showSettings()
+        XCTAssertEqual(navigation.focusPath, [.settings])
+        navigation.thoughtFilter = .done
+        navigation.thoughtSearch = "old search"
+        navigation.showThoughts(projectID: project.id)
+        XCTAssertEqual(navigation.selectedTab, .thoughts)
+        XCTAssertEqual(navigation.thoughtFilter, .open)
+        XCTAssertEqual(navigation.thoughtProjectFilter, .project(project.id))
+        XCTAssertTrue(navigation.thoughtSearch.isEmpty)
+        navigation.showFocus()
+        XCTAssertEqual(navigation.selectedTab, .focus)
+        XCTAssertTrue(navigation.focusPath.isEmpty)
+        XCTAssertEqual(navigation.selectedProjectID, project.id)
+        XCTAssertEqual(navigation.sessionNoteDrafts[project.id], "Revise introduction")
+        XCTAssertEqual(store.state, snapshot)
+        XCTAssertEqual(persistence.saves, 0)
+    }
+
     private func makeStore(_ persistence: RoutePersistence) throws -> AppStore {
         let date = now
         return try AppStore(persistence: persistence, now: { date }, notificationCenter: RouteNotificationCenter())

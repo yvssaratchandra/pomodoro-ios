@@ -87,18 +87,17 @@ struct RootView: View {
     }
     var body: some View {
         @Bindable var navigation = navigation
-        TabView(selection: $navigation.selectedTab) {
+        TabView(selection: Binding(get: { navigation.selectedTab }, set: { tab in
+            if tab == .focus { navigation.showFocus() }
+            else { navigation.selectedTab = tab }
+        })) {
             FocusView(store: store, navigation: navigation)
                 .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Focus", systemImage: "timer") }.tag(AppNavigation.Tab.focus)
-            StatsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
-            ProjectsView(store: store, navigation: navigation)
-                .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
-                .tabItem { Label("Projects", systemImage: "folder") }.tag(AppNavigation.Tab.projects)
             ThoughtsView(store: store, navigation: navigation)
                 .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Thoughts", systemImage: "text.bubble") }.tag(AppNavigation.Tab.thoughts)
-            SettingsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Settings", systemImage: "gearshape") }.tag(AppNavigation.Tab.settings)
+            StatsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
         }
         .onOpenURL { navigation.receive($0) }
         .onChange(of: store.pendingDeletion?.count) { _, count in

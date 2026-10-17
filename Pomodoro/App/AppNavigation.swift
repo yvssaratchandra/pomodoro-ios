@@ -9,15 +9,32 @@ enum AppInstallation {
     #endif
 }
 
+enum FocusDestination: Hashable { case projects, settings }
+
+enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
+    case open = "Open", all = "All", done = "Done"
+    var id: Self { self }
+
+    func includes(_ thought: CapturedThought) -> Bool {
+        switch self {
+        case .open: thought.completedAt == nil
+        case .all: true
+        case .done: thought.completedAt != nil
+        }
+    }
+}
+
 @MainActor @Observable final class AppNavigation {
-    enum Tab: Hashable { case focus, stats, projects, thoughts, settings }
+    enum Tab: Hashable { case focus, thoughts, stats }
 
     var selectedTab: Tab = .focus
+    var focusPath: [FocusDestination] = []
+    var sessionNoteDrafts: [UUID: String] = [:]
     var selectedProjectID: UUID?
     var showingProjectCreation = false
     var message: String?
     var thoughtProjectFilter: ThoughtProjectFilter = .all
-    var thoughtFilter = 0
+    var thoughtFilter: ThoughtStatusFilter = .open
     var thoughtSearch = ""
     private(set) var focusRequestID = UUID()
     private let router: AppURLRouter
@@ -26,9 +43,26 @@ enum AppInstallation {
 
     init(scheme: AppURLScheme) { router = AppURLRouter(scheme: scheme) }
 
+    func showFocus() {
+        selectedTab = .focus
+        focusPath.removeAll()
+        showingProjectCreation = false
+        focusRequestID = UUID()
+    }
+
+    func showProjects() {
+        selectedTab = .focus
+        focusPath = [.projects]
+    }
+
+    func showSettings() {
+        selectedTab = .focus
+        focusPath = [.settings]
+    }
+
     func showThoughts(projectID: UUID?) {
         thoughtProjectFilter = projectID.map(ThoughtProjectFilter.project) ?? .all
-        thoughtFilter = 0
+        thoughtFilter = .open
         thoughtSearch = ""
         selectedTab = .thoughts
     }
@@ -47,9 +81,7 @@ enum AppInstallation {
             return
         }
         message = nil
-        selectedTab = .focus
-        showingProjectCreation = false
-        focusRequestID = UUID()
+        showFocus()
         switch route {
         case .timer:
             store.reconcile()

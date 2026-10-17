@@ -15,11 +15,11 @@ struct DraftSessionNoteEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("What are you working on?", text: $draft, axis: .vertical)
+                TextField("What will you work on?", text: $draft, axis: .vertical)
                     .lineLimit(3...8).focused($focused).accessibilityIdentifier("intention.text")
                 if draft.count >= 230 { Text("\(draft.count) / 280").foregroundStyle(.secondary) }
             }
-            .appScreen().navigationTitle("Session note")
+            .appScreen().navigationTitle("This session")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { cancel() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -61,12 +61,12 @@ struct IntentionEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("What are you working on?", text: $draft, axis: .vertical)
+                TextField("What will you work on?", text: $draft, axis: .vertical)
                     .lineLimit(3...8).focused($focused).accessibilityIdentifier("intention.text")
                 if draft.count >= 230 { Text("\(draft.count) / 280").foregroundStyle(.secondary) }
                 if let error { Text(error).foregroundStyle(.red).font(.footnote) }
             }
-            .appScreen().navigationTitle("Session note")
+            .appScreen().navigationTitle("This session")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { if draft == original { dismiss() } else { confirmingDiscard = true } }
@@ -106,15 +106,15 @@ struct SessionDetailView: View {
                         LabeledContent("Focus time", value: DurationText.work(session.duration))
                         if session.outcome == .interrupted { Text("Ended early").foregroundStyle(.secondary) }
                     }
-                    Section("Session note") {
+                    Section("This session") {
                         if let note = session.intention { Text(note) }
-                        Button(session.intention == nil ? "Add session note" : "Edit session note") { editingIntention = true }
+                        Button(session.intention == nil ? "Plan this session" : "Edit this session") { editingIntention = true }
                     }
-                    Section("Next step") {
+                    Section("Next time") {
                         if let note = session.nextStep { Text(note) }
-                        Button(session.nextStep == nil ? "Add next step" : "Edit next step") { editingBreadcrumb = true }
+                        Button(session.nextStep == nil ? "Plan next time" : "Edit next time") { editingBreadcrumb = true }
                         if let note = session.nextStep {
-                            Button("Set as project next step") {
+                            Button("Set as project reminder") {
                                 if !store.saveNextStep(sessionID: session.id, text: note, promote: true) {
                                     error = store.errorMessage
                                     store.errorMessage = nil

@@ -14,7 +14,6 @@ struct FocusView: View {
     @State private var durationProject: Project?
     @State private var draftNoteProject: Project?
     @State private var confirmingEnd = false
-    @State private var sessionNotes: [UUID: String] = [:]
     @State private var noteTimer: ActiveTimer?
     @State private var breadcrumbSession: FocusSession?
     @State private var thoughtContext: ThoughtCaptureContext?
@@ -32,7 +31,7 @@ struct FocusView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigation.focusPath) {
             ScrollView {
                 VStack(spacing: 18) {
                     switch screenState {
@@ -50,20 +49,38 @@ struct FocusView: View {
             .navigationTitle(store.state.activeTimer?.kind == .focus ? "Focusing" : store.state.activeTimer != nil ? "Break" : "Focus")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if case .focusing(let timer) = screenState, timer.intention == nil {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button("Add session note", systemImage: "square.and.pencil") { noteTimer = timer }
-                                .accessibilityIdentifier("focus.intention.edit")
-                        } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More focus actions") }
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Settings", systemImage: "gearshape") { navigation.showSettings() }
+                        .labelStyle(.iconOnly).accessibilityIdentifier("focus.settings")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Manage projects", systemImage: "folder") { navigation.showProjects() }
+                            .accessibilityIdentifier("focus.projects")
+                        if case .ready(let project) = screenState {
+                            Button("Plan this session", systemImage: "square.and.pencil") { draftNoteProject = project }
+                                .accessibilityIdentifier("focus.intention")
+                        }
+                        if case .focusing(let timer) = screenState {
+                            Button(timer.intention == nil ? "Plan this session" : "Edit this session", systemImage: "square.and.pencil") {
+                                noteTimer = timer
+                            }.accessibilityIdentifier("focus.intention.edit")
+                        }
+                    } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More") }
+                    .accessibilityIdentifier("focus.more")
+                }
+            }
+            .navigationDestination(for: FocusDestination.self) { destination in
+                switch destination {
+                case .projects: ProjectsView(store: store, navigation: navigation)
+                case .settings: SettingsView(store: store)
                 }
             }
             .sheet(item: $durationProject) { FocusDurationSheet(store: store, project: $0) }
             .sheet(item: $draftNoteProject) { project in
                 DraftSessionNoteEditor(text: Binding(
-                    get: { sessionNotes[project.id] ?? "" },
-                    set: { sessionNotes[project.id] = $0 }))
+                    get: { navigation.sessionNoteDrafts[project.id] ?? "" },
+                    set: { navigation.sessionNoteDrafts[project.id] = $0 }))
             }
             .sheet(item: $noteTimer) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
             .sheet(item: $breadcrumbSession) { BreadcrumbEditor(store: store, sessionID: $0.id, promote: true) }
@@ -94,7 +111,7 @@ struct FocusView: View {
             Button("Create Project", systemImage: "plus") { navigation.showingProjectCreation = true }
                 .buttonStyle(.borderedProminent).controlSize(.large)
             if !store.state.projects.isEmpty {
-                Button("Manage Projects") { navigation.selectedTab = .projects }
+                Button("Manage projects") { navigation.showProjects() }
             }
         }
     }
@@ -106,8 +123,8 @@ struct FocusView: View {
                     Button(option.name) { navigation.selectedProjectID = option.id }
                 }
                 Divider()
-                Button("New Project", systemImage: "plus") { navigation.showingProjectCreation = true }
-                Button("Manage Projects", systemImage: "folder") { navigation.selectedTab = .projects }
+                Button("New project", systemImage: "plus") { navigation.showingProjectCreation = true }
+                Button("Manage projects", systemImage: "folder") { navigation.showProjects() }
             } label: {
                 HStack {
                     Label(project.name, systemImage: "folder")
@@ -127,21 +144,23 @@ struct FocusView: View {
             .accessibilityIdentifier("focus.duration")
             .accessibilityLabel("Focus duration")
             .accessibilityValue("\(minutes) min")
-            Button {
-                draftNoteProject = project
-            } label: {
-                HStack {
-                    Label(sessionNotes[project.id].flatMap { $0.isEmpty ? nil : $0 } ?? "Add session note", systemImage: "square.and.pencil")
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+            if let preview = navigation.sessionNoteDrafts[project.id]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !preview.isEmpty {
+                Button {
+                    draftNoteProject = project
+                } label: {
+                    HStack {
+                        Label(preview, systemImage: "square.and.pencil").lineLimit(1)
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(minHeight: 44)
                 }
-                .frame(minHeight: 44)
+                .accessibilityIdentifier("focus.intention")
             }
-            .accessibilityIdentifier("focus.intention")
             Button {
-                if store.startFocus(projectID: project.id, minutes: minutes, intention: sessionNotes[project.id]) {
-                    sessionNotes[project.id] = nil
+                if store.startFocus(projectID: project.id, minutes: minutes, intention: navigation.sessionNoteDrafts[project.id]) {
+                    navigation.sessionNoteDrafts[project.id] = nil
                 }
             } label: {
                 Label("Start Focus", systemImage: "play.fill")
@@ -149,12 +168,14 @@ struct FocusView: View {
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
             .accessibilityIdentifier("focus.start")
-            if let id = store.lastFinishedSessionID,
-               let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == project.id }) {
-                Button(session.nextStep == nil ? "Add next step" : "Edit next step") { breadcrumbSession = session }
-                    .accessibilityIdentifier(project.breadcrumb == nil ? "focus.nextStep" : "focus.recentNextStep")
+            if project.breadcrumb != nil {
+                BreadcrumbCard(store: store, project: project,
+                               useAsIntention: { navigation.sessionNoteDrafts[project.id] = $0 })
+            } else if let id = store.lastFinishedSessionID,
+                      let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == project.id && $0.nextStep == nil }) {
+                Button("Plan next time") { breadcrumbSession = session }
+                    .accessibilityIdentifier("focus.nextStep")
             }
-            BreadcrumbCard(store: store, project: project, useAsIntention: { sessionNotes[project.id] = $0 })
         }
     }
 
@@ -179,7 +200,7 @@ struct FocusView: View {
                 }
                 .buttonStyle(.bordered).controlSize(.large)
                 .accessibilityIdentifier("timer.end")
-                Button("Capture thought", systemImage: "text.bubble") {
+                Button("Save for later", systemImage: "text.bubble") {
                     thoughtContext = ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id)
                 }.accessibilityIdentifier("focus.captureThought")
             } else {
@@ -200,9 +221,11 @@ struct FocusView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
             }.buttonStyle(.borderedProminent).controlSize(.large).tint(.teal)
             Button("Skip Break") { store.update { $0.breakOffer = nil } }
-            if let id = store.lastFinishedSessionID,
-               let session = store.state.sessions.first(where: { $0.id == id }) {
-                Button(session.nextStep == nil ? "Add next step" : "Edit next step") { breadcrumbSession = session }
+            if let project = store.state.projects.first(where: { $0.id == offer.projectID }), project.breadcrumb != nil {
+                BreadcrumbCard(store: store, project: project)
+            } else if let id = store.lastFinishedSessionID,
+                      let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == offer.projectID && $0.nextStep == nil }) {
+                Button("Plan next time") { breadcrumbSession = session }
                     .accessibilityIdentifier("focus.nextStep")
             }
         }
