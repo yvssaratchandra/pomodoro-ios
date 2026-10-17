@@ -4,20 +4,47 @@ struct GoalsView: View {
     @Bindable var store: AppStore
     var body: some View {
         Form {
-            Section("Daily schedule") {
-                NavigationLink("Daily focus goals") { DailyGoalsEditor(store: store) }
-            }
-            Section("Consistency") {
-                Picker("Focused days per week", selection: Binding(
-                    get: { store.state.settings.consistencyTargetDays },
-                    set: { value in _ = store.update { $0.settings.consistencyTargetDays = value } }
-                )) {
-                    ForEach(1...7, id: \.self) { Text("\($0) days").tag($0) }
+            Section {
+                NavigationLink {
+                    DailyGoalsEditor(store: store)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Daily focus schedule")
+                        Text(dailySummary).font(.subheadline).foregroundStyle(.secondary)
+                    }
                 }
-                Text("A day counts after 10 minutes of focus. Breaks do not count.")
-                    .font(.footnote).foregroundStyle(.secondary)
             }
-            Section("Project weekly goals") {
+            Section("More goals") {
+                NavigationLink("Project weekly targets") { ProjectWeeklyTargetsView(store: store) }
+                NavigationLink("Consistency") { ConsistencyDetailsView(store: store) }
+            }
+        }
+        .listRowBackground(AppTheme.surface)
+        .appScreen()
+        .navigationTitle("Goals")
+    }
+    private var dailySummary: String {
+        let day = LocalDay(Date(), calendar: GoalEngine.calendar())
+        guard let values = store.state.goalPlan.dailyRevisions
+            .filter({ $0.effectiveFrom <= day })
+            .max(by: { $0.effectiveFrom < $1.effectiveFrom })?.minutes,
+              values.count == 7 else { return "No recorded goal" }
+        if values.allSatisfy({ $0 == values[0] }) { return "Every day · \(goalLabel(values[0]))" }
+        if values.prefix(5).allSatisfy({ $0 == values[0] }) && values.suffix(2).allSatisfy({ $0 == values[5] }) {
+            return "Weekdays · \(goalLabel(values[0])) / Weekend · \(goalLabel(values[5]))"
+        }
+        return "Custom schedule"
+    }
+}
+
+private struct ProjectWeeklyTargetsView: View {
+    @Bindable var store: AppStore
+    var body: some View {
+        List {
+            if store.state.projects.isEmpty {
+                ContentUnavailableView("No projects", systemImage: "folder",
+                    description: Text("Create a project from Focus to set a weekly target."))
+            } else {
                 ForEach(store.state.projects) { project in
                     NavigationLink {
                         WeeklyGoalEditor(store: store, projectID: project.id)
@@ -29,7 +56,7 @@ struct GoalsView: View {
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()
-        .navigationTitle("Goals")
+        .navigationTitle("Project weekly targets")
     }
     private func weeklyValue(_ id: UUID) -> String {
         guard let target = GoalEngine.weeklyTarget(projectID: id, weekStart: Date(), plan: store.state.goalPlan) else { return "Off" }

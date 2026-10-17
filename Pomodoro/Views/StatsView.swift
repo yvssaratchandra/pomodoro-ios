@@ -19,7 +19,6 @@ struct StatsView: View {
     @State private var range: HistoryRange = .today
     @State private var anchor = Date()
     @State private var projectID: UUID?
-    @State private var selectedDay: Date?
     @State private var showConsistency = false
 
     var body: some View {
@@ -34,31 +33,34 @@ struct StatsView: View {
                         Picker("Range", selection: $range) {
                             ForEach(HistoryRange.allCases) { Text($0.rawValue).tag($0) }
                         }.pickerStyle(.segmented)
-                        Picker("Project", selection: $projectID) {
-                            Text("All projects").tag(Optional<UUID>.none)
-                            ForEach(store.state.projects) { Text($0.name).tag(Optional($0.id)) }
-                        }
                         if range.period != nil { periodNavigation(now: now) }
                     }
                     Section {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 7) {
                             Text("Focus time").font(.subheadline).foregroundStyle(.secondary)
                             Text(DurationText.work(Statistics.total(store.state, projectID: projectID, interval: interval, now: now)))
                                 .font(.largeTitle.bold())
+                            if range == .today && projectID == nil,
+                               let goal = GoalEngine.dailyTarget(on: now, plan: store.state.goalPlan) {
+                                NavigationLink {
+                                    DailyGoalsEditor(store: store)
+                                } label: {
+                                    Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.work(Double(goal * 60)))")
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                .accessibilityIdentifier("stats.dailyGoal")
+                                if goal > 0 {
+                                    let worked = Statistics.total(store.state, interval: interval, now: now)
+                                    ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
+                                        .accessibilityLabel("Daily goal")
+                                }
+                            }
+                            if range == .week, let projectID,
+                               let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: anchor, plan: store.state.goalPlan) {
+                                Text("Weekly goal: \(DurationText.work(Double(target * 60)))")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
                         }.padding(.vertical, 5)
-                        if range == .today && projectID == nil,
-                           let goal = GoalEngine.dailyTarget(on: now, plan: store.state.goalPlan) {
-                            if goal > 0 {
-                                let worked = Statistics.total(store.state, interval: interval, now: now)
-                                ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
-                                    .accessibilityLabel("Daily goal")
-                                NavigationLink("Goal: \(DurationText.work(Double(goal * 60)))") { GoalsView(store: store) }
-                            } else { Text("Rest day").foregroundStyle(.secondary) }
-                        }
-                        if range == .week, let projectID,
-                           let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: anchor, plan: store.state.goalPlan) {
-                            LabeledContent("Weekly goal", value: DurationText.work(Double(target * 60)))
-                        }
                     }
                     if let period = range.period, let interval {
                         periodOverview(period: period, interval: interval, now: now)
@@ -70,13 +72,19 @@ struct StatsView: View {
                         if sessions.isEmpty && active == nil {
                             ContentUnavailableView("No sessions in this selection", systemImage: "timer")
                         } else {
-                            ForEach(grouped(Array(sessions.prefix(5)))) { group in
-                                Text(group.date.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption).foregroundStyle(.secondary)
-                                sessionRows(group.sessions, day: range == .today ? interval : nil)
+                            if range == .today {
+                                sessionRows(Array(sessions.prefix(5)), day: interval)
+                            } else {
+                                ForEach(grouped(Array(sessions.prefix(5)))) { group in
+                                    Text(group.date.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    sessionRows(group.sessions)
+                                }
                             }
-                            NavigationLink("View all sessions") {
-                                historyView(interval: interval, title: "Sessions")
+                            if sessions.count > 5 {
+                                NavigationLink("View all sessions") {
+                                    historyView(interval: interval, title: "Sessions")
+                                }
                             }
                         }
                     }
@@ -86,6 +94,33 @@ struct StatsView: View {
             }
             .navigationTitle("Stats")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Button {
+                            projectID = nil
+                        } label: {
+                            if projectID == nil { Label("All projects", systemImage: "checkmark") }
+                            else { Text("All projects") }
+                        }
+                        ForEach(store.state.projects) { project in
+                            Button {
+                                projectID = project.id
+                            } label: {
+                                if projectID == project.id { Label(project.name, systemImage: "checkmark") }
+                                else { Text(project.name) }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "line.3.horizontal.decrease")
+                            if let projectID {
+                                Text(store.projectName(projectID)).lineLimit(1)
+                            }
+                        }
+                    }
+                    .accessibilityLabel(projectID.map { "Project: \(store.projectName($0))" } ?? "All projects")
+                    .accessibilityIdentifier("stats.project")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Consistency", systemImage: "calendar.badge.checkmark") { showConsistency = true }
@@ -94,6 +129,7 @@ struct StatsView: View {
                         }
                     } label: { Image(systemName: "ellipsis.circle") }
                     .accessibilityLabel("More statistics")
+                    .accessibilityIdentifier("stats.more")
                 }
             }
             .onChange(of: range) { _, _ in anchor = Date() }
@@ -101,14 +137,7 @@ struct StatsView: View {
                 if let projectID, !ids.contains(projectID) { self.projectID = nil }
             }
             .navigationDestination(isPresented: $showConsistency) {
-                ConsistencyDetailsView(state: store.state)
-            }
-            .navigationDestination(isPresented: Binding(get: { selectedDay != nil }, set: { if !$0 { selectedDay = nil } })) {
-                if let selectedDay {
-                    historyView(interval: Statistics.today(selectedDay),
-                                title: selectedDay.formatted(date: .abbreviated, time: .omitted),
-                                day: Statistics.today(selectedDay))
-                }
+                ConsistencyDetailsView(store: store)
             }
             .alert("Unable to delete", isPresented: Binding(get: { deletionError != nil }, set: { if !$0 { deletionError = nil } })) {
                 Button("OK") { deletionError = nil }
@@ -144,37 +173,10 @@ struct StatsView: View {
             }
             .frame(height: 155)
             .accessibilityLabel("Daily focus chart")
-            .accessibilityHint("Open Daily breakdown for values and sessions")
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    Color.clear.contentShape(Rectangle()).onTapGesture { location in
-                        if let frame = proxy.plotFrame {
-                            let plot = geometry[frame]
-                            guard plot.contains(location),
-                                  let date: Date = proxy.value(atX: location.x - plot.origin.x), date <= now else { return }
-                            selectedDay = date
-                        }
-                    }
-                }
-            }
+            .accessibilityHint("Open Details for values and sessions")
             Text(comparisonText(comparison, period: period, current: interval.end > now))
                 .font(.subheadline).foregroundStyle(.secondary)
-            NavigationLink("Daily breakdown") { dailyBreakdown(summary: summary) }
-            NavigationLink("Details") { periodDetails(summary: summary, comparison: comparison) }
-        }
-        if projectID == nil && !summary.projects.isEmpty {
-            Section("Projects") {
-                ForEach(summary.projects.prefix(3)) { project in
-                    LabeledContent(project.name, value: DurationText.work(project.seconds))
-                }
-                if summary.projects.count > 3 {
-                    NavigationLink("All projects") {
-                        List(summary.projects) { project in
-                            LabeledContent(project.name, value: DurationText.work(project.seconds))
-                        }.appScreen().navigationTitle("Projects")
-                    }
-                }
-            }
+            NavigationLink("Details") { periodDetails(period: period, interval: interval) }
         }
     }
 
@@ -185,41 +187,56 @@ struct StatsView: View {
         return "\(DurationText.work(abs(comparison.delta))) \(comparison.delta > 0 ? "more" : "less") than last \(name)\(suffix)"
     }
 
-    private func dailyBreakdown(summary: PeriodSummary) -> some View {
-        List {
-            ForEach(summary.days.filter { !$0.isFuture }) { day in
-                Button { selectedDay = day.date } label: {
-                    LabeledContent(day.date.formatted(date: .abbreviated, time: .omitted),
-                                   value: DurationText.work(day.focusSeconds))
+    private func periodDetails(period: FocusPeriod, interval: DateInterval) -> some View {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            let now = timeline.date
+            let summary = Statistics.periodSummary(store.state, interval: interval, projectID: projectID, now: now)
+            let comparison = Statistics.periodComparison(store.state, period: period, interval: interval,
+                                                         projectID: projectID, now: now)
+            List {
+                Section("Daily breakdown") {
+                    ForEach(summary.days.filter { !$0.isFuture }) { day in
+                        NavigationLink {
+                            historyView(interval: Statistics.today(day.date),
+                                        title: day.date.formatted(date: .abbreviated, time: .omitted),
+                                        day: Statistics.today(day.date))
+                        } label: {
+                            LabeledContent(day.date.formatted(date: .abbreviated, time: .omitted),
+                                           value: DurationText.work(day.focusSeconds))
+                        }
+                    }
                 }
-            }
-        }.appScreen().navigationTitle("Daily breakdown")
-    }
-    private func periodDetails(summary: PeriodSummary, comparison: PeriodComparison) -> some View {
-        List {
-            Section("Overview") {
-                LabeledContent("Daily average", value: DurationText.work(summary.averageSeconds))
-                LabeledContent("Completed", value: "\(summary.completedCount)")
-                LabeledContent("Ended early", value: "\(summary.interruptedCount)")
-                if summary.includesActive { Text("Includes the current session").foregroundStyle(.secondary) }
-            }
-            Section("Comparison") {
-                LabeledContent("This period", value: DurationText.work(comparison.currentSeconds))
-                LabeledContent("Previous period", value: DurationText.work(comparison.previousSeconds))
-                Text("This period: \(comparison.current.start.formatted()) – \(comparison.current.end.formatted())")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("Previous period: \(comparison.previous.start.formatted()) – \(comparison.previous.end.formatted())")
-                    .font(.caption).foregroundStyle(.secondary)
-                if let percentage = comparison.percentage {
-                    LabeledContent("Change", value: String(format: "%+.1f%%", percentage))
+                Section("Overview") {
+                    LabeledContent("Daily average", value: DurationText.work(summary.averageSeconds))
+                    LabeledContent("Completed", value: "\(summary.completedCount)")
+                    LabeledContent("Ended early", value: "\(summary.interruptedCount)")
+                    if summary.includesActive { Text("Includes the current session").foregroundStyle(.secondary) }
                 }
-                Text("Compared through the same point in the previous period when this period is still in progress.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            if summary.days.contains(where: { $0.targetMinutes == nil }) {
-                Section { Text("Older dates may not have a recorded goal.") }
-            }
-        }.appScreen().navigationTitle("Details")
+                Section("Comparison") {
+                    LabeledContent("This period", value: DurationText.work(comparison.currentSeconds))
+                    LabeledContent("Previous period", value: DurationText.work(comparison.previousSeconds))
+                    Text("This period: \(comparison.current.start.formatted()) – \(comparison.current.end.formatted())")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("Previous period: \(comparison.previous.start.formatted()) – \(comparison.previous.end.formatted())")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let percentage = comparison.percentage {
+                        LabeledContent("Change", value: String(format: "%+.1f%%", percentage))
+                    }
+                    Text("Compared through the same point in the previous period when this period is still in progress.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if projectID == nil && !summary.projects.isEmpty {
+                    Section("Projects") {
+                        ForEach(summary.projects) { project in
+                            LabeledContent(project.name, value: DurationText.work(project.seconds))
+                        }
+                    }
+                }
+                if summary.days.contains(where: { $0.targetMinutes == nil }) {
+                    Section { Text("Older dates may not have a recorded goal.") }
+                }
+            }.appScreen()
+        }.navigationTitle("Details")
     }
     private func historyView(interval: DateInterval?, title: String, day: DateInterval? = nil) -> some View {
         let sessions = savedSessions(in: interval)
