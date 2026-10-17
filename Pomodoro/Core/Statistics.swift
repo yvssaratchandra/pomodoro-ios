@@ -7,16 +7,23 @@ enum Statistics {
 
     static func total(_ state: AppSnapshot, projectID: UUID? = nil,
                       interval: DateInterval? = nil, now: Date) -> TimeInterval {
-        var result = state.sessions.filter { projectID == nil || $0.projectID == projectID }.reduce(0.0) { sum, session in
+        // Retain now for source compatibility; saved durations do not depend on the clock.
+        state.sessions.filter { projectID == nil || $0.projectID == projectID }.reduce(0.0) { sum, session in
             sum + (interval.map { range in overlap(start: session.startedAt, end: session.endedAt, interval: range) } ?? session.duration)
         }
-        if let timer = state.activeTimer, timer.kind == .focus,
-           projectID == nil || projectID == timer.projectID,
-           !state.sessions.contains(where: { $0.id == timer.id }) {
-            let end = timer.startedAt.addingTimeInterval(timer.elapsed(at: now))
-            result += interval.map { overlap(start: timer.startedAt, end: end, interval: $0) } ?? timer.elapsed(at: now)
+    }
+
+    static func hasFocusInProgress(_ state: AppSnapshot, projectID: UUID? = nil,
+                                   interval: DateInterval? = nil, now: Date) -> Bool {
+        guard let timer = state.activeTimer, timer.kind == .focus,
+              projectID == nil || timer.projectID == projectID,
+              timer.startedAt <= now, now < timer.deadline else { return false }
+        guard let interval else { return true }
+        guard interval.end > interval.start else { return false }
+        if now == timer.startedAt {
+            return timer.startedAt >= interval.start && timer.startedAt < interval.end
         }
-        return result
+        return overlap(start: timer.startedAt, end: now, interval: interval) > 0
     }
 
     static func today(_ date: Date, calendar: Calendar = .current) -> DateInterval {

@@ -115,6 +115,14 @@ enum AppError: LocalizedError {
 }
 
 enum DurationText {
+    static func summary(_ seconds: TimeInterval) -> String {
+        guard seconds > 0 else { return "0 min" }
+        guard seconds >= 60 else { return "<1 min" }
+        let minutes = Int(seconds / 60)
+        if minutes < 60 { return "\(minutes) min" }
+        return minutes % 60 == 0 ? "\(minutes / 60) hr" : "\(minutes / 60) hr \(minutes % 60) min"
+    }
+
     static func work(_ seconds: TimeInterval) -> String {
         let seconds = max(0, Int(seconds))
         if seconds < 60 { return "\(seconds) sec" }

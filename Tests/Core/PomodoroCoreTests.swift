@@ -9,6 +9,37 @@ final class PomodoroCoreTests: XCTestCase {
     let now = Date(timeIntervalSince1970: 1_750_000_000)
     func fixture() -> AppSnapshot { AppSnapshot(projects: [Project(name: "Writing"), Project(name: "Study")]) }
 
+    func testRunningFocusNeverChangesSavedTotalsAndPresenceUsesHalfOpenIntervals() throws {
+        var state = fixture()
+        let projectID = state.projects[0].id
+        try TimerEngine.startFocus(&state, projectID: projectID, minutes: 10, now: now)
+        TimerEngine.finish(&state, now: now.addingTimeInterval(123.5), force: true)
+        let start = now.addingTimeInterval(200)
+        try TimerEngine.startFocus(&state, projectID: projectID, minutes: 10, now: start)
+        let original = state
+        for elapsed in [0.0, 1, 300, 600, 10000] {
+            let clock = start.addingTimeInterval(elapsed)
+            XCTAssertEqual(Statistics.total(state, now: clock), 123.5)
+            XCTAssertEqual(Statistics.total(state, projectID: state.projects[1].id, now: clock), 0)
+            XCTAssertEqual(Statistics.hasFocusInProgress(state, now: clock), elapsed < 600)
+        }
+        XCTAssertFalse(Statistics.hasFocusInProgress(state, now: start.addingTimeInterval(-1)))
+        XCTAssertFalse(Statistics.hasFocusInProgress(state, projectID: state.projects[1].id, now: start))
+        let beginsAtStart = DateInterval(start: start, end: start.addingTimeInterval(60))
+        let endsAtStart = DateInterval(start: start.addingTimeInterval(-60), end: start)
+        XCTAssertTrue(Statistics.hasFocusInProgress(state, interval: beginsAtStart, now: start))
+        XCTAssertFalse(Statistics.hasFocusInProgress(state, interval: endsAtStart, now: start))
+        XCTAssertFalse(Statistics.hasFocusInProgress(state, interval: beginsAtStart, now: start.addingTimeInterval(600)))
+        let nextInterval = DateInterval(start: start.addingTimeInterval(60), end: start.addingTimeInterval(120))
+        XCTAssertFalse(Statistics.hasFocusInProgress(state, interval: nextInterval, now: start.addingTimeInterval(60)))
+        XCTAssertTrue(Statistics.hasFocusInProgress(state, interval: nextInterval, now: start.addingTimeInterval(61)))
+        XCTAssertEqual(state, original)
+        TimerEngine.finish(&state, now: start.addingTimeInterval(600))
+        try TimerEngine.startBreak(&state, now: start.addingTimeInterval(600))
+        XCTAssertFalse(Statistics.hasFocusInProgress(state, now: start.addingTimeInterval(601)))
+        XCTAssertEqual(Statistics.total(state, now: start.addingTimeInterval(601)), 723.5)
+    }
+
     func testInterruptedWorkCountsAndDoesNotAdvanceCycle() throws {
         var state = fixture()
         let id = state.projects[0].id
@@ -20,11 +51,11 @@ final class PomodoroCoreTests: XCTestCase {
         XCTAssertNil(state.breakOffer)
     }
 
-    func testExpiredSessionIsCappedAndFinalizedOnceAfterRelaunch() throws {
+    func testExpiredSessionCountsOnlyAfterFinalizedOnceAfterRelaunch() throws {
         var state = fixture()
         try TimerEngine.startFocus(&state, projectID: state.projects[0].id, minutes: 10, now: now)
         state = try BackupService.decode(BackupService.encode(state, forBackup: false), forBackup: false)
-        XCTAssertEqual(Statistics.total(state, now: now.addingTimeInterval(9999)), 600)
+        XCTAssertEqual(Statistics.total(state, now: now.addingTimeInterval(9999)), 0)
         XCTAssertTrue(TimerEngine.finish(&state, now: now.addingTimeInterval(9999)))
         XCTAssertFalse(TimerEngine.finish(&state, now: now.addingTimeInterval(10000)))
         XCTAssertEqual(state.sessions.count, 1)
@@ -42,7 +73,7 @@ final class PomodoroCoreTests: XCTestCase {
         let previousSessions = state.sessions
         try TimerEngine.startFocus(&state, projectID: projectID, minutes: 10, now: now.addingTimeInterval(700))
         let timer = try XCTUnwrap(state.activeTimer)
-        XCTAssertEqual(Statistics.total(state, now: now.addingTimeInterval(800)), 700)
+        XCTAssertEqual(Statistics.total(state, now: now.addingTimeInterval(800)), 600)
 
         XCTAssertFalse(TimerEngine.discardFocus(&state, timerID: UUID()))
         XCTAssertEqual(state.activeTimer, timer)
@@ -97,7 +128,7 @@ final class PomodoroCoreTests: XCTestCase {
         XCTAssertEqual(Statistics.dailyAverage(state, projectID: projectID, now: midnight, calendar: calendar), 0)
         TimerEngine.deleteSession(&state, sessionID: interrupted.id)
         XCTAssertTrue(state.sessions.isEmpty)
-        XCTAssertEqual(Statistics.total(state, now: midnight.addingTimeInterval(900)), 100)
+        XCTAssertEqual(Statistics.total(state, now: midnight.addingTimeInterval(900)), 0)
     }
 
     func testLongBreakAcrossProjectsAndBreakTimeExcluded() throws {

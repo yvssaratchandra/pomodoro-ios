@@ -73,33 +73,36 @@ struct ProjectDetail: View {
     var body: some View {
         Group {
             if let project {
-                List {
-                    Section {
-                        if project.status != .ongoing { LabeledContent("Status", value: project.status.title) }
-                        LabeledContent("Total focus", value: DurationText.work(Statistics.total(store.state, projectID: project.id, now: Date())))
-                        if let target = GoalEngine.weeklyTarget(projectID: project.id, weekStart: Date(), plan: store.state.goalPlan) {
-                            LabeledContent("This week", value: "\(DurationText.work(Statistics.total(store.state, projectID: project.id, interval: GoalEngine.week(containing: Date()), now: Date()))) / \(DurationText.work(Double(target * 60)))")
-                        }
-                        LabeledContent("Focus duration", value: "\(project.preferredFocusMinutes) min")
-                    }
-                    Section {
-                        if project.breadcrumb != nil {
-                            BreadcrumbCard(store: store, project: project)
-                        } else {
-                            Button("Plan next time", systemImage: "arrow.turn.down.right") { editingNextStep = true }
-                        }
-                        Button("Thoughts", systemImage: "text.bubble") { navigation.showThoughts(projectID: project.id) }
-                    }
-                    Section("Recent sessions") {
-                        if sessions.isEmpty { Text("No sessions yet").foregroundStyle(.secondary) }
-                        ForEach(sessions.prefix(5)) { session in
-                            NavigationLink { SessionDetailView(store: store, sessionID: session.id) } label: {
-                                SessionRow(session: session, name: project.name, hideProject: true)
+                TimelineView(.periodic(from: .now, by: 60)) { timeline in
+                    let now = timeline.date
+                    List {
+                        Section {
+                            if project.status != .ongoing { LabeledContent("Status", value: project.status.title) }
+                            LabeledContent("Total focus", value: DurationText.summary(Statistics.total(store.state, projectID: project.id, now: now)))
+                            if let target = GoalEngine.weeklyTarget(projectID: project.id, weekStart: now, plan: store.state.goalPlan) {
+                                LabeledContent("This week", value: "\(DurationText.summary(Statistics.total(store.state, projectID: project.id, interval: GoalEngine.week(containing: now), now: now))) / \(DurationText.summary(Double(target * 60)))")
                             }
-                            .swipeActions { Button("Delete", role: .destructive) { _ = store.deleteSession(session.id) } }
+                            LabeledContent("Focus duration", value: "\(project.preferredFocusMinutes) min")
                         }
-                        if sessions.count > 5 {
-                            NavigationLink("View all sessions") { ProjectSessionHistory(store: store, projectID: project.id) }
+                        Section {
+                            if project.breadcrumb != nil {
+                                BreadcrumbCard(store: store, project: project)
+                            } else {
+                                Button("Plan next time", systemImage: "arrow.turn.down.right") { editingNextStep = true }
+                            }
+                            Button("Thoughts", systemImage: "text.bubble") { navigation.showThoughts(projectID: project.id) }
+                        }
+                        Section("Recent sessions") {
+                            if sessions.isEmpty { Text("No sessions yet").foregroundStyle(.secondary) }
+                            ForEach(sessions.prefix(5)) { session in
+                                NavigationLink { SessionDetailView(store: store, sessionID: session.id) } label: {
+                                    SessionRow(session: session, name: project.name, hideProject: true)
+                                }
+                                .swipeActions { Button("Delete", role: .destructive) { _ = store.deleteSession(session.id) } }
+                            }
+                            if sessions.count > 5 {
+                                NavigationLink("View all sessions") { ProjectSessionHistory(store: store, projectID: project.id) }
+                            }
                         }
                     }
                 }

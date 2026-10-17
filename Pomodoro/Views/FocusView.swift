@@ -354,12 +354,12 @@ struct GoalProgress: View {
         VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(DurationText.work(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text(goal > 0 ? "of \(DurationText.work(goal))" : "focused").foregroundStyle(.secondary)
+                    Text(DurationText.summary(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
+                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : "focused").foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading) {
-                    Text(DurationText.work(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text(goal > 0 ? "of \(DurationText.work(goal))" : "focused").foregroundStyle(.secondary)
+                    Text(DurationText.summary(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
+                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : "focused").foregroundStyle(.secondary)
                 }
             }
             if goal > 0 {

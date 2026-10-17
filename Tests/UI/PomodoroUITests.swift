@@ -26,7 +26,7 @@ final class PomodoroUITests: XCTestCase {
         app.alerts["End focus?"].buttons["Discard Session"].tap()
         XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Stats"].tap()
-        XCTAssertTrue(app.staticTexts["No sessions in this selection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No saved sessions"].waitForExistence(timeout: 5))
     }
 
     func testQuickStartSetupShowsInvalidURLAndCreatesShortcutWithoutStarting() {
@@ -88,6 +88,10 @@ final class PomodoroUITests: XCTestCase {
         let session = app.descendants(matching: .any).matching(identifier: "session.interrupted").firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         XCTAssertTrue(session.label.contains("Writing"))
+        XCTAssertFalse(app.staticTexts["stats.sessionInProgress"].exists)
+        XCTAssertNotEqual(app.staticTexts["stats.savedFocusTime"].label, "0 min")
+        XCTAssertFalse(app.textFields["intention.text"].exists)
+        XCTAssertFalse(app.textFields["breadcrumb.text"].exists)
         app.buttons["stats.dailyGoal"].tap()
         XCTAssertTrue(app.navigationBars["Daily goals"].waitForExistence(timeout: 5))
         app.navigationBars.buttons.firstMatch.tap()
@@ -100,6 +104,44 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["0 of 7 focused days"].waitForExistence(timeout: 5))
         openSettings(in: app)
         XCTAssertTrue(app.navigationBars["Settings"].exists)
+    }
+
+    func testSavedStatisticsStayStableWhileFocusRuns() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launchEnvironment["POMODORO_TEST_SCENARIO"] = "saved-stats"
+        app.launch()
+        app.tabBars.buttons["Stats"].tap()
+        app.buttons["All"].tap()
+        let total = app.staticTexts["stats.savedFocusTime"]
+        let status = app.staticTexts["stats.sessionInProgress"]
+        XCTAssertTrue(total.waitForExistence(timeout: 5))
+        XCTAssertEqual(total.label, "25 min")
+        XCTAssertTrue(status.exists)
+        XCTAssertFalse(app.staticTexts["In progress"].exists)
+        for range in ["Today", "Week", "Month", "All"] {
+            app.buttons[range].tap()
+            let savedValue = total.label
+            XCTAssertTrue(status.exists)
+            app.tabBars.buttons["Thoughts"].tap()
+            app.tabBars.buttons["Stats"].tap()
+            XCTAssertEqual(total.label, savedValue)
+        }
+        app.buttons["stats.project"].tap()
+        app.buttons["Study"].tap()
+        XCTAssertEqual(total.label, "0 min")
+        XCTAssertFalse(status.exists)
+        XCTAssertTrue(app.staticTexts["No saved sessions"].exists)
+        app.buttons["stats.project"].tap()
+        app.buttons["All projects"].tap()
+        XCTAssertEqual(total.label, "25 min")
+        XCTAssertTrue(status.exists)
+        openFocus(in: app)
+        app.buttons["timer.end"].tap()
+        app.alerts["End focus?"].buttons["Discard Session"].tap()
+        app.tabBars.buttons["Stats"].tap()
+        XCTAssertEqual(total.label, "25 min")
+        XCTAssertFalse(status.exists)
     }
 
     func testDurationWheelRemembersProjectAndRunningTimerIsReadOnly() {
@@ -159,7 +201,7 @@ final class PomodoroUITests: XCTestCase {
         endAlert.buttons["Discard Session"].tap()
         XCTAssertTrue(app.buttons["focus.start"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Stats"].tap()
-        XCTAssertTrue(app.staticTexts["No sessions in this selection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No saved sessions"].waitForExistence(timeout: 5))
 
         openFocus(in: app)
         app.buttons["focus.start"].tap()
@@ -212,7 +254,7 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         XCTAssertTrue(session.label.contains("Draft introduction"))
         app.buttons["Week"].tap()
-        XCTAssertTrue(app.staticTexts["Focus time"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Saved focus time"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Thoughts"].tap()
         let check = app.buttons["thought.check"].firstMatch
         XCTAssertTrue(check.waitForExistence(timeout: 5))
@@ -300,6 +342,11 @@ final class PomodoroUITests: XCTestCase {
             app.buttons["focus.start"].tap()
             XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
             attachScreenshot("\(name) · Focus running", app: app)
+            app.tabBars.buttons["Stats"].tap()
+            XCTAssertEqual(app.staticTexts["stats.savedFocusTime"].label, "0 min")
+            XCTAssertTrue(app.staticTexts["stats.sessionInProgress"].exists)
+            attachScreenshot("\(name) · Stats during focus", app: app)
+            openFocus(in: app)
             app.buttons["focus.captureThought"].tap()
             enterText("A thought saved during focus", into: "thought.text", in: app)
             app.buttons["thought.save"].tap()
@@ -328,6 +375,9 @@ final class PomodoroUITests: XCTestCase {
             breakApp.launch()
             let startBreak = breakApp.buttons["Start Break"]
             XCTAssertTrue(startBreak.waitForExistence(timeout: 5))
+            XCTAssertFalse(breakApp.textFields["intention.text"].exists)
+            XCTAssertFalse(breakApp.textFields["breadcrumb.text"].exists)
+            XCTAssertEqual(breakApp.alerts.count, 0)
             attachScreenshot("\(name) · Break ready", app: breakApp)
             reveal(startBreak, in: breakApp)
             startBreak.tap()

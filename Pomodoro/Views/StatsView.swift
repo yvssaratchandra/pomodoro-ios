@@ -27,7 +27,7 @@ struct StatsView: View {
                 let now = timeline.date
                 let interval = selectedInterval(now: now)
                 let sessions = savedSessions(in: interval)
-                let active = matchingActiveTimer(in: interval, now: now)
+                let hasFocusInProgress = Statistics.hasFocusInProgress(store.state, projectID: projectID, interval: interval, now: Date())
                 List {
                     Section {
                         Picker("Range", selection: $range) {
@@ -37,15 +37,21 @@ struct StatsView: View {
                     }
                     Section {
                         VStack(alignment: .leading, spacing: 7) {
-                            Text("Focus time").font(.subheadline).foregroundStyle(.secondary)
-                            Text(DurationText.work(Statistics.total(store.state, projectID: projectID, interval: interval, now: now)))
+                            Text("Saved focus time").font(.subheadline).foregroundStyle(.secondary)
+                            Text(DurationText.summary(Statistics.total(store.state, projectID: projectID, interval: interval, now: now)))
                                 .font(.largeTitle.bold())
+                                .accessibilityIdentifier("stats.savedFocusTime")
+                            if hasFocusInProgress {
+                                Text("Session in progress")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("stats.sessionInProgress")
+                            }
                             if range == .today && projectID == nil,
                                let goal = GoalEngine.dailyTarget(on: now, plan: store.state.goalPlan) {
                                 NavigationLink {
                                     DailyGoalsEditor(store: store)
                                 } label: {
-                                    Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.work(Double(goal * 60)))")
+                                    Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.summary(Double(goal * 60)))")
                                         .font(.subheadline).foregroundStyle(.secondary)
                                 }
                                 .accessibilityIdentifier("stats.dailyGoal")
@@ -57,7 +63,7 @@ struct StatsView: View {
                             }
                             if range == .week, let projectID,
                                let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: anchor, plan: store.state.goalPlan) {
-                                Text("Weekly goal: \(DurationText.work(Double(target * 60)))")
+                                Text("Weekly goal: \(DurationText.summary(Double(target * 60)))")
                                     .font(.subheadline).foregroundStyle(.secondary)
                             }
                         }.padding(.vertical, 5)
@@ -66,11 +72,8 @@ struct StatsView: View {
                         periodOverview(period: period, interval: interval, now: now)
                     }
                     Section("Recent sessions") {
-                        if let active {
-                            LabeledContent(store.projectName(active.projectID), value: "In progress")
-                        }
-                        if sessions.isEmpty && active == nil {
-                            ContentUnavailableView("No sessions in this selection", systemImage: "timer")
+                        if sessions.isEmpty {
+                            ContentUnavailableView("No saved sessions", systemImage: "timer")
                         } else {
                             if range == .today {
                                 sessionRows(Array(sessions.prefix(5)), day: interval)
@@ -183,8 +186,8 @@ struct StatsView: View {
     private func comparisonText(_ comparison: PeriodComparison, period: FocusPeriod, current: Bool) -> String {
         let name = period == .week ? "week" : "month"
         let suffix = current ? " so far" : ""
-        if abs(comparison.delta) < 1 { return "Same as last \(name)\(suffix)" }
-        return "\(DurationText.work(abs(comparison.delta))) \(comparison.delta > 0 ? "more" : "less") than last \(name)\(suffix)"
+        if comparison.delta == 0 { return "Same as last \(name)\(suffix)" }
+        return "\(DurationText.summary(abs(comparison.delta))) \(comparison.delta > 0 ? "more" : "less") than last \(name)\(suffix)"
     }
 
     private func periodDetails(period: FocusPeriod, interval: DateInterval) -> some View {
@@ -202,33 +205,32 @@ struct StatsView: View {
                                         day: Statistics.today(day.date))
                         } label: {
                             LabeledContent(day.date.formatted(date: .abbreviated, time: .omitted),
-                                           value: DurationText.work(day.focusSeconds))
+                                           value: DurationText.summary(day.focusSeconds))
                         }
                     }
                 }
                 Section("Overview") {
-                    LabeledContent("Daily average", value: DurationText.work(summary.averageSeconds))
+                    LabeledContent("Daily average", value: DurationText.summary(summary.averageSeconds))
                     LabeledContent("Completed", value: "\(summary.completedCount)")
                     LabeledContent("Ended early", value: "\(summary.interruptedCount)")
-                    if summary.includesActive { Text("Includes the current session").foregroundStyle(.secondary) }
                 }
                 Section("Comparison") {
-                    LabeledContent("This period", value: DurationText.work(comparison.currentSeconds))
-                    LabeledContent("Previous period", value: DurationText.work(comparison.previousSeconds))
-                    Text("This period: \(comparison.current.start.formatted()) – \(comparison.current.end.formatted())")
+                    LabeledContent("This period", value: DurationText.summary(comparison.currentSeconds))
+                    LabeledContent("Previous period", value: DurationText.summary(comparison.previousSeconds))
+                    Text("This period: \(comparison.current.start.formatted(date: .abbreviated, time: .omitted)) – \(comparison.current.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Previous period: \(comparison.previous.start.formatted()) – \(comparison.previous.end.formatted())")
+                    Text("Previous period: \(comparison.previous.start.formatted(date: .abbreviated, time: .omitted)) – \(comparison.previous.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted))")
                         .font(.caption).foregroundStyle(.secondary)
                     if let percentage = comparison.percentage {
                         LabeledContent("Change", value: String(format: "%+.1f%%", percentage))
                     }
-                    Text("Compared through the same point in the previous period when this period is still in progress.")
+                    Text(interval.end > now ? "Compared with the same calendar days in the previous period, including the full matching day." : "Compared with the full previous period.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 if projectID == nil && !summary.projects.isEmpty {
                     Section("Projects") {
                         ForEach(summary.projects) { project in
-                            LabeledContent(project.name, value: DurationText.work(project.seconds))
+                            LabeledContent(project.name, value: DurationText.summary(project.seconds))
                         }
                     }
                 }
@@ -242,7 +244,7 @@ struct StatsView: View {
         let sessions = savedSessions(in: interval)
         return List {
             if sessions.isEmpty {
-                ContentUnavailableView("No sessions", systemImage: "timer")
+                ContentUnavailableView("No saved sessions", systemImage: "timer")
             } else {
                 ForEach(grouped(sessions)) { group in
                     Section(group.date.formatted(date: .complete, time: .omitted)) {
@@ -257,15 +259,6 @@ struct StatsView: View {
         return groups.keys.sorted(by: >).map {
             HistoryDay(date: $0, sessions: groups[$0]!.sorted { $0.startedAt > $1.startedAt })
         }
-    }
-    private func matchingActiveTimer(in interval: DateInterval?, now: Date) -> ActiveTimer? {
-        guard let timer = store.state.activeTimer, timer.kind == .focus,
-              projectID == nil || projectID == timer.projectID else { return nil }
-        if let interval {
-            let end = timer.startedAt.addingTimeInterval(timer.elapsed(at: now))
-            guard Statistics.overlap(start: timer.startedAt, end: end, interval: interval) > 0 else { return nil }
-        }
-        return timer
     }
     private func selectedInterval(now: Date) -> DateInterval? {
         switch range {
@@ -320,11 +313,11 @@ struct SessionRow: View {
             if !hideProject { Text(name).font(.headline).lineLimit(1) }
             if let intention = session.intention { Text(intention).font(.subheadline).lineLimit(1) }
             HStack {
-                Text("\(session.startedAt.formatted(date: .omitted, time: .shortened)) · \(DurationText.work(session.duration))")
+                Text("\(session.startedAt.formatted(date: .omitted, time: .shortened)) · \(DurationText.summary(session.duration))")
                 if session.outcome != .completed { Text("Ended early") }
             }.font(.subheadline).foregroundStyle(.secondary)
             if let day, session.startedAt < day.start || session.endedAt > day.end {
-                Text("This day: \(DurationText.work(Statistics.overlap(start: session.startedAt, end: session.endedAt, interval: day)))")
+                Text("This day: \(DurationText.summary(Statistics.overlap(start: session.startedAt, end: session.endedAt, interval: day)))")
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }

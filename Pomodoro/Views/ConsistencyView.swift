@@ -10,10 +10,6 @@ struct ConsistencyDetailsView: View {
                 Section("This week · All projects") {
                     Text("\(current.focusedDays) of \(current.targetDays) focused days")
                         .font(.title2.bold())
-                    if current.isProvisional {
-                        Text("Today includes a running session")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
                 }
                 Section {
                     Picker("Focused days per week", selection: Binding(
@@ -33,7 +29,7 @@ struct ConsistencyDetailsView: View {
                     }
                 }
                 Section {
-                    Text("A day counts when you focus for at least 10 minutes. All projects contribute; break time does not count.")
+                    Text("A day counts when you save at least 10 minutes of focus. All projects contribute; break time does not count.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }

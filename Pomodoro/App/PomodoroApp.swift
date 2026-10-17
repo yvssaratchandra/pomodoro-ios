@@ -54,6 +54,19 @@ extension View {
                                                intention: "Finish the introduction", now: Date().addingTimeInterval(-601))
                 }
             }
+            if testing, ProcessInfo.processInfo.environment["POMODORO_TEST_SCENARIO"] == "saved-stats" {
+                let writing = Project(name: "Writing")
+                let study = Project(name: "Study")
+                let now = Date()
+                loadedStore?.update { state in
+                    state.projects = [writing, study]
+                    state.sessions = [FocusSession(id: UUID(), projectID: writing.id,
+                        startedAt: now.addingTimeInterval(-1800), endedAt: now.addingTimeInterval(-300),
+                        plannedSeconds: 1500, outcome: .completed)]
+                    try TimerEngine.startFocus(&state, projectID: writing.id, minutes: 25,
+                                               now: now.addingTimeInterval(-120))
+                }
+            }
         } catch {
             loadError = error.localizedDescription
         }
