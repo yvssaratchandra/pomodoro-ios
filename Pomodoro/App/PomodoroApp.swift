@@ -110,7 +110,18 @@ struct RootView: View {
         return store.state.settings.appearance == .system ? nil : store.state.settings.appearance == .dark ? .dark : .light
     }
     var body: some View {
-        @Bindable var navigation = navigation
+        configuredContent
+            .task { await runLifecycle() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    store.reconcile()
+                    store.refreshExternalSurfaces()
+                }
+                synchronizeDimFocus()
+            }
+    }
+
+    private var tabs: some View {
         TabView(selection: Binding(get: { navigation.selectedTab }, set: { tab in
             if tab == .focus { navigation.showFocus() }
             else { navigation.selectedTab = tab }
@@ -123,90 +134,125 @@ struct RootView: View {
                 .tabItem { Label("Thoughts", systemImage: "text.bubble") }.tag(AppNavigation.Tab.thoughts)
             StatsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
         }
-        .accessibilityHidden(dimFocus.isDimmed)
-        .allowsHitTesting(!dimFocus.isDimmed)
-        .overlay {
-            if dimFocus.isDimmed, let timer = store.state.activeTimer, timer.kind == .focus {
-                DimFocusView(timer: timer, reveal: dimFocus.reveal) {
-                    dimCaptureSessionID = timer.id
-                    captureReturnsToDim = true
-                    navigation.requestThoughtCapture(context: ThoughtCaptureContext(
-                        projectID: timer.projectID, originSessionID: timer.id))
+    }
+
+    private var dimPresentation: some View {
+        tabs
+            .accessibilityHidden(dimFocus.isDimmed)
+            .allowsHitTesting(!dimFocus.isDimmed)
+            .overlay {
+                if dimFocus.isDimmed, let timer = store.state.activeTimer, timer.kind == .focus {
+                    DimFocusView(timer: timer, reveal: dimFocus.reveal) {
+                        dimCaptureSessionID = timer.id
+                        captureReturnsToDim = true
+                        navigation.requestThoughtCapture(context: ThoughtCaptureContext(
+                            projectID: timer.projectID, originSessionID: timer.id))
+                    }
+                    .ignoresSafeArea()
                 }
-                .ignoresSafeArea()
             }
-        }
-        .statusBarHidden(dimFocus.isDimmed)
-        .onOpenURL { url in
-            // An external link reveals the app rather than covering its destination.
-            if dimFocus.isDimmed { dimFocus.reveal() }
-            navigation.receive(url)
-        }
-        .onChange(of: store.state.activeTimer) { _, _ in synchronizeDimFocus() }
-        .onChange(of: navigation.selectedTab) { _, _ in synchronizeDimFocus() }
-        .onChange(of: navigation.focusPath) { _, _ in synchronizeDimFocus() }
-        .onChange(of: navigation.capturePresentationBlockers) { _, _ in synchronizeDimFocus() }
-        .onChange(of: navigation.thoughtCaptureContext?.id) { _, id in
-            dimFocus.setBlocked("thought-capture", id != nil)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in synchronizeDimFocus() }
-        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.switchControlStatusDidChangeNotification)) { _ in synchronizeDimFocus() }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in dimFocus.setBlocked("keyboard", true) }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in dimFocus.setBlocked("keyboard", false) }
-        .onChange(of: navigation.message) { _, _ in synchronizeDimFocus() }
-        .onChange(of: store.errorMessage) { _, _ in synchronizeDimFocus() }
-        .onChange(of: store.pendingDeletion?.count) { _, count in
-            if count != nil, let pending = store.pendingDeletion {
-                UIAccessibility.post(notification: .announcement, argument: "\(pending.message). Undo available.")
+            .statusBarHidden(dimFocus.isDimmed)
+            .onOpenURL { url in
+                // An external link reveals the app rather than covering its destination.
+                if dimFocus.isDimmed { dimFocus.reveal() }
+                navigation.receive(url)
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
-            store.reconcile()
-            store.refreshExternalSurfaces()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
-            store.refreshExternalSurfaces()
-        }
-        .sheet(isPresented: $navigation.showingProjectCreation, onDismiss: {
-            navigation.setCapturePresentationBlocked(false, owner: "project-creation")
-        }) { ProjectEditor(store: store, project: nil) }
-        .sheet(item: $navigation.thoughtCaptureContext, onDismiss: captureDidDismiss) { context in
-            ThoughtCaptureView(store: store, context: context)
-        }
-        .onChange(of: navigation.showingProjectCreation) { _, showing in
-            if showing { navigation.setCapturePresentationBlocked(true, owner: "project-creation") }
-        }
-        .environment(navigation)
-        .alert("Quick Start", isPresented: Binding(get: { navigation.message != nil }, set: { if !$0 { navigation.message = nil } })) {
-            Button("OK", role: .cancel) { navigation.message = nil }
-        } message: { Text(navigation.message ?? "") }
-        .preferredColorScheme(appearance)
-        .environment(\.dynamicTypeSize, testing && ProcessInfo.processInfo.environment["POMODORO_TEST_DYNAMIC_TYPE"] == "accessibility2" ? .accessibility2 : dynamicTypeSize)
-        .alert("Unable to Complete Action", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
-            Button("OK", role: .cancel) { store.errorMessage = nil }
-        } message: { Text(store.errorMessage ?? "") }
-        .task {
-            navigation.canPresentThoughtCapture = { [weak store] in
-                UIApplication.shared.applicationState == .active && store?.errorMessage == nil &&
-                    !PresentationAvailability.hasPresentedContent
+    }
+
+    private var dimChanges: some View {
+        dimPresentation
+            .onChange(of: store.state.activeTimer) { _, _ in synchronizeDimFocus() }
+            .onChange(of: navigation.selectedTab) { _, _ in synchronizeDimFocus() }
+            .onChange(of: navigation.focusPath) { _, _ in synchronizeDimFocus() }
+            .onChange(of: navigation.capturePresentationBlockers) { _, _ in synchronizeDimFocus() }
+            .onChange(of: navigation.thoughtCaptureContext?.id) { _, id in
+                dimFocus.setBlocked("thought-capture", id != nil)
             }
-            navigation.connect(to: store)
-            store.reconcile()
-            synchronizeDimFocus()
-            if store.state.activeTimer != nil { store.scheduleNotification() }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                navigation.resumePendingThoughtCapture()
-                store.expireUndo()
-                if scenePhase == .active { store.reconcile() }
-                synchronizeDimFocus()
+    }
+
+    private var accessibilityAndKeyboardEvents: some View {
+        dimChanges
+            .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in synchronizeDimFocus() }
+            .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.switchControlStatusDidChangeNotification)) { _ in synchronizeDimFocus() }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in dimFocus.setBlocked("keyboard", true) }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in dimFocus.setBlocked("keyboard", false) }
+            .onChange(of: navigation.message) { _, _ in synchronizeDimFocus() }
+            .onChange(of: store.errorMessage) { _, _ in synchronizeDimFocus() }
+    }
+
+    private var systemEvents: some View {
+        accessibilityAndKeyboardEvents
+            .onChange(of: store.pendingDeletion?.count) { _, count in
+                if count != nil, let pending = store.pendingDeletion {
+                    UIAccessibility.post(notification: .announcement, argument: "\(pending.message). Undo available.")
+                }
             }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
                 store.reconcile()
                 store.refreshExternalSurfaces()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                store.refreshExternalSurfaces()
+            }
+    }
+
+    private var capturePresentation: some View {
+        @Bindable var navigation = navigation
+        return systemEvents
+            .sheet(isPresented: $navigation.showingProjectCreation, onDismiss: {
+                navigation.setCapturePresentationBlocked(false, owner: "project-creation")
+            }) { ProjectEditor(store: store, project: nil) }
+            .sheet(item: $navigation.thoughtCaptureContext, onDismiss: captureDidDismiss) { context in
+                ThoughtCaptureView(store: store, context: context)
+            }
+            .onChange(of: navigation.showingProjectCreation) { _, showing in
+                if showing { navigation.setCapturePresentationBlocked(true, owner: "project-creation") }
+            }
+            .environment(navigation)
+    }
+
+    private var configuredContent: some View {
+        capturePresentation
+            .alert("Quick Start", isPresented: quickStartAlertPresented) {
+                Button("OK", role: .cancel) { navigation.message = nil }
+            } message: { Text(navigation.message ?? "") }
+            .preferredColorScheme(appearance)
+            .environment(\.dynamicTypeSize, testing && ProcessInfo.processInfo.environment["POMODORO_TEST_DYNAMIC_TYPE"] == "accessibility2" ? .accessibility2 : dynamicTypeSize)
+            .alert("Unable to Complete Action", isPresented: actionErrorAlertPresented) {
+                Button("OK", role: .cancel) { store.errorMessage = nil }
+            } message: { Text(store.errorMessage ?? "") }
+    }
+
+    private var quickStartAlertPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { navigation.message != nil },
+            set: { presented in
+                if !presented { navigation.message = nil }
+            })
+    }
+
+    private var actionErrorAlertPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { store.errorMessage != nil },
+            set: { presented in
+                if !presented { store.errorMessage = nil }
+            })
+    }
+
+    private func runLifecycle() async {
+        navigation.canPresentThoughtCapture = { [weak store] in
+            UIApplication.shared.applicationState == .active && store?.errorMessage == nil &&
+                !PresentationAvailability.hasPresentedContent
+        }
+        navigation.connect(to: store)
+        store.reconcile()
+        synchronizeDimFocus()
+        if store.state.activeTimer != nil { store.scheduleNotification() }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            navigation.resumePendingThoughtCapture()
+            store.expireUndo()
+            if scenePhase == .active { store.reconcile() }
             synchronizeDimFocus()
         }
     }
