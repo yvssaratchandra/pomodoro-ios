@@ -48,3 +48,7 @@ Dim Focus state, capture URL parsing, and daily widget projection rules have loc
 | Widget across midnight or time-zone changes | Old saved totals are not presented as current-day totals | Not tested |
 
 The manual Codemagic **Native IPA** workflow produces an unsigned native artifact. Preserve its widget extension in SideStore. App Group identifiers after signing must match the app and extension's `PomodoroAppGroup` configuration; a successful unsigned build cannot establish this. Record the exact SideStore version and signing method when checking installation.
+
+### Container dim-display investigation
+
+A user reported that the current container build's Dim Focus toggle turned purple but did not show the dim display. Presentation checks now inspect the app's own controller subtree, and foreground checks use its attached window rather than requiring SwiftUI scene-phase delivery. This avoids treating a host controller as an editor inside Pomodoro. Regression tests cover container-owned presentations and app-owned nested editors. Rechecking the behavior inside the installed LiveContainer version remains pending; the exact version number has not been recorded.

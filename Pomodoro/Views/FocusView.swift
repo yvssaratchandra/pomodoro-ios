@@ -12,7 +12,7 @@ struct FocusView: View {
     @Bindable var store: AppStore
     @Bindable var navigation: AppNavigation
     @ObservedObject var dimFocus: DimFocusCoordinator
-    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject var presentation: AppPresentationContext
     @State private var durationProject: Project?
     @State private var draftNoteProject: Project?
     @State private var confirmingEnd = false
@@ -111,8 +111,9 @@ struct FocusView: View {
             } message: { Text("Save the time you’ve focused, or discard this session.") }
             .background {
                 FocusInteractionObserver(
-                    enabled: dimFocus.state.isEnabled && !dimFocus.isDimmed && scenePhase == .active && navigation.selectedTab == .focus && navigation.focusPath.isEmpty,
-                    onBegin: dimFocus.beginInteraction, onEnd: dimFocus.endInteraction)
+                    enabled: dimFocus.state.isEnabled && !dimFocus.isDimmed && presentation.isActive && navigation.selectedTab == .focus && navigation.focusPath.isEmpty,
+                    onBegin: dimFocus.beginInteraction, onEnd: dimFocus.endInteraction,
+                    canObserve: { !presentation.hasPresentedContent })
             }
             .onChange(of: hasEditor) { _, showing in
                 dimFocus.setBlocked("focus-editor", showing)

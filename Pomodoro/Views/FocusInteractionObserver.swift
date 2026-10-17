@@ -6,11 +6,13 @@ struct FocusInteractionObserver: UIViewRepresentable {
     var enabled: Bool
     var onBegin: () -> Void
     var onEnd: () -> Void
+    var canObserve: () -> Bool
 
     func makeUIView(context: Context) -> ObserverView { ObserverView() }
     func updateUIView(_ view: ObserverView, context: Context) {
         view.onBegin = onBegin
         view.onEnd = onEnd
+        view.canObserve = canObserve
         view.enabled = enabled
         view.refresh()
     }
@@ -20,6 +22,7 @@ struct FocusInteractionObserver: UIViewRepresentable {
         var enabled = false
         var onBegin: (() -> Void)?
         var onEnd: (() -> Void)?
+        var canObserve: (() -> Bool)?
         private var observing = false
         private var finishTask: Task<Void, Never>?
         private weak var scrollView: UIScrollView?
@@ -48,7 +51,7 @@ struct FocusInteractionObserver: UIViewRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard enabled, let window, touch.window === window,
                   bounds.contains(touch.location(in: self)),
-                  window.rootViewController?.presentedViewController == nil else { return false }
+                  canObserve?() == true else { return false }
             var ancestor = touch.view
             while let current = ancestor {
                 if let scroll = current as? UIScrollView { scrollView = scroll; break }

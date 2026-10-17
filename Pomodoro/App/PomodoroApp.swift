@@ -98,6 +98,7 @@ struct RootView: View {
     @Bindable var store: AppStore
     @State private var navigation = AppNavigation(scheme: AppInstallation.scheme)
     @StateObject private var dimFocus = DimFocusCoordinator()
+    @StateObject private var presentation = AppPresentationContext()
     @State private var dimCaptureSessionID: UUID?
     @State private var captureReturnsToDim = false
     @Environment(\.scenePhase) private var scenePhase
@@ -112,8 +113,10 @@ struct RootView: View {
     var body: some View {
         configuredContent
             .task { await runLifecycle() }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
+            .background { AppPresentationProbe(context: presentation).allowsHitTesting(false) }
+            .onChange(of: scenePhase) { _, _ in presentation.refresh() }
+            .onChange(of: presentation.isActive) { _, active in
+                if active {
                     store.reconcile()
                     store.refreshExternalSurfaces()
                 }
@@ -126,7 +129,7 @@ struct RootView: View {
             if tab == .focus { navigation.showFocus() }
             else { navigation.selectedTab = tab }
         })) {
-            FocusView(store: store, navigation: navigation, dimFocus: dimFocus)
+            FocusView(store: store, navigation: navigation, dimFocus: dimFocus, presentation: presentation)
                 .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Focus", systemImage: "timer") }.tag(AppNavigation.Tab.focus)
             ThoughtsView(store: store, navigation: navigation)
@@ -180,8 +183,14 @@ struct RootView: View {
             .onChange(of: store.errorMessage) { _, _ in synchronizeDimFocus() }
     }
 
-    private var systemEvents: some View {
+    private var applicationEvents: some View {
         accessibilityAndKeyboardEvents
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in presentation.applicationBecameActive() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in presentation.applicationResignedActive() }
+    }
+
+    private var systemEvents: some View {
+        applicationEvents
             .onChange(of: store.pendingDeletion?.count) { _, count in
                 if count != nil, let pending = store.pendingDeletion {
                     UIAccessibility.post(notification: .announcement, argument: "\(pending.message). Undo available.")
@@ -240,9 +249,9 @@ struct RootView: View {
     }
 
     private func runLifecycle() async {
-        navigation.canPresentThoughtCapture = { [weak store] in
-            UIApplication.shared.applicationState == .active && store?.errorMessage == nil &&
-                !PresentationAvailability.hasPresentedContent
+        presentation.refresh()
+        navigation.canPresentThoughtCapture = { [weak store, weak presentation] in
+            presentation?.canPresent == true && store?.errorMessage == nil
         }
         navigation.connect(to: store)
         store.reconcile()
@@ -250,9 +259,10 @@ struct RootView: View {
         if store.state.activeTimer != nil { store.scheduleNotification() }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
+            presentation.refresh()
             navigation.resumePendingThoughtCapture()
             store.expireUndo()
-            if scenePhase == .active { store.reconcile() }
+            if presentation.isActive { store.reconcile() }
             synchronizeDimFocus()
         }
     }
@@ -261,10 +271,10 @@ struct RootView: View {
         dimFocus.setBlocked("presentation", !navigation.capturePresentationBlockers.isEmpty ||
                             navigation.showingProjectCreation || navigation.message != nil || store.errorMessage != nil)
         // This catches sheets owned by nested screens, including Stats detail editors.
-        dimFocus.setBlocked("external-sheet", navigation.thoughtCaptureContext == nil && PresentationAvailability.hasPresentedContent)
+        dimFocus.setBlocked("external-sheet", navigation.thoughtCaptureContext == nil && presentation.hasPresentedContent)
         dimFocus.update(timer: store.state.activeTimer,
                         focusVisible: navigation.selectedTab == .focus && navigation.focusPath.isEmpty,
-                        sceneActive: scenePhase == .active,
+                        sceneActive: presentation.isActive,
                         accessibilityActive: UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning)
         if captureReturnsToDim, navigation.thoughtCaptureContext == nil {
             if dimFocus.state.sessionID != dimCaptureSessionID {
