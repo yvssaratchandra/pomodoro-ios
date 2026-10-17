@@ -2,6 +2,14 @@ import SwiftUI
 import SwiftData
 
 enum AppTheme {
+    static let breakAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 132 / 255, green: 160 / 255, blue: 140 / 255, alpha: 1)
+            : UIColor(red: 78 / 255, green: 107 / 255, blue: 86 / 255, alpha: 1)
+    })
+    static let breakButtonForeground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .black : .white
+    })
     static let background = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark ? .black : .systemGroupedBackground
     })
@@ -89,6 +97,9 @@ extension View {
 struct RootView: View {
     @Bindable var store: AppStore
     @State private var navigation = AppNavigation(scheme: AppInstallation.scheme)
+    @StateObject private var dimFocus = DimFocusCoordinator()
+    @State private var dimCaptureSessionID: UUID?
+    @State private var captureReturnsToDim = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var testing: Bool { ProcessInfo.processInfo.arguments.contains("--ui-testing") }
@@ -104,7 +115,7 @@ struct RootView: View {
             if tab == .focus { navigation.showFocus() }
             else { navigation.selectedTab = tab }
         })) {
-            FocusView(store: store, navigation: navigation)
+            FocusView(store: store, navigation: navigation, dimFocus: dimFocus)
                 .safeAreaInset(edge: .bottom) { UndoBanner(store: store) }
                 .tabItem { Label("Focus", systemImage: "timer") }.tag(AppNavigation.Tab.focus)
             ThoughtsView(store: store, navigation: navigation)
@@ -112,7 +123,36 @@ struct RootView: View {
                 .tabItem { Label("Thoughts", systemImage: "text.bubble") }.tag(AppNavigation.Tab.thoughts)
             StatsView(store: store).safeAreaInset(edge: .bottom) { UndoBanner(store: store) }.tabItem { Label("Stats", systemImage: "chart.bar") }.tag(AppNavigation.Tab.stats)
         }
-        .onOpenURL { navigation.receive($0) }
+        .overlay {
+            if dimFocus.isDimmed, let timer = store.state.activeTimer, timer.kind == .focus {
+                DimFocusView(timer: timer, reveal: dimFocus.reveal) {
+                    dimCaptureSessionID = timer.id
+                    captureReturnsToDim = true
+                    navigation.requestThoughtCapture(context: ThoughtCaptureContext(
+                        projectID: timer.projectID, originSessionID: timer.id))
+                }
+                .ignoresSafeArea()
+            }
+        }
+        .statusBarHidden(dimFocus.isDimmed)
+        .onOpenURL { url in
+            // An external link reveals the app rather than covering its destination.
+            if dimFocus.isDimmed { dimFocus.reveal() }
+            navigation.receive(url)
+        }
+        .onChange(of: store.state.activeTimer) { _, _ in synchronizeDimFocus() }
+        .onChange(of: navigation.selectedTab) { _, _ in synchronizeDimFocus() }
+        .onChange(of: navigation.focusPath) { _, _ in synchronizeDimFocus() }
+        .onChange(of: navigation.capturePresentationBlockers) { _, _ in synchronizeDimFocus() }
+        .onChange(of: navigation.thoughtCaptureContext?.id) { _, id in
+            dimFocus.setBlocked("thought-capture", id != nil)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in synchronizeDimFocus() }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.switchControlStatusDidChangeNotification)) { _ in synchronizeDimFocus() }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in dimFocus.setBlocked("keyboard", true) }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in dimFocus.setBlocked("keyboard", false) }
+        .onChange(of: navigation.message) { _, _ in synchronizeDimFocus() }
+        .onChange(of: store.errorMessage) { _, _ in synchronizeDimFocus() }
         .onChange(of: store.pendingDeletion?.count) { _, count in
             if count != nil, let pending = store.pendingDeletion {
                 UIAccessibility.post(notification: .announcement, argument: "\(pending.message). Undo available.")
@@ -128,7 +168,7 @@ struct RootView: View {
         .sheet(isPresented: $navigation.showingProjectCreation, onDismiss: {
             navigation.setCapturePresentationBlocked(false, owner: "project-creation")
         }) { ProjectEditor(store: store, project: nil) }
-        .sheet(item: $navigation.thoughtCaptureContext, onDismiss: navigation.thoughtCaptureDidDismiss) { context in
+        .sheet(item: $navigation.thoughtCaptureContext, onDismiss: captureDidDismiss) { context in
             ThoughtCaptureView(store: store, context: context)
         }
         .onChange(of: navigation.showingProjectCreation) { _, showing in
@@ -150,12 +190,14 @@ struct RootView: View {
             }
             navigation.connect(to: store)
             store.reconcile()
+            synchronizeDimFocus()
             if store.state.activeTimer != nil { store.scheduleNotification() }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 navigation.resumePendingThoughtCapture()
                 store.expireUndo()
                 if scenePhase == .active { store.reconcile() }
+                synchronizeDimFocus()
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -163,6 +205,35 @@ struct RootView: View {
                 store.reconcile()
                 store.refreshExternalSurfaces()
             }
+            synchronizeDimFocus()
         }
     }
+
+    private func synchronizeDimFocus() {
+        dimFocus.setBlocked("presentation", !navigation.capturePresentationBlockers.isEmpty ||
+                            navigation.showingProjectCreation || navigation.message != nil || store.errorMessage != nil)
+        // This catches sheets owned by nested screens, including Stats detail editors.
+        dimFocus.setBlocked("external-sheet", navigation.thoughtCaptureContext == nil && PresentationAvailability.hasPresentedContent)
+        dimFocus.update(timer: store.state.activeTimer,
+                        focusVisible: navigation.selectedTab == .focus && navigation.focusPath.isEmpty,
+                        sceneActive: scenePhase == .active,
+                        accessibilityActive: UIAccessibility.isVoiceOverRunning || UIAccessibility.isSwitchControlRunning)
+        if captureReturnsToDim, navigation.thoughtCaptureContext == nil {
+            if dimFocus.state.sessionID != dimCaptureSessionID {
+                dimCaptureSessionID = nil
+                captureReturnsToDim = false
+            } else if dimFocus.state.canPresent {
+                dimFocus.captureDismissed(sessionID: dimCaptureSessionID, returnDirectlyToDim: true)
+                dimCaptureSessionID = nil
+                captureReturnsToDim = false
+            }
+        }
+    }
+
+    private func captureDidDismiss() {
+        navigation.thoughtCaptureDidDismiss()
+        dimFocus.setBlocked("thought-capture", navigation.thoughtCaptureContext != nil)
+        synchronizeDimFocus()
+    }
+
 }

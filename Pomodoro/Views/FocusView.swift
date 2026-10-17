@@ -11,6 +11,8 @@ private enum FocusScreenState {
 struct FocusView: View {
     @Bindable var store: AppStore
     @Bindable var navigation: AppNavigation
+    @ObservedObject var dimFocus: DimFocusCoordinator
+    @Environment(\.scenePhase) private var scenePhase
     @State private var durationProject: Project?
     @State private var draftNoteProject: Project?
     @State private var confirmingEnd = false
@@ -34,6 +36,7 @@ struct FocusView: View {
     }
 
     private func editorDismissed() {
+        dimFocus.setBlocked("focus-editor", hasEditor)
         navigation.setCapturePresentationBlocked(hasEditor, owner: "focus-editor")
     }
 
@@ -56,25 +59,33 @@ struct FocusView: View {
             .navigationTitle(store.state.activeTimer?.kind == .focus ? "Focusing" : store.state.activeTimer != nil ? "Break" : "Focus")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    if store.state.activeTimer?.kind == .focus {
+                        Button {
+                            if dimFocus.state.isEnabled { dimFocus.disable() }
+                            else { dimFocus.enable() }
+                        } label: {
+                            Image(systemName: "circle.lefthalf.filled")
+                        }
+                        .font(.system(size: 18, weight: .regular))
+                        .frame(width: 44, height: 44)
+                        .foregroundStyle(dimFocus.state.isEnabled ? Color.indigo : Color.secondary)
+                        .accessibilityLabel(dimFocus.state.isEnabled ? "Disable Dim Focus" : "Enable Dim Focus")
+                        .accessibilityValue(dimFocus.state.isEnabled ? "On" : "Off")
+                        .accessibilityIdentifier("dimFocusToggle")
+                    }
                     Button("Settings", systemImage: "gearshape") { navigation.showSettings() }
-                        .labelStyle(.iconOnly).accessibilityIdentifier("focus.settings")
+                        .labelStyle(.iconOnly)
+                        .font(.system(size: 18, weight: .regular))
+                        .frame(width: 44, height: 44)
+                        .accessibilityIdentifier("focus.settings")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Manage projects", systemImage: "folder") { navigation.showProjects() }
-                            .accessibilityIdentifier("focus.projects")
-                        if case .ready(let project) = screenState {
-                            Button("Plan this session", systemImage: "square.and.pencil") { draftNoteProject = project }
-                                .accessibilityIdentifier("focus.intention")
-                        }
-                        if case .focusing(let timer) = screenState {
-                            Button(timer.intention == nil ? "Plan this session" : "Edit this session", systemImage: "square.and.pencil") {
-                                noteTimer = timer
-                            }.accessibilityIdentifier("focus.intention.edit")
-                        }
-                    } label: { Image(systemName: "ellipsis.circle").accessibilityLabel("More") }
-                    .accessibilityIdentifier("focus.more")
+                    FocusMenuButton(actions: focusMenuActions) { showing in
+                        dimFocus.setBlocked("focus-menu", showing)
+                        navigation.setCapturePresentationBlocked(showing, owner: "focus-menu")
+                    }
+                    .frame(width: 44, height: 44)
                 }
             }
             .navigationDestination(for: FocusDestination.self) { destination in
@@ -98,10 +109,17 @@ struct FocusView: View {
                 }
                 Button("Keep Focusing", role: .cancel) { }
             } message: { Text("Save the time you’ve focused, or discard this session.") }
+            .background {
+                FocusInteractionObserver(
+                    enabled: dimFocus.state.isEnabled && !dimFocus.isDimmed && scenePhase == .active && navigation.selectedTab == .focus && navigation.focusPath.isEmpty,
+                    onBegin: dimFocus.beginInteraction, onEnd: dimFocus.endInteraction)
+            }
             .onChange(of: hasEditor) { _, showing in
+                dimFocus.setBlocked("focus-editor", showing)
                 if showing { navigation.setCapturePresentationBlocked(true, owner: "focus-editor") }
             }
             .onChange(of: confirmingEnd) { _, showing in
+                dimFocus.setBlocked("focus-end-confirmation", showing)
                 navigation.setCapturePresentationBlocked(showing, owner: "focus-end-confirmation")
             }
             .onChange(of: store.state.activeTimer?.id) { _, _ in confirmingEnd = false }
@@ -113,6 +131,22 @@ struct FocusView: View {
             .onAppear { repairSelection() }
             .onChange(of: store.state.projects) { _, _ in repairSelection() }
         }
+    }
+
+    private var focusMenuActions: [FocusMenuAction] {
+        var actions = [FocusMenuAction(title: "Manage projects", systemImage: "folder", identifier: "focus.projects") {
+            navigation.showProjects()
+        }]
+        if case .ready(let project) = screenState {
+            actions.append(FocusMenuAction(title: "Plan this session", systemImage: "square.and.pencil", identifier: "focus.intention") {
+                draftNoteProject = project
+            })
+        }
+        if case .focusing(let timer) = screenState {
+            actions.append(FocusMenuAction(title: timer.intention == nil ? "Plan this session" : "Edit this session",
+                                          systemImage: "square.and.pencil", identifier: "focus.intention.edit") { noteTimer = timer })
+        }
+        return actions
     }
 
     private var emptyProjects: some View {
@@ -221,8 +255,9 @@ struct FocusView: View {
             TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
             Button { store.startBreak() } label: {
                 Label("Start Break", systemImage: "cup.and.saucer.fill")
+                    .foregroundStyle(AppTheme.breakButtonForeground)
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
-            }.buttonStyle(.borderedProminent).controlSize(.large).tint(.teal)
+            }.buttonStyle(.borderedProminent).controlSize(.large).tint(AppTheme.breakAccent)
             Button("Skip Break") { store.update { $0.breakOffer = nil } }
             if let project = store.state.projects.first(where: { $0.id == offer.projectID }), project.breadcrumb != nil {
                 BreadcrumbCard(store: store, project: project)
@@ -327,7 +362,7 @@ private struct TimerFace: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var tint: Color { isBreak ? .teal : .indigo }
+    private var tint: Color { isBreak ? AppTheme.breakAccent : .indigo }
     private var digits: some View {
         Text(DurationText.countdown(seconds))
             .font(dynamicTypeSize.isAccessibilitySize
