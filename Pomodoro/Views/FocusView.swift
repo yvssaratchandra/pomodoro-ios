@@ -84,7 +84,7 @@ struct FocusView: View {
             }
             .sheet(item: $noteTimer) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
             .sheet(item: $breadcrumbSession) { BreadcrumbEditor(store: store, sessionID: $0.id, promote: true) }
-            .sheet(item: $thoughtContext) { ThoughtEditor(store: store, context: $0) }
+            .sheet(item: $thoughtContext) { ThoughtCaptureView(store: store, context: $0) }
             .alert("End focus?", isPresented: $confirmingEnd) {
                 Button("Save Session") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
@@ -201,7 +201,7 @@ struct FocusView: View {
                 }
                 .buttonStyle(.bordered).controlSize(.large)
                 .accessibilityIdentifier("timer.end")
-                Button("Save for later", systemImage: "text.bubble") {
+                Button("Add a thought", systemImage: "text.bubble") {
                     thoughtContext = ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id)
                 }.accessibilityIdentifier("focus.captureThought")
             } else {

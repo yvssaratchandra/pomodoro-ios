@@ -175,7 +175,14 @@ struct PendingDeletion {
     }
 
     func captureThought(context: ThoughtCaptureContext, text: String) -> Bool {
-        update { try ThoughtEngine.capture(&$0, context: context, text: text, now: now()) }
+        createThought(context: context, text: text) != nil
+    }
+    func createThought(context: ThoughtCaptureContext, text: String) -> UUID? {
+        var createdID: UUID?
+        let saved = update {
+            createdID = try ThoughtEngine.capture(&$0, context: context, text: text, now: now())
+        }
+        return saved ? createdID : nil
     }
     func editThought(id: UUID, text: String) -> Bool { update { try ThoughtEngine.edit(&$0, id: id, text: text) } }
     func setThoughtCompleted(id: UUID, completed: Bool) -> Bool {

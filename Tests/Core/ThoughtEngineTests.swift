@@ -6,6 +6,20 @@ import XCTest
 #endif
 
 final class ThoughtEngineTests: XCTestCase {
+    func testCaptureReturnsStoredIDAndRepeatedTextCreatesDistinctThoughts() throws {
+        var state = AppSnapshot()
+        let now = Date()
+        let origin = UUID()
+        let context = ThoughtCaptureContext(projectID: nil, originSessionID: origin)
+        let first = try ThoughtEngine.capture(&state, context: context, text: "  Remember  ", now: now)
+        let second = try ThoughtEngine.capture(&state, context: context, text: "Remember", now: now)
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(state.thoughts.map(\.id), [first, second])
+        XCTAssertEqual(state.thoughts.map(\.text), ["Remember", "Remember"])
+        XCTAssertEqual(state.thoughts.map(\.originSessionID), [origin, origin])
+        XCTAssertEqual(state.thoughts.map(\.createdAt), [now, now])
+    }
+
     func testThoughtSurvivesDiscardDeletionMergeAndBackupWithCompletion() throws {
         let now = Date()
         var state = AppSnapshot(projects: [Project(name: "First"), Project(name: "Destination")])

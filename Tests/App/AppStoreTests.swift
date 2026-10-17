@@ -4,6 +4,40 @@ import UserNotifications
 @testable import Pomodoro
 
 @MainActor final class AppStoreTests: XCTestCase {
+    func testThoughtCreationReturnsCommittedIDAndFailedRetryCreatesExactlyOne() throws {
+        let persistence = MemorySnapshotPersistence()
+        let date = Date()
+        let store = try AppStore(persistence: persistence, now: { date })
+        let original = store.state
+        let originalBytes = persistence.payload
+        let origin = UUID()
+        let context = ThoughtCaptureContext(projectID: nil, originSessionID: origin)
+        persistence.failSave = true
+        XCTAssertNil(store.createThought(context: context, text: "Remember"))
+        XCTAssertEqual(store.state, original)
+        XCTAssertEqual(persistence.payload, originalBytes)
+        persistence.failSave = false
+        let id = try XCTUnwrap(store.createThought(context: context, text: "Remember"))
+        XCTAssertEqual(store.state.thoughts.map(\.id), [id])
+        XCTAssertEqual(store.state.thoughts[0].originSessionID, origin)
+        XCTAssertEqual(store.state.thoughts[0].createdAt, date)
+        let reloaded = try AppStore(persistence: persistence)
+        XCTAssertEqual(reloaded.state.thoughts, store.state.thoughts)
+        let second = try XCTUnwrap(store.createThought(context: context, text: "Remember"))
+        XCTAssertNotEqual(second, id)
+        XCTAssertEqual(store.state.thoughts.map(\.id), [id, second])
+    }
+
+    func testThoughtCreationReturnsIDWhenOptionalDisplayPublicationFails() throws {
+        let publisher = RecordingSnapshotPublisher()
+        let store = try AppStore(persistence: MemorySnapshotPersistence(), publisher: publisher)
+        publisher.failPublish = true
+        let id = try XCTUnwrap(store.createThought(
+            context: ThoughtCaptureContext(projectID: nil, originSessionID: nil), text: "Saved"))
+        XCTAssertEqual(store.state.thoughts.map(\.id), [id])
+        XCTAssertNotNil(store.errorMessage)
+    }
+
     func makeContainer() throws -> ModelContainer {
         try ModelContainer(for: AppDocument.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
     }

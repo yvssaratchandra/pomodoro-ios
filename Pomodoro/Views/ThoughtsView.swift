@@ -2,8 +2,7 @@ import SwiftUI
 
 struct ThoughtEditor: View {
     let store: AppStore
-    let context: ThoughtCaptureContext?
-    let thoughtID: UUID?
+    let thoughtID: UUID
     private let original: String
     private let originalProject: UUID?
     @State private var draft: String
@@ -13,11 +12,11 @@ struct ThoughtEditor: View {
     @FocusState private var textFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    init(store: AppStore, context: ThoughtCaptureContext? = nil, thoughtID: UUID? = nil) {
-        self.store = store; self.context = context; self.thoughtID = thoughtID
-        let thought = thoughtID.flatMap { id in store.state.thoughts.first { $0.id == id } }
+    init(store: AppStore, thoughtID: UUID) {
+        self.store = store; self.thoughtID = thoughtID
+        let thought = store.state.thoughts.first { $0.id == thoughtID }
         original = thought?.text ?? ""
-        originalProject = thought?.projectID ?? context?.projectID
+        originalProject = thought?.projectID
         _draft = State(initialValue: original)
         _projectID = State(initialValue: originalProject)
     }
@@ -33,15 +32,10 @@ struct ThoughtEditor: View {
                         Text("\(draft.count) / 500").foregroundStyle(draft.count > 500 ? .red : .secondary)
                     }
                 }
-                if thoughtID == nil, context?.originSessionID == nil {
-                    Picker("Project", selection: $projectID) {
-                        Text("Unassigned").tag(Optional<UUID>.none)
-                        ForEach(store.state.projects) { Text($0.name).tag(Optional($0.id)) }
-                    }.accessibilityIdentifier("thought.project")
-                } else if let projectID {
+                if let projectID {
                     LabeledContent("Project", value: store.projectName(projectID))
                 }
-                if let thoughtID, let thought = store.state.thoughts.first(where: { $0.id == thoughtID }) {
+                if let thought = store.state.thoughts.first(where: { $0.id == thoughtID }) {
                     DisclosureGroup("Details") {
                         LabeledContent("Created", value: thought.createdAt.formatted(date: .abbreviated, time: .shortened))
                         if let completed = thought.completedAt {
@@ -55,7 +49,7 @@ struct ThoughtEditor: View {
                 }
                 if let error { Text(error).foregroundStyle(.red) }
             }
-            .appScreen().navigationTitle(thoughtID == nil ? "New thought" : "Edit thought")
+            .appScreen().navigationTitle("Edit thought")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -63,12 +57,7 @@ struct ThoughtEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        let saved: Bool
-                        if let thoughtID { saved = store.editThought(id: thoughtID, text: draft) }
-                        else {
-                            let capture = ThoughtCaptureContext(projectID: projectID, originSessionID: context?.originSessionID)
-                            saved = store.captureThought(context: capture, text: draft)
-                        }
+                        let saved = store.editThought(id: thoughtID, text: draft)
                         if saved { dismiss() } else { error = store.errorMessage; store.errorMessage = nil }
                     }.disabled(normalized.isEmpty || normalized.count > 500).accessibilityIdentifier("thought.save")
                 }
@@ -202,7 +191,7 @@ struct ThoughtsView: View {
                 }
             }
             .sheet(item: $editing) { ThoughtEditor(store: store, thoughtID: $0.id) }
-            .sheet(item: $capture) { ThoughtEditor(store: store, context: $0) }
+            .sheet(item: $capture) { ThoughtCaptureView(store: store, context: $0) }
             .confirmationDialog("Delete \(selection.count) thoughts?", isPresented: $confirmingBulkDelete, titleVisibility: .visible) {
                 Button("Delete thoughts", role: .destructive) {
                     if store.deleteThoughts(ids: selection) { selection.removeAll(); selecting = false }
