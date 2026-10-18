@@ -8,6 +8,7 @@ struct ProjectsView: View {
 
     var body: some View {
         List {
+            LegacyDailyGoalAssignmentSection(store: store)
             if store.state.projects.isEmpty {
                 ContentUnavailableView {
                     Label("No Projects", systemImage: "folder")
@@ -60,7 +61,6 @@ struct ProjectDetail: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
     @State private var merging = false
-    @State private var showingGoal = false
     @State private var showingShortcut = false
     @State private var confirmingDeletion = false
     @State private var error: String?
@@ -110,8 +110,7 @@ struct ProjectDetail: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
-                            Button("Edit Project", systemImage: "pencil") { editing = true }
-                            Button("Weekly Goal", systemImage: "target") { showingGoal = true }
+                            Button("Project settings", systemImage: "slider.horizontal.3") { editing = true }
                             if project.status == .ongoing {
                                 Button("Create Shortcut", systemImage: "square.and.arrow.up") { showingShortcut = true }
                                     .accessibilityIdentifier("project.quickstart")
@@ -128,7 +127,6 @@ struct ProjectDetail: View {
                 }
                 .sheet(isPresented: $editing) { ProjectEditor(store: store, project: project) }
                 .sheet(isPresented: $merging) { MergeView(store: store, source: project) { dismiss() } }
-                .navigationDestination(isPresented: $showingGoal) { WeeklyGoalEditor(store: store, projectID: project.id) }
                 .navigationDestination(isPresented: $showingShortcut) { QuickStartSetupView(store: store, projectID: project.id) }
                 .confirmationDialog("Delete \(project.name)?", isPresented: $confirmingDeletion) {
                     Button("Delete Project", role: .destructive) {
@@ -168,71 +166,154 @@ struct ProjectEditor: View {
     @Bindable var store: AppStore
     @Environment(AppNavigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
-    @State private var draft: Project
-    @State private var focusDuration: Int
-    private let originalFocusDuration: Int
-    @State private var showingTimerSettings = false
+    @State private var draft: ProjectSettingsDraft
+    @State private var path: [ProjectSettingsPage]
+    @State private var confirmingDiscard = false
     @State private var error: String?
     private let isNew: Bool
+    private let unavailable: Bool
 
-    init(store: AppStore, project: Project?) {
+    init(store: AppStore, project: Project?, createNew: Bool = false, initialPage: ProjectSettingsPage? = nil) {
         self.store = store
-        isNew = project == nil
-        let settings = store.state.settings
-        let starting = project ?? Project(name: "", focusMinutes: settings.defaultFocusMinutes,
-            shortBreakMinutes: settings.defaultShortBreakMinutes, longBreakMinutes: settings.defaultLongBreakMinutes)
-        originalFocusDuration = starting.preferredFocusMinutes
-        _focusDuration = State(initialValue: starting.preferredFocusMinutes)
-        _draft = State(initialValue: starting)
+        isNew = createNew
+        let existing = store.makeProjectSettingsDraft(projectID: project?.id)
+        unavailable = !createNew && existing == nil
+        _draft = State(initialValue: existing ?? store.makeProjectSettingsDraft(projectID: nil)!)
+        _path = State(initialValue: initialPage.map { [$0] } ?? [])
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Project Name", text: $draft.name).accessibilityIdentifier("project.name")
-                    if !isNew {
-                        Picker("Status", selection: $draft.status) {
-                            ForEach(ProjectStatus.allCases) { Text($0.title).tag($0) }
-                        }.disabled(store.state.activeTimer?.projectID == draft.id)
+        NavigationStack(path: $path) {
+            Group {
+                if unavailable {
+                    ContentUnavailableView("Project unavailable", systemImage: "folder",
+                        description: Text("Return to Projects and open the project again."))
+                } else {
+                    Form {
+                        Section {
+                            TextField("Name", text: $draft.name).accessibilityIdentifier("project.name")
+                            if !isNew {
+                                Picker("Status", selection: $draft.status) {
+                                    ForEach(ProjectStatus.allCases) { Text($0.title).tag($0) }
+                                }
+                                .disabled(store.state.activeTimer?.projectID == draft.projectID)
+                            }
+                        }
+                        if isNew {
+                            Section {
+                                DisclosureGroup("Timer settings") { timerRows }
+                            }
+                        } else {
+                            Section("Timers") { timerRows }
+                        }
+                        if !isNew {
+                            Section("Goals") {
+                                NavigationLink(value: ProjectSettingsPage.daily) {
+                                    LabeledContent("Daily goal", value: dailySummary)
+                                }
+                                NavigationLink(value: ProjectSettingsPage.weekly) {
+                                    LabeledContent("Weekly goal", value: draft.weeklyMinutes.map(goalLabel) ?? "Off")
+                                }
+                            }
+                        }
+                        if let error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
                     }
                 }
-                if isNew {
-                    DisclosureGroup("Timer Settings", isExpanded: $showingTimerSettings) { timerSettings }
-                } else {
-                    Section("Timer Settings") { timerSettings }
-                }
-                if let error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
             }
             .appScreen()
-            .navigationTitle(isNew ? "New Project" : "Edit Project")
+            .navigationTitle(unavailable ? "Project settings" : isNew ? "New project" : "Project settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        draft.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if store.saveProject(draft, focusDuration: focusDuration == originalFocusDuration ? nil : focusDuration) {
-                            if isNew {
-                                navigation.selectedProjectID = draft.id
-                                navigation.showFocus()
-                            }
-                            dismiss()
-                        } else { error = store.errorMessage; store.errorMessage = nil }
+                if !unavailable {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: cancel)
                     }
-                    .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.name.count > 100)
-                    .accessibilityIdentifier("project.save")
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save", action: save)
+                            .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                      || draft.name.trimmingCharacters(in: .whitespacesAndNewlines).count > 100
+                                      || !draft.hasChanges)
+                            .accessibilityIdentifier("project.save")
+                    }
                 }
+            }
+            .navigationDestination(for: ProjectSettingsPage.self) { page in
+                switch page {
+                case .daily: DailyGoalsDraftView(draft: $draft)
+                case .dailyTarget(let title, let indices):
+                    GoalMinutesEditor(title: title, minutes: dailyBinding(indices), maximum: 1440, allowsRest: true)
+                case .weekly: WeeklyGoalsDraftView(draft: $draft)
+                case .weeklyTarget:
+                    GoalMinutesEditor(title: "Weekly goal", minutes: weeklyBinding, maximum: 10080, allowsRest: false)
+                case .scheduledWeekly(let day):
+                    ScheduledWeeklyGoalDraftView(draft: $draft, day: day)
+                }
+            }
+            .interactiveDismissDisabled(draft.hasChanges && !unavailable)
+            .confirmationDialog("Discard changes?", isPresented: $confirmingDiscard) {
+                Button("Discard changes", role: .destructive) { dismiss() }
+                Button("Keep editing", role: .cancel) { }
+            } message: { Text("Your project settings have not been saved.") }
+            .alert("Unable to save project settings", isPresented: Binding(
+                get: { error != nil }, set: { if !$0 { error = nil } }
+            )) {
+                Button("OK") { error = nil }
+            } message: { Text(error ?? "") }
+        }
+        .onAppear {
+            if !isNew && store.state.projects.contains(where: { $0.id == draft.projectID }) == false {
+                error = "This project is no longer available. Return to Projects and open it again."
             }
         }
     }
 
-    private var timerSettings: some View {
-        Group {
-            MinutePicker(title: "Focus", value: $focusDuration, range: 10...60)
-            MinutePicker(title: "Short Break", value: $draft.shortBreakMinutes, range: 1...60)
-            MinutePicker(title: "Long Break", value: $draft.longBreakMinutes, range: 1...60)
+    private var dailySummary: String {
+        guard let schedule = draft.dailySchedule else { return "Not set" }
+        if schedule.allSatisfy({ $0 == schedule[0] }) { return "\(goalLabel(schedule[0])) daily" }
+        if schedule.prefix(5).allSatisfy({ $0 == schedule[0] }) && schedule.suffix(2).allSatisfy({ $0 == schedule[5] }) {
+            return schedule[5] == 0 ? "\(goalLabel(schedule[0])) weekdays" : "Weekdays & weekends"
         }
+        return "Custom schedule"
+    }
+
+    @ViewBuilder private var timerRows: some View {
+        timerRow("Focus", value: $draft.focusMinutes, range: 10...60)
+        timerRow("Short break", value: $draft.shortBreakMinutes, range: 1...60)
+        timerRow("Long break", value: $draft.longBreakMinutes, range: 1...60)
+    }
+
+    private var weeklyBinding: Binding<Int> {
+        Binding(get: { draft.weeklyMinutes ?? 60 }, set: { draft.weeklyMinutes = $0 })
+    }
+
+    private func dailyBinding(_ indices: [Int]) -> Binding<Int> {
+        Binding(get: { indices.first.flatMap { draft.dailySchedule?[$0] } ?? 0 }, set: { value in
+            var schedule = draft.dailySchedule ?? Array(repeating: 0, count: 7)
+            for index in indices { schedule[index] = value }
+            draft.dailySchedule = schedule
+        })
+    }
+
+    private func timerRow(_ title: String, value: Binding<Int>, range: ClosedRange<Int>) -> some View {
+        MinutePicker(title: title, value: value, range: range)
+    }
+
+    private func save() {
+        guard store.saveProjectSettings(draft) else {
+            error = store.errorMessage ?? "The settings could not be saved."
+            store.errorMessage = nil
+            return
+        }
+        if isNew {
+            navigation.selectedProjectID = draft.projectID
+            navigation.showFocus()
+        }
+        dismiss()
+    }
+
+    private func cancel() {
+        if draft.hasChanges { confirmingDiscard = true }
+        else { dismiss() }
     }
 }
 

@@ -212,7 +212,7 @@ struct RootView: View {
         return systemEvents
             .sheet(isPresented: $navigation.showingProjectCreation, onDismiss: {
                 navigation.setCapturePresentationBlocked(false, owner: "project-creation")
-            }) { ProjectEditor(store: store, project: nil) }
+            }) { ProjectEditor(store: store, project: nil, createNew: true) }
             .sheet(item: $navigation.thoughtCaptureContext, onDismiss: captureDidDismiss) { context in
                 ThoughtCaptureView(store: store, context: context)
             }
