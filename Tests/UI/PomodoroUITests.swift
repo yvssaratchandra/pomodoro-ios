@@ -94,6 +94,9 @@ final class PomodoroUITests: XCTestCase {
         app.tabBars.buttons["Stats"].tap()
         XCTAssertEqual(app.staticTexts["stats.savedFocusTime"].label, "0 min")
         XCTAssertEqual(app.staticTexts["stats.sessionInProgress"].label, "1 session in progress · not included yet")
+        app.buttons["stats.project"].tap()
+        app.buttons["Linked project"].tap()
+        XCTAssertEqual(app.buttons["stats.dailyGoal"].label, "Set daily goal")
         // open(_:) relaunches the process and exercises durable timer recovery.
         app.open(URL(string: "pomodoro://timer")!)
         XCTAssertTrue(app.staticTexts["timer.countdown"].waitForExistence(timeout: 5))
@@ -113,6 +116,7 @@ final class PomodoroUITests: XCTestCase {
         app.launchEnvironment["POMODORO_TEST_SCENARIO"] = "project-goals"
         app.launch()
         app.tabBars.buttons["Stats"].tap()
+        XCTAssertFalse(app.buttons["stats.dailyGoal"].exists)
         app.buttons["stats.project"].tap()
         app.buttons["Work"].tap()
         XCTAssertEqual(app.staticTexts["stats.savedFocusTime"].label, "10 min")
@@ -121,6 +125,9 @@ final class PomodoroUITests: XCTestCase {
         app.buttons["Reading"].tap()
         XCTAssertEqual(app.staticTexts["stats.savedFocusTime"].label, "5 min")
         XCTAssertTrue(app.buttons["stats.dailyGoal"].label.contains("1 hr"))
+        app.buttons["stats.project"].tap()
+        app.buttons["All projects"].tap()
+        XCTAssertFalse(app.buttons["stats.dailyGoal"].exists)
     }
 
     func testDiscardAndImmediateHistoryDeletionUndo() {

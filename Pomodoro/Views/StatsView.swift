@@ -46,20 +46,8 @@ struct StatsView: View {
                                     .font(.subheadline).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("stats.sessionInProgress")
                             }
-                            if range == .today, let projectID,
-                               let goal = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: store.state.goalPlan) {
-                                NavigationLink {
-                                    DailyGoalsEditor(store: store, projectID: projectID)
-                                } label: {
-                                    Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.summary(Double(goal * 60)))")
-                                        .font(.subheadline).foregroundStyle(.secondary)
-                                }
-                                .accessibilityIdentifier("stats.dailyGoal")
-                                if goal > 0 {
-                                    let worked = Statistics.total(store.state, projectID: projectID, interval: interval, now: now)
-                                    ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
-                                        .accessibilityLabel("Daily goal")
-                                }
+                            if range == .today, let projectID {
+                                dailyGoal(projectID: projectID, now: now)
                             }
                             if range == .week, let projectID,
                                let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: anchor, plan: store.state.goalPlan) {
@@ -148,6 +136,32 @@ struct StatsView: View {
         }
     }
     @State private var deletionError: String?
+
+    @ViewBuilder private func dailyGoal(projectID: UUID, now: Date) -> some View {
+        let goal = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: store.state.goalPlan)
+        let hasPreviousGoal = goal == nil && store.state.goalPlan.pendingLegacyDailySchedule != nil
+        NavigationLink {
+            if hasPreviousGoal {
+                GoalsView(store: store)
+            } else {
+                DailyGoalsEditor(store: store, projectID: projectID)
+            }
+        } label: {
+            if let goal {
+                Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.summary(Double(goal * 60)))")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                Text(hasPreviousGoal ? "Assign previous daily goal" : "Set daily goal")
+                    .font(.subheadline)
+            }
+        }
+        .accessibilityIdentifier("stats.dailyGoal")
+        if let goal, goal > 0 {
+            let worked = Statistics.total(store.state, projectID: projectID, interval: Statistics.today(now), now: now)
+            ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
+                .accessibilityLabel("Daily goal")
+        }
+    }
 
     @ViewBuilder private func periodNavigation(now: Date) -> some View {
         if let period = range.period {
