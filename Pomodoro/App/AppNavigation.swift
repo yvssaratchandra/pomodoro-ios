@@ -29,7 +29,6 @@ enum ThoughtStatusFilter: String, CaseIterable, Identifiable {
 
     var selectedTab: Tab = .focus
     var focusPath: [FocusDestination] = []
-    var sessionNoteDrafts: [UUID: String] = [:]
     var selectedProjectID: UUID?
     var showingProjectCreation = false
     var message: String?

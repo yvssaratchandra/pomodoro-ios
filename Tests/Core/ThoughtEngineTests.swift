@@ -65,8 +65,11 @@ final class ThoughtEngineTests: XCTestCase {
         let state = AppSnapshot(projects: [project], thoughts: [thought])
         var json = try XCTUnwrap(JSONSerialization.jsonObject(with: BackupService.encode(state)) as? [String: Any])
         json["schemaVersion"] = 7
-        let migrated = try BackupService.decode(JSONSerialization.data(withJSONObject: json))
-        XCTAssertEqual(migrated, state)
+        let migrationDate = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let migrated = try BackupService.decode(JSONSerialization.data(withJSONObject: json), now: migrationDate)
+        var expected = state
+        expected.goalPlan.legacyDailyGoalTransitionDay = LocalDay(migrationDate, calendar: GoalEngine.calendar())
+        XCTAssertEqual(migrated, expected)
         var legacyThoughts = try XCTUnwrap(json["thoughts"] as? [[String: Any]])
         legacyThoughts[0].removeValue(forKey: "projectID")
         json["thoughts"] = legacyThoughts

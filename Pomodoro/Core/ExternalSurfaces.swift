@@ -1,7 +1,7 @@
 import Foundation
 
 struct WidgetSnapshot: Codable, Equatable {
-    static let currentFormatVersion = 2
+    static let currentFormatVersion = 3
 
     struct SavedFocus: Codable, Equatable {
         let dayStart: Date
@@ -38,10 +38,17 @@ struct WidgetSnapshot: Codable, Equatable {
 
     struct Timer: Codable, Equatable, Identifiable {
         let id: UUID
+        let projectID: UUID?
         let kind: TimerKind
         let projectName: String
         let startedAt: Date
         let deadline: Date
+    }
+
+    struct ProjectDaySummary: Codable, Equatable {
+        let projectID: UUID
+        let savedFocus: SavedFocus
+        let targetMinutes: Int?
     }
 
     let formatVersion: Int
@@ -49,19 +56,33 @@ struct WidgetSnapshot: Codable, Equatable {
     let projects: [Project]
     let activeTimer: Timer?
     let savedFocus: SavedFocus?
+    let projectDaySummaries: [ProjectDaySummary]?
 
-    init(state: AppSnapshot, now: Date, savedFocus: SavedFocus? = nil) {
+    init(state: AppSnapshot, now: Date, savedFocus: SavedFocus? = nil,
+         projectDaySummaries: [ProjectDaySummary]? = nil) {
         formatVersion = Self.currentFormatVersion
         generatedAt = now
         self.savedFocus = savedFocus
+        self.projectDaySummaries = projectDaySummaries
         projects = state.projects.filter { $0.status == .ongoing }.map {
             Project(id: $0.id, name: $0.name, preferredFocusMinutes: $0.preferredFocusMinutes)
         }
         activeTimer = state.activeTimer.map { timer in
-            Timer(id: timer.id, kind: timer.kind,
+            Timer(id: timer.id, projectID: timer.projectID, kind: timer.kind,
                   projectName: state.projects.first { $0.id == timer.projectID }?.name ?? "Project",
                   startedAt: timer.startedAt, deadline: timer.deadline)
         }
+    }
+
+    func projectSummary(for projectID: UUID, at date: Date, timeZone: TimeZone = .current) -> ProjectDaySummary? {
+        guard let summary = projectDaySummaries?.first(where: { $0.projectID == projectID }),
+              summary.savedFocus.isFresh(at: date, timeZone: timeZone) else { return nil }
+        return summary
+    }
+
+    func hasSameDisplayContent(as other: WidgetSnapshot) -> Bool {
+        formatVersion == other.formatVersion && projects == other.projects && activeTimer == other.activeTimer &&
+        savedFocus == other.savedFocus && projectDaySummaries == other.projectDaySummaries
     }
 
     var thoughtRoute: AppRoute {

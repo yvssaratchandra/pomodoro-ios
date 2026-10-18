@@ -1,5 +1,30 @@
 import SwiftUI
 
+struct PlanSaveError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
+struct ProjectPlanEditor: View {
+    let store: AppStore
+    let projectID: UUID
+
+    private var text: String {
+        store.state.projects.first(where: { $0.id == projectID })?.breadcrumb?.text ?? ""
+    }
+
+    var body: some View {
+        SessionPlanEditor(text: text) { value in
+            guard store.setPendingPlan(projectID: projectID, text: value) else {
+                let error = PlanSaveError(message: store.errorMessage ?? "Your plan could not be saved. Try again.")
+                store.errorMessage = nil
+                return .failure(error)
+            }
+            return .success(())
+        }
+    }
+}
+
 struct SessionPlanEditor: View {
     let text: String
     let commit: (String) -> Result<Void, Error>

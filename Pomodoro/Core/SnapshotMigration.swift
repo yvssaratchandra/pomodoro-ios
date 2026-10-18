@@ -78,6 +78,30 @@ enum SnapshotMigration {
                 }
                 current = 8
                 document["schemaVersion"] = current
+            case 8:
+                guard var goalPlan = document["goalPlan"] as? [String: Any] else {
+                    throw AppError.invalid("Invalid goal settings.")
+                }
+                let day = LocalDay(now, calendar: GoalEngine.calendar(calendar))
+                let goalCalendar = GoalEngine.calendar(calendar)
+                let eligible = (goalPlan["dailyRevisions"] as? [[String: Any]] ?? [])
+                    .compactMap { revision -> (LocalDay, [Int])? in
+                        guard let effective = revision["effectiveFrom"] as? [String: Int],
+                              let year = effective["year"], let month = effective["month"], let dayNumber = effective["day"],
+                              let minutes = revision["minutes"] as? [Int], minutes.count == 7,
+                              let effectiveDate = goalCalendar.date(from: DateComponents(year: year, month: month, day: dayNumber)) else { return nil }
+                        let candidate = LocalDay(effectiveDate, calendar: goalCalendar)
+                        guard candidate.date(calendar: goalCalendar) != nil else { return nil }
+                        return candidate <= day ? (candidate, minutes) : nil
+                    }
+                    .max(by: { $0.0 < $1.0 })?.1
+                goalPlan["dailyProjectRevisions"] = []
+                goalPlan["legacyDailyGoalTransitionDay"] = ["year": day.year, "month": day.month, "day": day.day]
+                if let eligible { goalPlan["pendingLegacyDailySchedule"] = eligible }
+                else { goalPlan.removeValue(forKey: "pendingLegacyDailySchedule") }
+                document["goalPlan"] = goalPlan
+                current = 9
+                document["schemaVersion"] = current
             default:
                 throw AppError.invalid("This data version is not supported.")
             }

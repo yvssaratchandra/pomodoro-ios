@@ -2,65 +2,129 @@ import SwiftUI
 
 struct GoalsView: View {
     @Bindable var store: AppStore
+    @State private var replacementProjectID: UUID?
+    @State private var showReplacementConfirmation = false
+    @State private var showDiscardConfirmation = false
+    @State private var error: String?
+
     var body: some View {
-        Form {
-            Section {
-                NavigationLink {
-                    DailyGoalsEditor(store: store)
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Daily focus schedule")
-                        Text(dailySummary).font(.subheadline).foregroundStyle(.secondary)
+        List {
+            if let legacy = store.state.goalPlan.pendingLegacyDailySchedule {
+                Section("Previous daily goal") {
+                    Text(legacySummary(legacy)).foregroundStyle(.secondary)
+                    ForEach(store.state.projects) { project in
+                        let hasGoal = GoalEngine.dailySchedule(projectID: project.id, on: Date(), plan: store.state.goalPlan) != nil
+                        Button(hasGoal ? "Replace for \(project.name)" : "Assign to \(project.name)") {
+                            if hasGoal {
+                                replacementProjectID = project.id
+                                showReplacementConfirmation = true
+                            } else {
+                                assign(to: project.id, replacing: false)
+                            }
+                        }
+                    }
+                    Button("Discard previous goal", role: .destructive) { showDiscardConfirmation = true }
+                }
+            }
+            Section("Projects") {
+                if store.state.projects.isEmpty {
+                    ContentUnavailableView("No projects", systemImage: "folder",
+                        description: Text("Create a project to set its goals."))
+                } else {
+                    ForEach(store.state.projects) { project in
+                        NavigationLink {
+                            ProjectGoalsEditor(store: store, projectID: project.id)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(project.name)
+                                Text(projectDailySummary(project.id)).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
             Section("More goals") {
-                NavigationLink("Project weekly targets") { ProjectWeeklyTargetsView(store: store) }
                 NavigationLink("Consistency") { ConsistencyDetailsView(store: store) }
             }
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()
         .navigationTitle("Goals")
+        .confirmationDialog("Replace this project's daily goal?", isPresented: $showReplacementConfirmation) {
+            Button("Replace daily goal", role: .destructive) {
+                if let replacementProjectID { assign(to: replacementProjectID, replacing: true) }
+            }
+            Button("Cancel", role: .cancel) { replacementProjectID = nil }
+        }
+        .confirmationDialog("Discard previous daily goal?", isPresented: $showDiscardConfirmation) {
+            Button("Discard previous goal", role: .destructive) {
+                if !store.discardLegacyDailyGoal() { error = store.errorMessage; store.errorMessage = nil }
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .alert("Unable to update goal", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK") { error = nil }
+        } message: { Text(error ?? "") }
     }
-    private var dailySummary: String {
-        let day = LocalDay(Date(), calendar: GoalEngine.calendar())
-        guard let values = store.state.goalPlan.dailyRevisions
-            .filter({ $0.effectiveFrom <= day })
-            .max(by: { $0.effectiveFrom < $1.effectiveFrom })?.minutes,
-              values.count == 7 else { return "No recorded goal" }
+
+    private func assign(to id: UUID, replacing: Bool) {
+        if !store.assignLegacyDailyGoal(to: id, replacingExisting: replacing) {
+            error = store.errorMessage
+            store.errorMessage = nil
+        }
+    }
+
+    private func projectDailySummary(_ id: UUID) -> String {
+        guard let values = GoalEngine.dailySchedule(projectID: id, on: Date(), plan: store.state.goalPlan) else { return "No daily goal" }
         if values.allSatisfy({ $0 == values[0] }) { return "Every day · \(goalLabel(values[0]))" }
         if values.prefix(5).allSatisfy({ $0 == values[0] }) && values.suffix(2).allSatisfy({ $0 == values[5] }) {
             return "Weekdays · \(goalLabel(values[0])) / Weekend · \(goalLabel(values[5]))"
         }
         return "Custom schedule"
     }
+
+    private func legacySummary(_ values: [Int]) -> String {
+        guard values.count == 7 else { return "Previous daily schedule" }
+        if values.allSatisfy({ $0 == values[0] }) { return "Every day · \(goalLabel(values[0]))" }
+        if values.prefix(5).allSatisfy({ $0 == values[0] }) && values.suffix(2).allSatisfy({ $0 == values[5] }) {
+            return "Weekdays · \(goalLabel(values[0])) / Weekend · \(goalLabel(values[5]))"
+        }
+        return "Custom schedule · choose a project to assign"
+    }
 }
 
-private struct ProjectWeeklyTargetsView: View {
-    @Bindable var store: AppStore
+private struct ProjectGoalsEditor: View {
+    let store: AppStore
+    let projectID: UUID
+    private var projectName: String { store.projectName(projectID) }
+
     var body: some View {
-        List {
-            if store.state.projects.isEmpty {
-                ContentUnavailableView("No projects", systemImage: "folder",
-                    description: Text("Create a project from Focus to set a weekly target."))
-            } else {
-                ForEach(store.state.projects) { project in
-                    NavigationLink {
-                        WeeklyGoalEditor(store: store, projectID: project.id)
-                    } label: {
-                        LabeledContent(project.name, value: weeklyValue(project.id))
-                    }
+        Form {
+            Section {
+                NavigationLink {
+                    DailyGoalsEditor(store: store, projectID: projectID)
+                } label: {
+                    LabeledContent("Daily schedule", value: dailyValue)
+                }
+                NavigationLink {
+                    WeeklyGoalEditor(store: store, projectID: projectID)
+                } label: {
+                    LabeledContent("Weekly target", value: weeklyValue)
                 }
             }
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()
-        .navigationTitle("Project weekly targets")
+        .navigationTitle(projectName)
     }
-    private func weeklyValue(_ id: UUID) -> String {
-        guard let target = GoalEngine.weeklyTarget(projectID: id, weekStart: Date(), plan: store.state.goalPlan) else { return "Off" }
-        return DurationText.work(Double(target * 60))
+
+    private var dailyValue: String {
+        guard let value = GoalEngine.dailyTarget(projectID: projectID, on: Date(), plan: store.state.goalPlan) else { return "Off" }
+        return goalLabel(value)
+    }
+    private var weeklyValue: String {
+        guard let value = GoalEngine.weeklyTarget(projectID: projectID, weekStart: Date(), plan: store.state.goalPlan) else { return "Off" }
+        return goalLabel(value)
     }
 }
 
@@ -71,6 +135,7 @@ private enum DailyMode: String, CaseIterable, Identifiable {
 
 struct DailyGoalsEditor: View {
     let store: AppStore
+    let projectID: UUID
     @Environment(\.dismiss) private var dismiss
     @State private var reviewing = false
     @State private var mode: DailyMode
@@ -81,12 +146,12 @@ struct DailyGoalsEditor: View {
     @State private var error: String?
     private let days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-    init(store: AppStore) {
+    init(store: AppStore, projectID: UUID) {
         self.store = store
+        self.projectID = projectID
         let day = LocalDay(Date(), calendar: GoalEngine.calendar())
-        let values = store.state.goalPlan.dailyRevisions
-            .filter { $0.effectiveFrom <= day }
-            .max(by: { $0.effectiveFrom < $1.effectiveFrom })?.minutes ?? Array(repeating: 240, count: 7)
+        let values = GoalEngine.dailySchedule(projectID: projectID, on: day.date(calendar: GoalEngine.calendar())!, plan: store.state.goalPlan)
+            ?? Array(repeating: 0, count: 7)
         let detected: DailyMode = values.allSatisfy { $0 == values[0] } ? .everyDay :
             (values.prefix(5).allSatisfy { $0 == values[0] } && values.suffix(2).allSatisfy { $0 == values[5] } ? .split : .custom)
         _mode = State(initialValue: detected)
@@ -145,7 +210,7 @@ struct DailyGoalsEditor: View {
         .onChange(of: mode) { _, _ in reviewing = true }
         .toolbar {
             Button("Save") {
-                if store.saveDailyGoals(draft) { dismiss() }
+                if store.saveDailyGoals(projectID: projectID, minutes: draft) { dismiss() }
                 else { error = store.errorMessage; store.errorMessage = nil }
             }
         }

@@ -151,8 +151,8 @@ struct PendingDeletion {
     }
 
     @discardableResult
-    func startFocus(projectID: UUID, minutes: Int, intention: String? = nil) -> Bool {
-        if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, intention: intention, now: now()) }) {
+    func startFocus(projectID: UUID, minutes: Int) -> Bool {
+        if update({ try TimerEngine.startFocus(&$0, projectID: projectID, minutes: minutes, now: now()) }) {
             lastFinishedSessionID = nil
             scheduleNotification()
             return true
@@ -173,8 +173,46 @@ struct PendingDeletion {
         }
     }
 
-    func saveDailyGoals(_ minutes: [Int]) -> Bool {
-        update { try GoalEngine.setDaily(&$0.goalPlan, minutes: minutes, now: now()) }
+    func setPendingPlan(projectID: UUID, text: String) -> Bool {
+        update { state in
+            guard let index = state.projects.firstIndex(where: { $0.id == projectID }) else {
+                throw AppError.invalid("Project unavailable.")
+            }
+            let normalized = try SessionText.normalize(text)
+            let origin = state.projects[index].breadcrumb?.originSessionID
+            state.projects[index].breadcrumb = normalized.map {
+                ProjectBreadcrumb(text: $0, updatedAt: now(), originSessionID: origin)
+            }
+        }
+    }
+
+    func saveDailyGoals(projectID: UUID, minutes: [Int]) -> Bool {
+        update { state in
+            guard state.projects.contains(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
+            try GoalEngine.setDaily(&state.goalPlan, projectID: projectID, minutes: minutes, now: now())
+        }
+    }
+
+    func assignLegacyDailyGoal(to projectID: UUID, replacingExisting: Bool) -> Bool {
+        update { state in
+            guard let minutes = state.goalPlan.pendingLegacyDailySchedule else {
+                throw AppError.invalid("There is no previous daily goal to assign.")
+            }
+            guard state.projects.contains(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
+            let today = LocalDay(now(), calendar: GoalEngine.calendar())
+            let existing = GoalEngine.dailyTarget(projectID: projectID, on: now(), plan: state.goalPlan)
+            guard existing == nil || replacingExisting else { throw AppError.invalid("This project already has a daily goal.") }
+            try GoalEngine.setDaily(&state.goalPlan, projectID: projectID, minutes: minutes, now: now())
+            state.goalPlan.pendingLegacyDailySchedule = nil
+            state.goalPlan.legacyDailyGoalTransitionDay = today
+        }
+    }
+
+    func discardLegacyDailyGoal() -> Bool {
+        update { state in
+            state.goalPlan.pendingLegacyDailySchedule = nil
+            state.goalPlan.legacyDailyGoalTransitionDay = LocalDay(now(), calendar: GoalEngine.calendar())
+        }
     }
 
     func captureThought(context: ThoughtCaptureContext, text: String) -> Bool {
@@ -253,6 +291,7 @@ struct PendingDeletion {
         let saved = update { state in
             state.projects.removeAll { $0.id == id }
             state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == id }
+            state.goalPlan.dailyProjectRevisions.removeAll { $0.projectID == id }
         }
         if saved { pendingDeletion = pending }
         return saved
@@ -293,15 +332,12 @@ struct PendingDeletion {
             }
             let note = try SessionText.normalize(text)
             state.sessions[index].nextStep = note
-            if promote { state.projects[projectIndex].breadcrumb = note.map { ProjectBreadcrumb(text: $0, updatedAt: now(), originSessionID: sessionID) } }
-        }
-    }
-
-    func editProjectBreadcrumb(projectID: UUID, text: String) -> Bool {
-        update { state in
-            guard let index = state.projects.firstIndex(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
-            let origin = state.projects[index].breadcrumb?.originSessionID
-            state.projects[index].breadcrumb = try SessionText.normalize(text).map { ProjectBreadcrumb(text: $0, updatedAt: now(), originSessionID: origin) }
+            if promote {
+                if let pending = state.projects[projectIndex].breadcrumb, pending.text != note {
+                    throw AppError.invalid("This project already has a different plan for its next session.")
+                }
+                state.projects[projectIndex].breadcrumb = note.map { ProjectBreadcrumb(text: $0, updatedAt: now(), originSessionID: sessionID) }
+            }
         }
     }
 

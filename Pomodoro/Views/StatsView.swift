@@ -42,21 +42,21 @@ struct StatsView: View {
                                 .font(.largeTitle.bold())
                                 .accessibilityIdentifier("stats.savedFocusTime")
                             if hasFocusInProgress {
-                                Text("Session in progress")
+                                Text("1 session in progress · not included yet")
                                     .font(.subheadline).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("stats.sessionInProgress")
                             }
-                            if range == .today && projectID == nil,
-                               let goal = GoalEngine.dailyTarget(on: now, plan: store.state.goalPlan) {
+                            if range == .today, let projectID,
+                               let goal = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: store.state.goalPlan) {
                                 NavigationLink {
-                                    DailyGoalsEditor(store: store)
+                                    DailyGoalsEditor(store: store, projectID: projectID)
                                 } label: {
                                     Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.summary(Double(goal * 60)))")
                                         .font(.subheadline).foregroundStyle(.secondary)
                                 }
                                 .accessibilityIdentifier("stats.dailyGoal")
                                 if goal > 0 {
-                                    let worked = Statistics.total(store.state, interval: interval, now: now)
+                                    let worked = Statistics.total(store.state, projectID: projectID, interval: interval, now: now)
                                     ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
                                         .accessibilityLabel("Daily goal")
                                 }

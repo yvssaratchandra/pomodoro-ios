@@ -4,6 +4,51 @@ import UserNotifications
 @testable import Pomodoro
 
 @MainActor final class AppStoreTests: XCTestCase {
+    func testPendingPlanIsConsumedOnceAndFailedStartPreservesIt() throws {
+        let date = Date()
+        let writing = Project(name: "Writing")
+        let reading = Project(name: "Reading")
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [writing, reading])))
+        let store = try AppStore(persistence: persistence, now: { date }, notificationCenter: RecordingNotificationCenter())
+        XCTAssertTrue(store.setPendingPlan(projectID: writing.id, text: "Draft chapter"))
+        XCTAssertTrue(store.setPendingPlan(projectID: reading.id, text: "Read pages 20–30"))
+
+        persistence.failSave = true
+        XCTAssertFalse(store.startFocus(projectID: writing.id, minutes: 25))
+        XCTAssertNil(store.state.activeTimer)
+        XCTAssertEqual(store.state.projects.first(where: { $0.id == writing.id })?.breadcrumb?.text, "Draft chapter")
+
+        persistence.failSave = false
+        XCTAssertTrue(store.startFocus(projectID: writing.id, minutes: 25))
+        XCTAssertEqual(store.state.activeTimer?.intention, "Draft chapter")
+        XCTAssertNil(store.state.projects.first(where: { $0.id == writing.id })?.breadcrumb)
+        XCTAssertEqual(store.state.projects.first(where: { $0.id == reading.id })?.breadcrumb?.text, "Read pages 20–30")
+        let restored = try AppStore(persistence: persistence, now: { date }, notificationCenter: RecordingNotificationCenter())
+        XCTAssertEqual(restored.state.activeTimer?.intention, "Draft chapter")
+        XCTAssertNil(restored.state.projects.first(where: { $0.id == writing.id })?.breadcrumb)
+    }
+
+    func testLegacyGoalAssignmentRequiresExplicitReplacementAndPersists() throws {
+        let date = Date()
+        let writing = Project(name: "Writing")
+        let reading = Project(name: "Reading")
+        let calendar = GoalEngine.calendar()
+        var snapshot = AppSnapshot(projects: [writing, reading])
+        snapshot.goalPlan.pendingLegacyDailySchedule = Array(repeating: 240, count: 7)
+        snapshot.goalPlan.legacyDailyGoalTransitionDay = LocalDay(date, calendar: calendar)
+        try GoalEngine.setDaily(&snapshot.goalPlan, projectID: reading.id, minutes: Array(repeating: 60, count: 7), now: date, calendar: calendar)
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot))
+        let store = try AppStore(persistence: persistence, now: { date }, notificationCenter: RecordingNotificationCenter())
+
+        XCTAssertFalse(store.assignLegacyDailyGoal(to: reading.id, replacingExisting: false))
+        XCTAssertEqual(store.state.goalPlan.pendingLegacyDailySchedule, Array(repeating: 240, count: 7))
+        XCTAssertTrue(store.assignLegacyDailyGoal(to: writing.id, replacingExisting: false))
+        XCTAssertEqual(GoalEngine.dailyTarget(projectID: writing.id, on: date, plan: store.state.goalPlan), 240)
+        XCTAssertEqual(GoalEngine.dailyTarget(projectID: reading.id, on: date, plan: store.state.goalPlan), 60)
+        XCTAssertNil(store.state.goalPlan.pendingLegacyDailySchedule)
+        XCTAssertEqual(try AppStore(persistence: persistence, now: { date }).state.goalPlan, store.state.goalPlan)
+    }
+
     func testThoughtCreationReturnsCommittedIDAndFailedRetryCreatesExactlyOne() throws {
         let persistence = MemorySnapshotPersistence()
         let date = Date()
@@ -317,7 +362,8 @@ import UserNotifications
         try SwiftDataSnapshotPersistence(container: container).save(BackupService.encode(initial))
         let store = try AppStore(persistence: SwiftDataSnapshotPersistence(container: container), now: { date },
                                  notificationCenter: RecordingNotificationCenter())
-        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 10, intention: "Resume this draft"))
+        XCTAssertTrue(store.setPendingPlan(projectID: project.id, text: "Resume this draft"))
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 10))
         let timer = try XCTUnwrap(store.state.activeTimer)
         let runningBytes = try SwiftDataSnapshotPersistence(container: container).load()
 
@@ -662,7 +708,8 @@ import UserNotifications
         let project = Project(name: "Writing")
         let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [project])))
         let store = try AppStore(persistence: persistence, now: { date }, notificationCenter: RecordingNotificationCenter())
-        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 10, intention: "Draft introduction"))
+        XCTAssertTrue(store.setPendingPlan(projectID: project.id, text: "Draft introduction"))
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 10))
         let timer = try XCTUnwrap(store.state.activeTimer)
         let context = ThoughtCaptureContext(projectID: project.id, originSessionID: timer.id)
         XCTAssertTrue(store.captureThought(context: context, text: "Find the source later"))

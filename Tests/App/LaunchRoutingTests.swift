@@ -148,7 +148,7 @@ import UserNotifications
         let navigation = AppNavigation(scheme: .container, now: { self.now })
         navigation.connect(to: store)
         navigation.selectedProjectID = project.id
-        navigation.sessionNoteDrafts[project.id] = "Revise introduction"
+        XCTAssertTrue(store.setPendingPlan(projectID: project.id, text: "Revise introduction"))
         navigation.showProjects()
         XCTAssertEqual(navigation.focusPath, [.projects])
         navigation.showSettings()
@@ -164,9 +164,9 @@ import UserNotifications
         XCTAssertEqual(navigation.selectedTab, .focus)
         XCTAssertTrue(navigation.focusPath.isEmpty)
         XCTAssertEqual(navigation.selectedProjectID, project.id)
-        XCTAssertEqual(navigation.sessionNoteDrafts[project.id], "Revise introduction")
-        XCTAssertEqual(store.state, snapshot)
-        XCTAssertEqual(persistence.saves, 0)
+        XCTAssertEqual(store.state.projects.first?.breadcrumb?.text, "Revise introduction")
+        XCTAssertEqual(store.state.activeTimer, snapshot.activeTimer)
+        XCTAssertEqual(persistence.saves, 1)
     }
 
     func testCaptureResolvesCurrentSavedAndMissingSessionWithoutChangingTimer() throws {

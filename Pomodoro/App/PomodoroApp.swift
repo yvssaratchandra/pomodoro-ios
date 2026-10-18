@@ -59,20 +59,25 @@ extension View {
                 loadedStore?.update { state in
                     state.projects = [project]
                     try TimerEngine.startFocus(&state, projectID: project.id, minutes: 10,
-                                               intention: "Finish the introduction", now: Date().addingTimeInterval(-601))
+                                               now: Date().addingTimeInterval(-601))
                 }
             }
-            if testing, ProcessInfo.processInfo.environment["POMODORO_TEST_SCENARIO"] == "saved-stats" {
-                let writing = Project(name: "Writing")
-                let study = Project(name: "Study")
+            if testing, ProcessInfo.processInfo.environment["POMODORO_TEST_SCENARIO"] == "project-goals" {
+                let work = Project(name: "Work")
+                let reading = Project(name: "Reading")
                 let now = Date()
                 loadedStore?.update { state in
-                    state.projects = [writing, study]
-                    state.sessions = [FocusSession(id: UUID(), projectID: writing.id,
-                        startedAt: now.addingTimeInterval(-1800), endedAt: now.addingTimeInterval(-300),
-                        plannedSeconds: 1500, outcome: .completed)]
-                    try TimerEngine.startFocus(&state, projectID: writing.id, minutes: 25,
-                                               now: now.addingTimeInterval(-120))
+                    state.projects = [work, reading]
+                    state.sessions = [
+                        FocusSession(id: UUID(), projectID: work.id, startedAt: now.addingTimeInterval(-1200),
+                                     endedAt: now.addingTimeInterval(-600), plannedSeconds: 1200, outcome: .interrupted),
+                        FocusSession(id: UUID(), projectID: reading.id, startedAt: now.addingTimeInterval(-600),
+                                     endedAt: now.addingTimeInterval(-300), plannedSeconds: 600, outcome: .interrupted)
+                    ]
+                    try GoalEngine.setDaily(&state.goalPlan, projectID: work.id,
+                                            minutes: Array(repeating: 240, count: 7), now: now)
+                    try GoalEngine.setDaily(&state.goalPlan, projectID: reading.id,
+                                            minutes: Array(repeating: 60, count: 7), now: now)
                 }
             }
         } catch {
@@ -212,7 +217,7 @@ struct RootView: View {
                 ThoughtCaptureView(store: store, context: context)
             }
             .sheet(item: $navigation.nextSessionPlanProject, onDismiss: navigation.nextSessionPlanDidDismiss) { project in
-                BreadcrumbEditor(store: store, projectID: project.id)
+                ProjectPlanEditor(store: store, projectID: project.id)
             }
             .onChange(of: navigation.showingProjectCreation) { _, showing in
                 if showing { navigation.setCapturePresentationBlocked(true, owner: "project-creation") }

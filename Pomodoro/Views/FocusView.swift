@@ -20,10 +20,8 @@ struct FocusView: View {
     @ObservedObject var presentation: AppPresentationContext
     @State private var durationProject: Project?
     @State private var breakDuration: BreakDurationRequest?
-    @State private var draftNoteProject: Project?
     @State private var confirmingEnd = false
     @State private var noteTimer: ActiveTimer?
-    @State private var breadcrumbSession: FocusSession?
 
     private var selected: Project? { store.state.projects.first { $0.id == navigation.selectedProjectID && $0.status == .ongoing } }
     private var activeProjects: [Project] { store.state.projects.filter { $0.status == .ongoing } }
@@ -38,7 +36,7 @@ struct FocusView: View {
     }
 
     private var hasEditor: Bool {
-        durationProject != nil || breakDuration != nil || draftNoteProject != nil || noteTimer != nil || breadcrumbSession != nil
+        durationProject != nil || breakDuration != nil || noteTimer != nil
     }
 
     private func editorDismissed() {
@@ -104,13 +102,7 @@ struct FocusView: View {
             .sheet(item: $breakDuration, onDismiss: editorDismissed) { request in
                 BreakDurationSheet(store: store, offer: request.offer)
             }
-            .sheet(item: $draftNoteProject, onDismiss: editorDismissed) { project in
-                DraftSessionNoteEditor(text: Binding(
-                    get: { navigation.sessionNoteDrafts[project.id] ?? "" },
-                    set: { navigation.sessionNoteDrafts[project.id] = $0 }))
-            }
             .sheet(item: $noteTimer, onDismiss: editorDismissed) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
-            .sheet(item: $breadcrumbSession, onDismiss: editorDismissed) { BreadcrumbEditor(store: store, sessionID: $0.id, promote: true) }
             .alert("End focus?", isPresented: $confirmingEnd) {
                 Button("Save Session") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
@@ -136,7 +128,6 @@ struct FocusView: View {
             .onChange(of: navigation.focusRequestID) { _, _ in
                 durationProject = nil
                 breakDuration = nil
-                draftNoteProject = nil
                 confirmingEnd = false
             }
             .onAppear { repairSelection() }
@@ -150,7 +141,7 @@ struct FocusView: View {
         }]
         if case .ready(let project) = screenState {
             actions.append(FocusMenuAction(title: "Plan this session", systemImage: "square.and.pencil", identifier: "focus.intention") {
-                draftNoteProject = project
+                navigation.requestNextSessionPlan(projectID: project.id)
             })
         }
         if case .focusing(let timer) = screenState {
@@ -202,40 +193,30 @@ struct FocusView: View {
             .accessibilityLabel("Focus duration")
             .accessibilityValue("\(minutes) min")
             Button {
-                if store.startFocus(projectID: project.id, minutes: minutes, intention: navigation.sessionNoteDrafts[project.id]) {
-                    navigation.sessionNoteDrafts[project.id] = nil
-                }
+                store.startFocus(projectID: project.id, minutes: minutes)
             } label: {
                 Label("Start Focus", systemImage: "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
             .accessibilityIdentifier("focus.start")
-            let taskCount = SessionPlanText.items(from: navigation.sessionNoteDrafts[project.id]).count
+            let taskCount = SessionPlanText.items(from: project.breadcrumb?.text).count
             if taskCount > 0 {
-                SessionPlanSummaryRow(taskCount: taskCount) { draftNoteProject = project }
+                SessionPlanSummaryRow(taskCount: taskCount) { navigation.requestNextSessionPlan(projectID: project.id) }
                     .accessibilityIdentifier("focus.intention")
+            } else {
+                Button("Plan this session", systemImage: "square.and.pencil") {
+                    navigation.requestNextSessionPlan(projectID: project.id)
+                }.accessibilityIdentifier("focus.nextStep")
             }
-            if project.breadcrumb != nil {
-                BreadcrumbCard(store: store, project: project,
-                               useAsIntention: { navigation.sessionNoteDrafts[project.id] = $0 })
-            } else if let id = store.lastFinishedSessionID,
-                      let session = store.state.sessions.first(where: { $0.id == id && $0.projectID == project.id && $0.nextStep == nil }) {
-                Button("Plan next session") { breadcrumbSession = session }
-                    .accessibilityIdentifier("focus.nextStep")
-            }
+            GoalProgress(state: store.state, projectID: project.id, now: Date())
         }
     }
 
     private func running(_ active: ActiveTimer) -> some View {
         VStack(spacing: 18) {
             Text(store.projectName(active.projectID)).font(.headline).multilineTextAlignment(.center)
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                TimerFace(seconds: max(0, active.deadline.timeIntervalSince(timeline.date)),
-                    fraction: 1 - active.elapsed(at: timeline.date) / Double(active.plannedSeconds),
-                    title: "", project: "",
-                    isBreak: active.kind != .focus, isRunning: true)
-            }
+            runningTimerFace(active)
             if active.kind == .focus {
                 Button(role: .destructive) { confirmingEnd = true } label: {
                     Label("End Focus", systemImage: "stop.fill")
@@ -251,6 +232,7 @@ struct FocusView: View {
                 Button("Add a thought", systemImage: "text.bubble") {
                     navigation.requestThoughtCapture(context: ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id))
                 }.accessibilityIdentifier("focus.captureThought")
+                GoalProgress(state: store.state, projectID: active.projectID, now: Date())
             } else {
                 Button("End Break", systemImage: "stop.fill") { store.endTimer() }
                     .buttonStyle(.bordered).controlSize(.large)
@@ -260,6 +242,21 @@ struct FocusView: View {
                 }
                 .accessibilityIdentifier("focus.nextStep")
                 Button("Review thoughts") { navigation.showThoughts(projectID: active.projectID) }
+            }
+        }
+    }
+
+    @ViewBuilder private func runningTimerFace(_ active: ActiveTimer) -> some View {
+        if dimFocus.isDimmed || navigation.selectedTab != .focus || !presentation.isActive {
+            let date = Date()
+            TimerFace(seconds: max(0, active.deadline.timeIntervalSince(date)),
+                fraction: 1 - active.elapsed(at: date) / Double(active.plannedSeconds),
+                title: "", project: "", isBreak: active.kind != .focus, isRunning: true)
+        } else {
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                TimerFace(seconds: max(0, active.deadline.timeIntervalSince(timeline.date)),
+                    fraction: 1 - active.elapsed(at: timeline.date) / Double(active.plannedSeconds),
+                    title: "", project: "", isBreak: active.kind != .focus, isRunning: true)
             }
         }
     }
@@ -427,20 +424,21 @@ private struct TimerFace: View {
 
 struct GoalProgress: View {
     let state: AppSnapshot
+    let projectID: UUID
     let now: Date
     var body: some View {
-        let worked = Statistics.total(state, interval: Statistics.today(now), now: now)
-        let target = GoalEngine.dailyTarget(on: now, plan: state.goalPlan)
+        let worked = Statistics.total(state, projectID: projectID, interval: Statistics.today(now), now: now)
+        let target = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: state.goalPlan)
         let goal = Double((target ?? 0) * 60)
         VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(DurationText.summary(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : "focused").foregroundStyle(.secondary)
+                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : target == 0 ? "rest day" : "no daily goal").foregroundStyle(.secondary)
                 }
                 VStack(alignment: .leading) {
                     Text(DurationText.summary(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : "focused").foregroundStyle(.secondary)
+                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : target == 0 ? "rest day" : "no daily goal").foregroundStyle(.secondary)
                 }
             }
             if goal > 0 {

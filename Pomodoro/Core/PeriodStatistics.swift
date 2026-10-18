@@ -56,7 +56,18 @@ extension Statistics {
         var day = c.startOfDay(for: interval.start)
         while day < interval.end {
             indices[day] = result.count
-            result.append(DailySummary(date: day, targetMinutes: GoalEngine.dailyTarget(on: day, plan: state.goalPlan, calendar: c), isFuture: day > now))
+            let target: Int?
+            if let projectID {
+                target = GoalEngine.dailyTarget(projectID: projectID, on: day, plan: state.goalPlan, calendar: c)
+            } else {
+                let localDay = LocalDay(day, calendar: c)
+                if let transition = state.goalPlan.legacyDailyGoalTransitionDay, localDay >= transition {
+                    target = nil
+                } else {
+                    target = GoalEngine.dailyTarget(on: day, plan: state.goalPlan, calendar: c)
+                }
+            }
+            result.append(DailySummary(date: day, targetMinutes: target, isFuture: day > now))
             day = c.date(byAdding: .day, value: 1, to: day)!
         }
         func distribute(start: Date, end: Date) {

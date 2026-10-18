@@ -1,18 +1,21 @@
 import Foundation
 
 enum TimerEngine {
-    static func startFocus(_ state: inout AppSnapshot, projectID: UUID, minutes: Int, intention: String? = nil, now: Date) throws {
+    static func startFocus(_ state: inout AppSnapshot, projectID: UUID, minutes: Int, now: Date) throws {
         guard state.activeTimer == nil else { throw AppError.invalid("End the current timer first.") }
         guard (10...60).contains(minutes),
-              let project = state.projects.first(where: { $0.id == projectID }), project.status == .ongoing else {
+              let projectIndex = state.projects.firstIndex(where: { $0.id == projectID }),
+              state.projects[projectIndex].status == .ongoing else {
             throw AppError.invalid("Choose an ongoing project and a focus duration from 10 to 60 minutes.")
         }
-        let normalizedIntention = try SessionText.normalize(intention)
+        let project = state.projects[projectIndex]
+        let normalizedIntention = try SessionText.normalize(project.breadcrumb?.text)
         state.breakOffer = nil
         state.activeTimer = ActiveTimer(projectID: projectID, kind: .focus, startedAt: now,
             plannedSeconds: minutes * 60, shortBreakMinutes: project.shortBreakMinutes,
             longBreakMinutes: project.longBreakMinutes, longBreakInterval: state.settings.longBreakInterval,
             intention: normalizedIntention, completionSound: state.settings.completionSound(for: .focus))
+        state.projects[projectIndex].breadcrumb = nil
     }
 
     static func setBreakDuration(_ state: inout AppSnapshot, offer: BreakOffer, minutes: Int) throws {
@@ -79,6 +82,13 @@ enum TimerEngine {
         guard state.activeTimer?.projectID != source, state.activeTimer?.projectID != destination else {
             throw AppError.invalid("End the affected project's timer before merging.")
         }
+        let sourcePlan = state.projects.first { $0.id == source }?.breadcrumb
+        let destinationIndex = state.projects.firstIndex { $0.id == destination }!
+        let destinationPlan = state.projects[destinationIndex].breadcrumb
+        if let sourcePlan, let destinationPlan, sourcePlan.text != destinationPlan.text {
+            throw AppError.invalid("Resolve the projects' different session plans before merging them.")
+        }
+        if destinationPlan == nil { state.projects[destinationIndex].breadcrumb = sourcePlan }
         for index in state.sessions.indices where state.sessions[index].projectID == source {
             state.sessions[index].projectID = destination
         }
@@ -86,5 +96,6 @@ enum TimerEngine {
         if state.breakOffer?.projectID == source { state.breakOffer?.projectID = destination }
         state.projects.removeAll { $0.id == source }
         state.goalPlan.weeklyProjectRevisions.removeAll { $0.projectID == source }
+        state.goalPlan.dailyProjectRevisions.removeAll { $0.projectID == source }
     }
 }

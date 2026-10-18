@@ -102,6 +102,28 @@ final class SnapshotMigrationTests: XCTestCase {
         XCTAssertEqual(AppSnapshot().schemaVersion, BackupService.currentSchemaVersion)
     }
 
+    func testV8DailyScheduleBecomesPendingSingleProjectAssignment() throws {
+        let project = Project(name: "Work")
+        var state = AppSnapshot(projects: [project])
+        let today = LocalDay(now, calendar: GoalEngine.calendar(calendar))
+        let previous = LocalDay(calendar.date(byAdding: .day, value: -20, to: now)!, calendar: GoalEngine.calendar(calendar))
+        state.goalPlan.dailyRevisions = [DailyGoalRevision(effectiveFrom: previous, minutes: [240, 240, 240, 240, 240, 60, 60])]
+        var legacy = try object(BackupService.encode(state))
+        legacy["schemaVersion"] = 8
+        var goals = try XCTUnwrap(legacy["goalPlan"] as? [String: Any])
+        goals.removeValue(forKey: "dailyProjectRevisions")
+        goals.removeValue(forKey: "pendingLegacyDailySchedule")
+        goals.removeValue(forKey: "legacyDailyGoalTransitionDay")
+        legacy["goalPlan"] = goals
+
+        let migrated = try BackupService.decode(JSONSerialization.data(withJSONObject: legacy), now: now, calendar: calendar)
+        XCTAssertEqual(migrated.goalPlan.pendingLegacyDailySchedule, [240, 240, 240, 240, 240, 60, 60])
+        XCTAssertEqual(migrated.goalPlan.legacyDailyGoalTransitionDay, today)
+        XCTAssertNil(GoalEngine.dailyTarget(projectID: project.id, on: now, plan: migrated.goalPlan, calendar: calendar))
+        XCTAssertEqual(migrated.projects, state.projects)
+        XCTAssertEqual(migrated.goalPlan.dailyRevisions, state.goalPlan.dailyRevisions)
+    }
+
     func testOlderV1WithoutRememberedDurationStillUsesProjectDefault() throws {
         var json = try object(MigrationFixtures.data("v1-history"))
         var projects = try XCTUnwrap(json["projects"] as? [[String: Any]])

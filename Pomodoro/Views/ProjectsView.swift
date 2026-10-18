@@ -60,7 +60,6 @@ struct ProjectDetail: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
     @State private var merging = false
-    @State private var editingNextStep = false
     @State private var showingGoal = false
     @State private var showingShortcut = false
     @State private var confirmingDeletion = false
@@ -85,10 +84,10 @@ struct ProjectDetail: View {
                             LabeledContent("Focus duration", value: "\(project.preferredFocusMinutes) min")
                         }
                         Section {
-                            if project.breadcrumb != nil {
-                                BreadcrumbCard(store: store, project: project)
-                            } else {
-                                Button("Plan next session", systemImage: "arrow.turn.down.right") { editingNextStep = true }
+                            let count = SessionPlanText.items(from: project.breadcrumb?.text).count
+                            Button(count == 0 ? "Plan next session" : "Session plan · \(count) \(count == 1 ? "task" : "tasks")",
+                                   systemImage: "arrow.turn.down.right") {
+                                navigation.requestNextSessionPlan(projectID: project.id)
                             }
                             Button("Thoughts", systemImage: "text.bubble") { navigation.showThoughts(projectID: project.id) }
                         }
@@ -128,7 +127,6 @@ struct ProjectDetail: View {
                     }
                 }
                 .sheet(isPresented: $editing) { ProjectEditor(store: store, project: project) }
-                .sheet(isPresented: $editingNextStep) { BreadcrumbEditor(store: store, projectID: project.id) }
                 .sheet(isPresented: $merging) { MergeView(store: store, source: project) { dismiss() } }
                 .navigationDestination(isPresented: $showingGoal) { WeeklyGoalEditor(store: store, projectID: project.id) }
                 .navigationDestination(isPresented: $showingShortcut) { QuickStartSetupView(store: store, projectID: project.id) }

@@ -6,6 +6,33 @@ import XCTest
 #endif
 
 final class PeriodStatisticsTests: XCTestCase {
+    func testDailySummariesKeepProjectWorkAndTargetsSeparate() throws {
+        var calendar = GoalEngine.calendar()
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 12))!
+        let work = Project(name: "Work"), reading = Project(name: "Reading")
+        let start = calendar.startOfDay(for: now).addingTimeInterval(3600)
+        let sessions = [
+            FocusSession(id: UUID(), projectID: work.id, startedAt: start, endedAt: start.addingTimeInterval(1800), plannedSeconds: 1800, outcome: .interrupted),
+            FocusSession(id: UUID(), projectID: reading.id, startedAt: start.addingTimeInterval(3600), endedAt: start.addingTimeInterval(4200), plannedSeconds: 600, outcome: .interrupted)
+        ]
+        var state = AppSnapshot(projects: [work, reading], sessions: sessions)
+        try GoalEngine.setDaily(&state.goalPlan, projectID: work.id, minutes: Array(repeating: 240, count: 7), now: now, calendar: calendar)
+        try GoalEngine.setDaily(&state.goalPlan, projectID: reading.id, minutes: Array(repeating: 60, count: 7), now: now, calendar: calendar)
+        state.goalPlan.legacyDailyGoalTransitionDay = LocalDay(now, calendar: calendar)
+        let interval = calendar.dateInterval(of: .day, for: now)!
+
+        let workDay = Statistics.dailySummaries(state, interval: interval, projectID: work.id, now: now, calendar: calendar)[0]
+        let readingDay = Statistics.dailySummaries(state, interval: interval, projectID: reading.id, now: now, calendar: calendar)[0]
+        let allDay = Statistics.dailySummaries(state, interval: interval, now: now, calendar: calendar)[0]
+        XCTAssertEqual(workDay.focusSeconds, 1800)
+        XCTAssertEqual(workDay.targetMinutes, 240)
+        XCTAssertEqual(readingDay.focusSeconds, 600)
+        XCTAssertEqual(readingDay.targetMinutes, 60)
+        XCTAssertEqual(allDay.focusSeconds, 2400)
+        XCTAssertNil(allDay.targetMinutes)
+    }
+
     func testMidnightSplitCountsByStartAndAveragesIncludeZeroDays() throws {
         var c = GoalEngine.calendar(); c.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = c.date(from: DateComponents(year: 2026, month: 10, day: 16, hour: 12))!

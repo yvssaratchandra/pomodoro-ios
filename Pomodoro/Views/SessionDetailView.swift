@@ -1,16 +1,5 @@
 import SwiftUI
 
-struct DraftSessionNoteEditor: View {
-    @Binding var text: String
-
-    var body: some View {
-        SessionPlanEditor(text: text) { value in
-            text = value
-            return .success(())
-        }
-    }
-}
-
 struct IntentionEditor: View {
     let store: AppStore
     let sessionID: UUID
@@ -33,17 +22,13 @@ struct IntentionEditor: View {
     }
 }
 
-private struct PlanSaveError: LocalizedError {
-    let message: String
-    var errorDescription: String? { message }
-}
-
 struct SessionDetailView: View {
     @Bindable var store: AppStore
     let sessionID: UUID
     @Environment(\.dismiss) private var dismiss
     @State private var editingIntention = false
     @State private var editingBreadcrumb = false
+    @State private var confirmingPlanReplacement = false
     @State private var error: String?
 
     var body: some View {
@@ -64,12 +49,7 @@ struct SessionDetailView: View {
                         if let note = session.nextStep { Text(note) }
                         Button(session.nextStep == nil ? "Plan next session" : "Edit next session plan") { editingBreadcrumb = true }
                         if let note = session.nextStep {
-                            Button("Set as project reminder") {
-                                if !store.saveNextStep(sessionID: session.id, text: note, promote: true) {
-                                    error = store.errorMessage
-                                    store.errorMessage = nil
-                                }
-                            }
+                            Button("Use for next session") { useForNextSession(note, projectID: session.projectID) }
                         }
                     }
                 }.appScreen()
@@ -84,11 +64,54 @@ struct SessionDetailView: View {
                     }
                 }
                 .sheet(isPresented: $editingIntention) { IntentionEditor(store: store, sessionID: sessionID, active: false) }
-                .sheet(isPresented: $editingBreadcrumb) { BreadcrumbEditor(store: store, sessionID: sessionID) }
+                .sheet(isPresented: $editingBreadcrumb) { SessionNextStepEditor(store: store, sessionID: sessionID) }
+                .confirmationDialog("Replace the current session plan?", isPresented: $confirmingPlanReplacement) {
+                    Button("Replace plan", role: .destructive) {
+                        guard let session = store.state.sessions.first(where: { $0.id == sessionID }) else { return }
+                        assignNextStep(session.nextStep, projectID: session.projectID)
+                    }
+                    Button("Cancel", role: .cancel) { }
+                }
                 .alert("Unable to Complete Action", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                     Button("OK") { error = nil }
                 } message: { Text(error ?? "") }
             } else { ContentUnavailableView("Session Removed", systemImage: "timer") }
         }.navigationTitle("Session").navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func useForNextSession(_ text: String, projectID: UUID) {
+        if let existing = store.state.projects.first(where: { $0.id == projectID })?.breadcrumb,
+           existing.text != text {
+            confirmingPlanReplacement = true
+        } else {
+            assignNextStep(text, projectID: projectID)
+        }
+    }
+
+    private func assignNextStep(_ text: String?, projectID: UUID) {
+        if !store.setPendingPlan(projectID: projectID, text: text ?? "") {
+            error = store.errorMessage
+            store.errorMessage = nil
+        }
+    }
+}
+
+private struct SessionNextStepEditor: View {
+    let store: AppStore
+    let sessionID: UUID
+
+    private var text: String {
+        store.state.sessions.first(where: { $0.id == sessionID })?.nextStep ?? ""
+    }
+
+    var body: some View {
+        SessionPlanEditor(text: text) { value in
+            guard store.saveNextStep(sessionID: sessionID, text: value, promote: false) else {
+                let error = PlanSaveError(message: store.errorMessage ?? "Your plan could not be saved. Try again.")
+                store.errorMessage = nil
+                return .failure(error)
+            }
+            return .success(())
+        }
     }
 }
