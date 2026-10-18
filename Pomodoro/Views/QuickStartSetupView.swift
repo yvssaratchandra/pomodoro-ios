@@ -252,6 +252,9 @@ struct QuickStartTroubleshootingView: View {
             Section("Widgets") {
                 Text("Add the Pomodoro widget from your iPhone's widget gallery, then select a project.")
             }
+            Section("Shortcuts") {
+                Text("In Shortcuts, add Open URLs and paste a project or Add thought link copied from Pomodoro.")
+            }
             #else
             Section("LiveContainer") {
                 Text("If the shortcut opens Pomodoro without starting focus, create a Shortcut with Open URLs using the app-launch link below. Then tap Start Focus in Pomodoro.")
