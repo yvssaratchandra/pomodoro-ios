@@ -121,6 +121,12 @@ final class PomodoroUITests: XCTestCase {
         app.buttons["Reading"].tap()
         XCTAssertEqual(app.staticTexts["stats.savedFocusTime"].label, "5 min")
         XCTAssertTrue(app.buttons["stats.dailyGoal"].label.contains("1 hr"))
+        app.buttons["stats.dailyGoal"].tap()
+        XCTAssertTrue(app.navigationBars["Daily goal"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Project settings"].tap()
+        XCTAssertTrue(app.navigationBars["Project settings"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["Stats"].waitForExistence(timeout: 5))
     }
 
     func testDiscardAndImmediateHistoryDeletionUndo() {
@@ -182,8 +188,7 @@ final class PomodoroUITests: XCTestCase {
 
     private func openProjects(in app: XCUIApplication) {
         openFocus(in: app)
-        app.buttons["focus.more"].tap()
-        app.buttons["Manage projects"].tap()
+        app.buttons["focus.projects"].tap()
         XCTAssertTrue(app.navigationBars["Projects"].waitForExistence(timeout: 5))
     }
 

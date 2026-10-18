@@ -85,11 +85,14 @@ struct FocusView: View {
                         .accessibilityIdentifier("focus.settings")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    FocusMenuButton(actions: focusMenuActions) { showing in
-                        dimFocus.setBlocked("focus-menu", showing)
-                        navigation.setCapturePresentationBlocked(showing, owner: "focus-menu")
+                    Button {
+                        navigation.showProjects()
+                    } label: {
+                        Image(systemName: "folder")
                     }
                     .frame(width: 44, height: 44)
+                    .accessibilityLabel("Projects")
+                    .accessibilityIdentifier("focus.projects")
                 }
             }
             .navigationDestination(for: FocusDestination.self) { destination in
@@ -102,7 +105,16 @@ struct FocusView: View {
             .sheet(item: $breakDuration, onDismiss: editorDismissed) { request in
                 BreakDurationSheet(store: store, offer: request.offer)
             }
-            .sheet(item: $noteTimer, onDismiss: editorDismissed) { IntentionEditor(store: store, sessionID: $0.id, active: true) }
+            .sheet(item: $noteTimer, onDismiss: editorDismissed) { timer in
+                SessionPlanEditor(text: timer.intention ?? "") { value in
+                    guard store.editIntention(id: timer.id, active: true, text: value) else {
+                        let error = PlanSaveError(message: store.errorMessage ?? "Your session plan could not be saved. Try again.")
+                        store.errorMessage = nil
+                        return .failure(error)
+                    }
+                    return .success(())
+                }
+            }
             .alert("End focus?", isPresented: $confirmingEnd) {
                 Button("Save Session") { store.endTimer() }
                 Button("Discard Session", role: .destructive) {
@@ -133,22 +145,6 @@ struct FocusView: View {
             .onAppear { repairSelection() }
             .onChange(of: store.state.projects) { _, _ in repairSelection() }
         }
-    }
-
-    private var focusMenuActions: [FocusMenuAction] {
-        var actions = [FocusMenuAction(title: "Manage projects", systemImage: "folder", identifier: "focus.projects") {
-            navigation.showProjects()
-        }]
-        if case .ready(let project) = screenState {
-            actions.append(FocusMenuAction(title: "Plan this session", systemImage: "square.and.pencil", identifier: "focus.intention") {
-                navigation.requestNextSessionPlan(projectID: project.id)
-            })
-        }
-        if case .focusing(let timer) = screenState {
-            actions.append(FocusMenuAction(title: timer.intention == nil ? "Plan this session" : "Edit this session",
-                                          systemImage: "square.and.pencil", identifier: "focus.intention.edit") { noteTimer = timer })
-        }
-        return actions
     }
 
     private var emptyProjects: some View {
@@ -184,10 +180,11 @@ struct FocusView: View {
                 .contentShape(Rectangle())
             }
             .accessibilityIdentifier("focus.project")
-            TimerFace(seconds: Double(minutes * 60), fraction: 1, title: "", project: "", isBreak: false, isRunning: false)
             Button { durationProject = project } label: {
-                Label("\(minutes) min", systemImage: "clock")
-                    .frame(minHeight: 44)
+                VStack(spacing: 1) {
+                    TimerFace(seconds: Double(minutes * 60), fraction: 1, title: "", project: "", isBreak: false, isRunning: false)
+                    Text("Change duration").font(.caption).foregroundStyle(.secondary)
+                }
             }
             .accessibilityIdentifier("focus.duration")
             .accessibilityLabel("Focus duration")
@@ -201,14 +198,10 @@ struct FocusView: View {
             .buttonStyle(.borderedProminent).controlSize(.large)
             .accessibilityIdentifier("focus.start")
             let taskCount = SessionPlanText.items(from: project.breadcrumb?.text).count
-            if taskCount > 0 {
-                SessionPlanSummaryRow(taskCount: taskCount) { navigation.requestNextSessionPlan(projectID: project.id) }
-                    .accessibilityIdentifier("focus.intention")
-            } else {
-                Button("Plan this session", systemImage: "square.and.pencil") {
-                    navigation.requestNextSessionPlan(projectID: project.id)
-                }.accessibilityIdentifier("focus.nextStep")
+            SessionPlanSummaryRow(title: taskCount == 0 ? "Plan this session" : "Session plan", taskCount: taskCount) {
+                navigation.requestNextSessionPlan(projectID: project.id)
             }
+            .accessibilityIdentifier("focus.nextStep")
         }
     }
 
@@ -224,10 +217,8 @@ struct FocusView: View {
                 .buttonStyle(.bordered).controlSize(.large)
                 .accessibilityIdentifier("timer.end")
                 let taskCount = SessionPlanText.items(from: active.intention).count
-                if taskCount > 0 {
-                    SessionPlanSummaryRow(taskCount: taskCount) { noteTimer = active }
-                        .accessibilityIdentifier("focus.intention.edit")
-                }
+                SessionPlanSummaryRow(title: "Session plan", taskCount: taskCount) { noteTimer = active }
+                    .accessibilityIdentifier("focus.intention.edit")
                 Button("Add a thought", systemImage: "text.bubble") {
                     navigation.requestThoughtCapture(context: ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id))
                 }.accessibilityIdentifier("focus.captureThought")
@@ -235,7 +226,9 @@ struct FocusView: View {
                 Button("End Break", systemImage: "stop.fill") { store.endTimer() }
                     .buttonStyle(.bordered).controlSize(.large)
                     .accessibilityIdentifier("timer.end")
-                Button("Plan next session", systemImage: "square.and.pencil") {
+                let taskCount = store.state.projects.first(where: { $0.id == active.projectID })
+                    .map { SessionPlanText.items(from: $0.breadcrumb?.text).count } ?? 0
+                SessionPlanSummaryRow(title: "Plan next session", taskCount: taskCount) {
                     navigation.requestNextSessionPlan(projectID: active.projectID)
                 }
                 .accessibilityIdentifier("focus.nextStep")
@@ -262,9 +255,11 @@ struct FocusView: View {
     private func breakReady(_ offer: BreakOffer) -> some View {
         VStack(spacing: 18) {
             Text("Focus saved").font(.headline)
-            TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
             Button { breakDuration = BreakDurationRequest(offer: offer) } label: {
-                Label("\(offer.minutes) min", systemImage: "clock").frame(minHeight: 44)
+                VStack(spacing: 1) {
+                    TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
+                    Text("Change duration").font(.caption).foregroundStyle(.secondary)
+                }
             }
             .accessibilityIdentifier("break.duration")
             .accessibilityLabel("Break duration")
@@ -276,7 +271,9 @@ struct FocusView: View {
             }.buttonStyle(.borderedProminent).controlSize(.large).tint(AppTheme.breakAccent)
                 .accessibilityIdentifier("break.start")
             Button("Skip Break") { store.update { $0.breakOffer = nil } }
-            Button("Plan next session", systemImage: "square.and.pencil") {
+            let taskCount = store.state.projects.first(where: { $0.id == offer.projectID })
+                .map { SessionPlanText.items(from: $0.breadcrumb?.text).count } ?? 0
+            SessionPlanSummaryRow(title: "Plan next session", taskCount: taskCount) {
                 navigation.requestNextSessionPlan(projectID: offer.projectID)
             }
             .accessibilityIdentifier("focus.nextStep")
@@ -289,15 +286,17 @@ struct FocusView: View {
 }
 
 private struct SessionPlanSummaryRow: View {
+    var title = "Session plan"
     let taskCount: Int
     let action: () -> Void
 
     private var taskSummary: String { "\(taskCount) \(taskCount == 1 ? "task" : "tasks")" }
+    private var label: String { taskCount == 0 ? title : "\(title) · \(taskSummary)" }
 
     var body: some View {
         Button(action: action) {
             HStack {
-                Text("Session plan · \(taskSummary)")
+                Text(label)
                 Spacer()
                 Image(systemName: "chevron.right").font(.caption)
             }
@@ -307,8 +306,8 @@ private struct SessionPlanSummaryRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open session plan")
-        .accessibilityValue(taskSummary)
+        .accessibilityLabel(title)
+        .accessibilityValue(taskCount == 0 ? "No tasks" : taskSummary)
     }
 }
 
