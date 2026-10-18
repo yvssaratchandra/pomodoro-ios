@@ -22,7 +22,11 @@ struct FocusActivityWidget: Widget {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Label(context.state.title, systemImage: "timer").font(.headline)
+                        HStack(spacing: 7) {
+                            Image("PomodoroMark").resizable().scaledToFit().frame(width: 18, height: 18)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            Text(context.state.title).font(.headline)
+                        }
                         if let name = context.state.projectName {
                             Text(name).font(.subheadline).lineLimit(1)
                         }
@@ -44,7 +48,13 @@ struct FocusActivityWidget: Widget {
             .widgetURL(url)
         } dynamicIsland: { context in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { Label(context.state.title, systemImage: "timer") }
+                DynamicIslandExpandedRegion(.leading) {
+                    HStack(spacing: 5) {
+                        Image("PomodoroMark").resizable().scaledToFit().frame(width: 16, height: 16)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                        Text(context.state.title)
+                    }
+                }
                 DynamicIslandExpandedRegion(.trailing) {
                     ActivityTimerText(state: context.state, stale: context.isStale)
                         .multilineTextAlignment(.trailing)
@@ -72,13 +82,19 @@ struct FocusActivityWidget: Widget {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            } compactLeading: { Image(systemName: "timer") }
+            } compactLeading: {
+                Image("PomodoroMark").resizable().scaledToFit().frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
               compactTrailing: {
                   ActivityTimerText(state: context.state, stale: context.isStale)
                       .multilineTextAlignment(.trailing)
                       .frame(width: 52, alignment: .trailing)
               }
-              minimal: { Image(systemName: "timer") }
+              minimal: {
+                  Image("PomodoroMark").resizable().scaledToFit().frame(width: 16, height: 16)
+                      .clipShape(RoundedRectangle(cornerRadius: 3))
+              }
             .widgetURL(url)
         }
     }

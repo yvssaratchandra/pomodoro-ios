@@ -13,8 +13,19 @@ import WidgetKit
         let summary = WidgetSnapshot.SavedFocus(dayStart: day.start, dayEnd: day.end,
             timeZoneIdentifier: calendar.timeZone.identifier,
             seconds: Statistics.total(state, interval: day, now: now))
-        try WidgetSnapshotFile.write(WidgetSnapshot(state: state, now: now, savedFocus: summary), in: directory)
-        WidgetCenter.shared.reloadAllTimelines()
+        let projectSummaries = state.projects.filter { $0.status == .ongoing }.map { project in
+            WidgetSnapshot.ProjectDaySummary(
+                projectID: project.id,
+                savedFocus: WidgetSnapshot.SavedFocus(dayStart: day.start, dayEnd: day.end,
+                    timeZoneIdentifier: calendar.timeZone.identifier,
+                    seconds: Statistics.total(state, projectID: project.id, interval: day, now: now)),
+                targetMinutes: GoalEngine.dailyTarget(projectID: project.id, on: now, plan: state.goalPlan, calendar: calendar))
+        }
+        let snapshot = WidgetSnapshot(state: state, now: now, savedFocus: summary,
+                                      projectDaySummaries: projectSummaries)
+        if let existing = WidgetSnapshotFile.read(in: directory), snapshot.hasSameDisplayContent(as: existing) { return }
+        try WidgetSnapshotFile.write(snapshot, in: directory)
+        WidgetCenter.shared.reloadTimelines(ofKind: "PomodoroFocus")
     }
 }
 #endif

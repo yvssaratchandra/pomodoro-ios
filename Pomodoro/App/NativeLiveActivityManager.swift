@@ -17,7 +17,7 @@ import OSLog
         guard let projection, projection.deadline > Date() else { return }
         let content = ActivityContent(state: projection, staleDate: projection.deadline)
         if let retained {
-            await retained.update(content)
+            if retained.content.state != projection { await retained.update(content) }
         } else if ActivityAuthorizationInfo().areActivitiesEnabled, UIApplication.shared.applicationState == .active {
             do {
                 _ = try Activity.request(attributes: FocusActivityAttributes(timerID: projection.id), content: content, pushType: nil)

@@ -6,6 +6,34 @@ import XCTest
 #endif
 
 final class WidgetSnapshotFileTests: XCTestCase {
+    func testVersionTwoSnapshotRemainsReadableAndNewVersionTracksPerProjectData() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let project = Project(name: "Work")
+        let snapshot = WidgetSnapshot(state: AppSnapshot(projects: [project]), now: Date())
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+        legacy["formatVersion"] = 2
+        legacy.removeValue(forKey: "projectDaySummaries")
+        try JSONSerialization.data(withJSONObject: legacy).write(to: directory.appendingPathComponent(WidgetSnapshotFile.filename))
+        XCTAssertEqual(WidgetSnapshotFile.read(in: directory)?.formatVersion, 2)
+
+        let start = Date()
+        let day = Calendar.current.dateInterval(of: .day, for: start)!
+        let saved = WidgetSnapshot.SavedFocus(dayStart: day.start, dayEnd: day.end,
+            timeZoneIdentifier: TimeZone.current.identifier, seconds: 1800)
+        let updated = WidgetSnapshot(state: AppSnapshot(projects: [project]), now: start.addingTimeInterval(2),
+            projectDaySummaries: [.init(projectID: project.id, savedFocus: saved, targetMinutes: 240)])
+        XCTAssertNil(updated.projectSummary(for: UUID(), at: start))
+        XCTAssertEqual(updated.projectSummary(for: project.id, at: start)?.targetMinutes, 240)
+        let equivalent = WidgetSnapshot(state: AppSnapshot(projects: [project]), now: start.addingTimeInterval(10),
+            projectDaySummaries: [.init(projectID: project.id, savedFocus: saved, targetMinutes: 240)])
+        XCTAssertTrue(updated.hasSameDisplayContent(as: equivalent))
+        let changed = WidgetSnapshot(state: AppSnapshot(projects: [project]), now: start.addingTimeInterval(10),
+            projectDaySummaries: [.init(projectID: project.id, savedFocus: saved, targetMinutes: 60)])
+        XCTAssertFalse(updated.hasSameDisplayContent(as: changed))
+    }
+
     func testSnapshotReplacementAndCorruptOrUnknownVersionFallback() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

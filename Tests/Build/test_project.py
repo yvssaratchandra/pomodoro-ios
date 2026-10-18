@@ -52,6 +52,18 @@ class ProjectTests(unittest.TestCase):
         self.assertIn("RemoveHeadersOnCopy", self.objects[files[0]]["settings"]["ATTRIBUTES"])
         self.assertFalse(self.phases("Pomodoro", "PBXCopyFilesBuildPhase"))
 
+    def test_widget_brand_asset_is_included_in_extension(self):
+        resources = {self.objects[self.objects[value]["fileRef"]]["path"]
+                     for phase in self.phases("PomodoroWidgets", "PBXResourcesBuildPhase")
+                     for value in phase["files"]}
+        self.assertIn("PomodoroWidgets/Assets.xcassets", resources)
+        contents = ROOT / "PomodoroWidgets/Assets.xcassets/PomodoroMark.imageset/Contents.json"
+        self.assertTrue(contents.is_file())
+        self.assertIn('"filename" : "AppIcon.png"', contents.read_text())
+        self.assertTrue(contents.parent.joinpath("AppIcon.png").is_file())
+        source = (ROOT / "PomodoroWidgets/PomodoroWidgets.swift").read_text()
+        self.assertIn(".supportedFamilies([.systemSmall, .accessoryCircular])", source)
+
     def test_entry_points_and_extension_source_boundary(self):
         container = self.sources("Pomodoro")
         native = self.sources("PomodoroNative")

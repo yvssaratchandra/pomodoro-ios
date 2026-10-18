@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pomodoro · Focus surfaces</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+      --accent: #8b70f4;
+      --ink: #f7f5ff;
+      --muted: #a4a0b1;
+      --panel: #1c1b22;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 44px 24px 64px;
+      color: var(--ink);
+      background: radial-gradient(ellipse at 50% -10%, #342858, #111116 52%);
+    }
+    main { max-width: 940px; margin: 0 auto; }
+    header { margin: 0 0 28px; }
+    h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -.6px; }
+    header p, .caption { color: var(--muted); }
+    header p { margin: 0; }
+    .mode-switch {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      margin: 0 0 26px;
+      border: 1px solid #393640;
+      border-radius: 13px;
+      background: #1a191f;
+    }
+    .mode-switch button {
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 16px;
+      color: var(--muted);
+      background: transparent;
+      font: inherit;
+      cursor: pointer;
+    }
+    .mode-switch button[aria-pressed="true"] { color: white; background: #373440; }
+    .surfaces { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start; }
+    .section-title { margin: 0 0 12px; font-size: 15px; font-weight: 600; color: #d9d6e2; }
+    .homescreen {
+      min-height: 250px;
+      padding: 15px;
+      border: 1px solid #55516c;
+      border-radius: 26px;
+      background: linear-gradient(135deg, #49357b, #22233b 55%, #35314b);
+      box-shadow: 0 22px 60px #0008;
+    }
+    .small-home-frame {
+      width: 204px;
+      height: 204px;
+      padding: 14px;
+      border: 1px solid #55516c;
+      border-radius: 26px;
+      background: linear-gradient(135deg, #49357b, #22233b 55%, #35314b);
+      box-shadow: 0 18px 44px #0007;
+    }
+    .small-thought-widget {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      position: relative;
+      border: 1px solid #ffffff20;
+      border-radius: 22px;
+      background: linear-gradient(145deg, #24222d, #17161d);
+    }
+    .small-thought-widget img { width: 64px; height: 64px; border-radius: 15px; }
+    .plus-badge {
+      position: absolute;
+      right: 17px;
+      bottom: 17px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 3px solid #201f26;
+      border-radius: 50%;
+      color: white;
+      background: var(--accent);
+      font-size: 23px;
+      line-height: 1;
+    }
+    .widget {
+      min-height: 218px;
+      padding: 16px 18px 14px;
+      border: 1px solid #ffffff20;
+      border-radius: 22px;
+      background: linear-gradient(145deg, #24222d, #17161d);
+      box-shadow: 0 5px 16px #0004;
+      display: flex;
+      flex-direction: column;
+    }
+    .widget-head, .row, .project-line, .progress-label { display: flex; align-items: center; }
+    .widget-head { gap: 8px; }
+    .mark {
+      width: 20px; height: 20px; flex: 0 0 20px;
+      display: block;
+    }
+    .mark img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 4px; }
+    .project { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; font-weight: 650; }
+    .phase { margin-left: auto; color: #c9c4d4; font-size: 11px; }
+    .row { flex: 1; gap: 12px; padding: 10px 0 6px; }
+    .timer { font-size: 39px; font-weight: 600; letter-spacing: -1.3px; font-variant-numeric: tabular-nums; }
+    .ready-title { font-size: 18px; font-weight: 650; }
+    .duration { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .action {
+      width: 46px; height: 46px; flex: 0 0 46px;
+      display: grid; place-items: center;
+      border: 1px solid #ffffff18;
+      border-radius: 14px;
+      color: white; background: #ffffff10;
+      font-size: 25px; line-height: 1;
+    }
+    .action.plan { font-size: 22px; }
+    .progress { margin-top: auto; }
+    .progress-label { justify-content: space-between; color: var(--muted); font-size: 11px; }
+    .track { height: 4px; margin-top: 7px; overflow: hidden; border-radius: 5px; background: #ffffff1c; }
+    .fill { height: 100%; width: 34%; border-radius: inherit; background: var(--accent); }
+    .preview-stack { display: grid; gap: 26px; }
+    .phone-lock {
+      min-height: 150px;
+      padding: 15px;
+      border: 1px solid #37353d;
+      border-radius: 22px;
+      background: linear-gradient(145deg, #25232b, #151419);
+    }
+    .lock-time { margin: 3px 0 12px; color: #e9e7ef; font-size: 31px; font-weight: 500; letter-spacing: -1px; }
+    .lock-row { display: flex; align-items: center; gap: 10px; }
+    .circle-widget {
+      width: 42px; height: 42px;
+      display: grid; place-items: center;
+      border: 1px solid #ffffff32;
+      border-radius: 50%;
+      color: white;
+      background: #24212e;
+      font-size: 18px;
+    }
+    .circle-widget img { width: 24px; height: 24px; border-radius: 6px; }
+    .lock-copy { color: #ccc8d4; font-size: 12px; line-height: 1.35; }
+    .lock-copy strong { display: block; color: white; font-size: 13px; }
+    .activity {
+      padding: 15px;
+      border: 1px solid #393740;
+      border-radius: 24px;
+      background: #1c1b20;
+    }
+    .activity-top { display: flex; align-items: flex-start; gap: 12px; }
+    .activity-mark { width: 30px; height: 30px; border-radius: 9px; font-size: 16px; }
+    .activity-main { flex: 1; min-width: 0; }
+    .activity-title { font-size: 14px; font-weight: 650; }
+    .activity-project { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .activity-time { margin-top: 11px; font-size: 22px; font-variant-numeric: tabular-nums; }
+    .activity-action {
+      min-width: 42px; height: 42px;
+      display: grid; place-items: center;
+      border: 1px solid #ffffff1a;
+      border-radius: 13px;
+      background: #ffffff0b;
+      font-size: 18px;
+    }
+    .island {
+      width: 264px;
+      margin: 14px auto 0;
+      padding: 12px 14px 10px;
+      border-radius: 23px;
+      color: white;
+      background: #050505;
+      box-shadow: 0 3px 16px #0008;
+    }
+    .island-top { display: flex; align-items: center; gap: 9px; }
+    .island-title { font-size: 12px; font-weight: 600; }
+    .island-time { margin-left: auto; font-size: 15px; font-variant-numeric: tabular-nums; }
+    .island-bottom { display: flex; align-items: center; gap: 8px; margin-top: 11px; }
+    .island-project { flex: 1; overflow: hidden; color: #c7c4ce; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+    .island-action { min-width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; background: #242329; font-size: 16px; }
+    .caption { margin: 9px 2px 0; font-size: 12px; line-height: 1.45; }
+    [hidden] { display: none !important; }
+    @media (max-width: 700px) {
+      body { padding: 28px 16px 40px; }
+      .surfaces { grid-template-columns: 1fr; }
+      .preview-stack { grid-template-columns: 1fr; }
+      .homescreen { min-height: 250px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Focus surfaces</h1>
+      <p>Quick start, thought capture, and the running timer at a glance.</p>
+    </header>
+
+    <div class="mode-switch" role="group" aria-label="Preview state">
+      <button type="button" data-mode="ready" aria-pressed="false">Ready</button>
+      <button type="button" data-mode="focus" aria-pressed="true">Focus</button>
+      <button type="button" data-mode="break" aria-pressed="false">Break</button>
+    </div>
+
+    <div class="surfaces">
+      <section>
+        <h2 class="section-title">Home Screen · Medium widget</h2>
+        <div class="homescreen">
+          <div class="widget">
+            <div class="widget-head">
+              <span class="mark" aria-hidden="true"><img src="../PomodoroWidgets/Assets.xcassets/PomodoroMark.imageset/AppIcon.png" alt=""></span>
+              <span class="project">Work</span>
+              <span class="phase" data-ready hidden>Ready</span>
+              <span class="phase" data-focus>Focus</span>
+              <span class="phase" data-break hidden>Break</span>
+            </div>
+            <div class="row">
+              <div>
+                <div class="ready-title" data-ready hidden>Start Focus</div>
+                <div class="duration" data-ready hidden>25 min</div>
+                <div class="timer" data-focus>24:18</div>
+                <div class="timer" data-break hidden>04:32</div>
+              </div>
+              <div class="action" data-ready hidden aria-label="Add a thought">+</div>
+              <div class="action" data-focus aria-label="Add a thought">+</div>
+              <div class="action plan" data-break hidden aria-label="Plan next session">✎</div>
+            </div>
+            <div class="progress">
+              <div class="progress-label"><span>Today</span><span>1 hr 20 min / 4 hr</span></div>
+              <div class="track"><div class="fill"></div></div>
+            </div>
+          </div>
+        </div>
+        <p class="caption">The widget opens the exact app screen for the current action. Focus shows thought capture; a break offers the next-session plan.</p>
+        <h2 class="section-title" style="margin-top:24px">Home Screen · Thought shortcut</h2>
+        <div class="small-home-frame">
+          <div class="small-thought-widget" aria-label="Small widget that opens thought capture">
+            <img src="../PomodoroWidgets/Assets.xcassets/PomodoroMark.imageset/AppIcon.png" alt="">
+            <span class="plus-badge" aria-hidden="true">+</span>
+          </div>
+        </div>
+        <p class="caption">A separate small widget opens thought capture directly in Pomodoro.</p>
+      </section>
+
+      <div class="preview-stack">
+        <section>
+          <h2 class="section-title">Lock Screen · Thought shortcut</h2>
+          <div class="phone-lock">
+            <div class="lock-time">9:41</div>
+            <div class="lock-row">
+              <div class="circle-widget" aria-label="Open thought capture"><img src="../PomodoroWidgets/Assets.xcassets/PomodoroMark.imageset/AppIcon.png" alt=""></div>
+              <div class="lock-copy"><strong>Add a thought</strong>Opens the capture screen in Pomodoro</div>
+            </div>
+          </div>
+          <p class="caption">A single branded circular widget keeps the shortcut compact.</p>
+        </section>
+
+        <section data-live>
+          <h2 class="section-title">Live Activity · Lock Screen</h2>
+          <div class="activity">
+            <div class="activity-top">
+              <span class="mark activity-mark" aria-hidden="true"><img src="../PomodoroWidgets/Assets.xcassets/PomodoroMark.imageset/AppIcon.png" alt=""></span>
+              <div class="activity-main">
+                <div class="activity-title" data-focus>Focus</div>
+                <div class="activity-title" data-break hidden>Break</div>
+                <div class="activity-project">Work · Draft project outline</div>
+                <div class="activity-time" data-focus>24:18</div>
+                <div class="activity-time" data-break hidden>04:32</div>
+              </div>
+              <div class="activity-action" data-focus aria-label="Add a thought">+</div>
+              <div class="activity-action" data-break hidden aria-label="Plan next session">✎</div>
+            </div>
+          </div>
+          <div class="island" aria-label="Expanded Dynamic Island preview">
+            <div class="island-top">
+              <span class="mark" aria-hidden="true"><img src="../PomodoroWidgets/Assets.xcassets/PomodoroMark.imageset/AppIcon.png" alt=""></span>
+              <span class="island-title" data-focus>Focus</span>
+              <span class="island-title" data-break hidden>Break</span>
+              <span class="island-time" data-focus>24:18</span>
+              <span class="island-time" data-break hidden>04:32</span>
+            </div>
+            <div class="island-bottom">
+              <span class="island-project">Work · Draft project outline</span>
+              <span class="island-action" data-focus aria-label="Add a thought">+</span>
+              <span class="island-action" data-break hidden aria-label="Plan next session">✎</span>
+            </div>
+          </div>
+          <p class="caption">The expanded Island keeps the timer aligned to the trailing edge and shows the project name beside a small action.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    const buttons = document.querySelectorAll("[data-mode]");
+    function showMode(mode) {
+      document.querySelectorAll("[data-focus]").forEach(element => { element.hidden = mode !== "focus"; });
+      document.querySelectorAll("[data-break]").forEach(element => { element.hidden = mode !== "break"; });
+      document.querySelectorAll("[data-ready]").forEach(element => { element.hidden = mode !== "ready"; });
+      document.querySelectorAll("[data-live]").forEach(element => { element.hidden = mode === "ready"; });
+      buttons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.mode === mode)));
+    }
+    buttons.forEach(button => button.addEventListener("click", () => showMode(button.dataset.mode)));
+  </script>
+</body>
+</html>
