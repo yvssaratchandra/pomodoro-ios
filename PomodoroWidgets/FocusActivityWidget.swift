@@ -23,8 +23,7 @@ struct FocusActivityWidget: Widget {
                 HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 7) {
-                            Image("PomodoroMark").resizable().scaledToFit().frame(width: 18, height: 18)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            Image(systemName: "timer").font(.headline)
                             Text(context.state.title).font(.headline)
                         }
                         if let name = context.state.projectName {
@@ -50,8 +49,7 @@ struct FocusActivityWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 5) {
-                        Image("PomodoroMark").resizable().scaledToFit().frame(width: 16, height: 16)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                        Image(systemName: "timer")
                         Text(context.state.title)
                     }
                 }
@@ -83,8 +81,7 @@ struct FocusActivityWidget: Widget {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } compactLeading: {
-                Image("PomodoroMark").resizable().scaledToFit().frame(width: 16, height: 16)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                Image(systemName: "timer")
             }
               compactTrailing: {
                   ActivityTimerText(state: context.state, stale: context.isStale)
@@ -92,8 +89,7 @@ struct FocusActivityWidget: Widget {
                       .frame(width: 52, alignment: .trailing)
               }
               minimal: {
-                  Image("PomodoroMark").resizable().scaledToFit().frame(width: 16, height: 16)
-                      .clipShape(RoundedRectangle(cornerRadius: 3))
+                  Image(systemName: "timer")
               }
             .widgetURL(url)
         }

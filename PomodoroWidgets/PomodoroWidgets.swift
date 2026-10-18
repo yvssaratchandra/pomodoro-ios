@@ -73,8 +73,7 @@ private struct FocusWidgetView: View {
     private var smallContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label { Text("Pomodoro") } icon: {
-                Image("PomodoroMark").resizable().scaledToFit().frame(width: 18, height: 18)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                Image(systemName: "timer")
             }.font(.headline)
             primaryContent
         }
@@ -83,8 +82,7 @@ private struct FocusWidgetView: View {
     private var mediumContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
-                Image("PomodoroMark").resizable().scaledToFit().frame(width: 17, height: 17)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                Image(systemName: "timer").font(.subheadline)
                 Text(displayProjectName).font(.subheadline.weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 4)
                 Text(activeTimer?.kind.title ?? "Ready").font(.caption.weight(.medium)).foregroundStyle(.secondary)
@@ -223,24 +221,29 @@ private struct ThoughtCaptureWidgetView: View {
 
     private var captureLink: some View {
         Link(destination: route) {
-            ZStack(alignment: .bottomTrailing) {
-                Image("PomodoroMark")
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: family == .systemSmall ? 15 : 3))
-                    .padding(family == .systemSmall ? 30 : 8)
+            Group {
                 if family == .systemSmall {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(AppWidgetTheme.accent)
-                        .background(.background, in: Circle())
-                        .padding(12)
-                        .accessibilityHidden(true)
+                    ZStack(alignment: .bottomTrailing) {
+                        Image("PomodoroMark")
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 15))
+                            .padding(30)
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(AppWidgetTheme.accent)
+                            .background(.background, in: Circle())
+                            .padding(12)
+                            .accessibilityHidden(true)
+                    }
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .medium))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityLabel("Add a thought")
         }
+        .accessibilityLabel("Add a thought")
         .widgetURL(route)
     }
 }
