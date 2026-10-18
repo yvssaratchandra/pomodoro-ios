@@ -186,6 +186,7 @@ struct FocusView: View {
                     Text("Change duration").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("focus.duration")
             .accessibilityLabel("Focus duration")
             .accessibilityValue("\(minutes) min")
@@ -261,6 +262,7 @@ struct FocusView: View {
                     Text("Change duration").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("break.duration")
             .accessibilityLabel("Break duration")
             .accessibilityValue("\(offer.minutes) min")
