@@ -35,7 +35,8 @@ import UserNotifications
         let calendar = GoalEngine.calendar()
         var snapshot = AppSnapshot(projects: [writing, reading])
         snapshot.goalPlan.pendingLegacyDailySchedule = Array(repeating: 240, count: 7)
-        snapshot.goalPlan.legacyDailyGoalTransitionDay = LocalDay(date, calendar: calendar)
+        let migrationDay = LocalDay(calendar.date(byAdding: .day, value: -3, to: date)!, calendar: calendar)
+        snapshot.goalPlan.legacyDailyGoalTransitionDay = migrationDay
         try GoalEngine.setDaily(&snapshot.goalPlan, projectID: reading.id, minutes: Array(repeating: 60, count: 7), now: date, calendar: calendar)
         let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot))
         let store = try AppStore(persistence: persistence, now: { date }, notificationCenter: RecordingNotificationCenter())
@@ -46,7 +47,15 @@ import UserNotifications
         XCTAssertEqual(GoalEngine.dailyTarget(projectID: writing.id, on: date, plan: store.state.goalPlan), 240)
         XCTAssertEqual(GoalEngine.dailyTarget(projectID: reading.id, on: date, plan: store.state.goalPlan), 60)
         XCTAssertNil(store.state.goalPlan.pendingLegacyDailySchedule)
+        XCTAssertEqual(store.state.goalPlan.legacyDailyGoalTransitionDay, migrationDay)
         XCTAssertEqual(try AppStore(persistence: persistence, now: { date }).state.goalPlan, store.state.goalPlan)
+
+        let discardPersistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot))
+        let discardStore = try AppStore(persistence: discardPersistence, now: { date })
+        XCTAssertTrue(discardStore.discardLegacyDailyGoal())
+        XCTAssertNil(discardStore.state.goalPlan.pendingLegacyDailySchedule)
+        XCTAssertEqual(discardStore.state.goalPlan.legacyDailyGoalTransitionDay, migrationDay)
+        XCTAssertEqual(try AppStore(persistence: discardPersistence, now: { date }).state.goalPlan, discardStore.state.goalPlan)
     }
 
     func testThoughtCreationReturnsCommittedIDAndFailedRetryCreatesExactlyOne() throws {

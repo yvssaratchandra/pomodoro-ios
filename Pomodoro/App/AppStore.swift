@@ -199,19 +199,16 @@ struct PendingDeletion {
                 throw AppError.invalid("There is no previous daily goal to assign.")
             }
             guard state.projects.contains(where: { $0.id == projectID }) else { throw AppError.invalid("Project unavailable.") }
-            let today = LocalDay(now(), calendar: GoalEngine.calendar())
             let existing = GoalEngine.dailyTarget(projectID: projectID, on: now(), plan: state.goalPlan)
             guard existing == nil || replacingExisting else { throw AppError.invalid("This project already has a daily goal.") }
             try GoalEngine.setDaily(&state.goalPlan, projectID: projectID, minutes: minutes, now: now())
             state.goalPlan.pendingLegacyDailySchedule = nil
-            state.goalPlan.legacyDailyGoalTransitionDay = today
         }
     }
 
     func discardLegacyDailyGoal() -> Bool {
         update { state in
             state.goalPlan.pendingLegacyDailySchedule = nil
-            state.goalPlan.legacyDailyGoalTransitionDay = LocalDay(now(), calendar: GoalEngine.calendar())
         }
     }
 
