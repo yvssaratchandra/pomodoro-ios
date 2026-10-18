@@ -117,6 +117,142 @@ struct PendingDeletion {
 
     func projectName(_ id: UUID) -> String { state.projects.first { $0.id == id }?.name ?? "Project" }
 
+    func makeProjectSettingsDraft(projectID: UUID?) -> ProjectSettingsDraft? {
+        let c = GoalEngine.calendar()
+        let timestamp = now()
+        let today = LocalDay(timestamp, calendar: c)
+        let week = LocalDay(GoalEngine.week(containing: timestamp, calendar: c).start, calendar: c)
+        if let projectID {
+            guard let project = state.projects.first(where: { $0.id == projectID }) else { return nil }
+            let daily = GoalEngine.dailySchedule(projectID: projectID, on: timestamp, plan: state.goalPlan)
+            let weekly = GoalEngine.weeklyTarget(projectID: projectID, weekStart: timestamp, plan: state.goalPlan)
+            let dailyRevisions = state.goalPlan.dailyProjectRevisions.filter { $0.projectID == projectID }
+            let weeklyRevisions = state.goalPlan.weeklyProjectRevisions.filter { $0.projectID == projectID }
+            let baseline = ProjectSettingsBaseline(name: project.name, status: project.status,
+                focusMinutes: project.preferredFocusMinutes, shortBreakMinutes: project.shortBreakMinutes,
+                longBreakMinutes: project.longBreakMinutes, dailySchedule: daily, weeklyMinutes: weekly,
+                dailyRevisions: dailyRevisions,
+                weeklyRevisions: weeklyRevisions)
+            return ProjectSettingsDraft(projectID: project.id, isNew: false, createdOn: today,
+                createdWeek: week, baseline: baseline, name: project.name, status: project.status,
+                focusMinutes: project.preferredFocusMinutes, shortBreakMinutes: project.shortBreakMinutes,
+                longBreakMinutes: project.longBreakMinutes, dailySchedule: daily, weeklyMinutes: weekly)
+        }
+        let project = Project(name: "", focusMinutes: state.settings.defaultFocusMinutes,
+            shortBreakMinutes: state.settings.defaultShortBreakMinutes,
+            longBreakMinutes: state.settings.defaultLongBreakMinutes)
+        let baseline = ProjectSettingsBaseline(name: "", status: project.status,
+            focusMinutes: project.preferredFocusMinutes, shortBreakMinutes: project.shortBreakMinutes,
+            longBreakMinutes: project.longBreakMinutes, dailySchedule: nil,
+            weeklyMinutes: nil, dailyRevisions: [], weeklyRevisions: [])
+        return ProjectSettingsDraft(projectID: project.id, isNew: true, createdOn: today,
+            createdWeek: week, baseline: baseline, name: project.name, status: project.status,
+            focusMinutes: project.preferredFocusMinutes, shortBreakMinutes: project.shortBreakMinutes,
+            longBreakMinutes: project.longBreakMinutes, dailySchedule: nil, weeklyMinutes: nil)
+    }
+
+    @discardableResult
+    func saveProjectSettings(_ draft: ProjectSettingsDraft) -> Bool {
+        guard draft.hasChanges else { errorMessage = nil; return true }
+        let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty, trimmedName.count <= 100,
+              (10...60).contains(draft.focusMinutes),
+              (1...60).contains(draft.shortBreakMinutes), (1...60).contains(draft.longBreakMinutes),
+              draft.dailySchedule == nil || (draft.dailySchedule?.count == 7 && draft.dailySchedule!.allSatisfy { (0...1440).contains($0) }),
+              draft.weeklyMinutes == nil || (1...10080).contains(draft.weeklyMinutes!) else {
+            errorMessage = "Check the project name, durations, and goals, then try again."
+            return false
+        }
+
+        let committedAt = now()
+        return update { candidate in
+            let c = GoalEngine.calendar()
+            let today = LocalDay(committedAt, calendar: c)
+            let currentWeek = LocalDay(GoalEngine.week(containing: committedAt, calendar: c).start, calendar: c)
+            if draft.dailySchedule != draft.baseline?.dailySchedule, today != draft.createdOn {
+                throw AppError.invalid("The date changed while editing. Reopen project settings to continue.")
+            }
+            let weeklyChanged = draft.weeklyMinutes != draft.baseline?.weeklyMinutes || !draft.scheduledWeeklyEdits.isEmpty
+            if weeklyChanged, currentWeek != draft.createdWeek {
+                throw AppError.invalid("The week changed while editing. Reopen project settings to continue.")
+            }
+
+            var project: Project
+            if draft.isNew {
+                guard !candidate.projects.contains(where: { $0.id == draft.projectID }) else {
+                    throw AppError.invalid("This project already exists. Reopen project creation.")
+                }
+                project = Project(id: draft.projectID, name: trimmedName,
+                    focusMinutes: draft.focusMinutes, shortBreakMinutes: draft.shortBreakMinutes,
+                    longBreakMinutes: draft.longBreakMinutes)
+            } else {
+                guard let baseline = draft.baseline,
+                      let index = candidate.projects.firstIndex(where: { $0.id == draft.projectID }) else {
+                    throw AppError.invalid("This project is no longer available. Reopen project settings.")
+                }
+                let current = candidate.projects[index]
+                let dailyRevisions = candidate.goalPlan.dailyProjectRevisions.filter { $0.projectID == draft.projectID }
+                let weeklyRevisions = candidate.goalPlan.weeklyProjectRevisions.filter { $0.projectID == draft.projectID }
+                if draft.dailySchedule != baseline.dailySchedule, dailyRevisions != baseline.dailyRevisions {
+                    throw AppError.invalid("This project's daily goal changed. Reopen project settings to continue.")
+                }
+                if weeklyChanged, weeklyRevisions != baseline.weeklyRevisions {
+                    throw AppError.invalid("This project's weekly goals changed. Reopen project settings to continue.")
+                }
+                func conflict<T: Equatable>(_ proposed: T, _ original: T, _ current: T, _ field: String) throws {
+                    if proposed != original, current != original, proposed != current {
+                        throw AppError.invalid("The project's \(field) changed. Reopen project settings to continue.")
+                    }
+                }
+                try conflict(trimmedName, baseline.name, current.name, "name")
+                try conflict(draft.status, baseline.status, current.status, "status")
+                try conflict(draft.focusMinutes, baseline.focusMinutes, current.preferredFocusMinutes, "focus duration")
+                try conflict(draft.shortBreakMinutes, baseline.shortBreakMinutes, current.shortBreakMinutes, "short break")
+                try conflict(draft.longBreakMinutes, baseline.longBreakMinutes, current.longBreakMinutes, "long break")
+                if candidate.activeTimer?.projectID == draft.projectID, current.status != draft.status {
+                    throw AppError.invalid("End this project's timer before changing its status.")
+                }
+                project = current
+                if draft.name != baseline.name { project.name = trimmedName }
+                if draft.status != baseline.status { project.status = draft.status }
+                if draft.focusMinutes != baseline.focusMinutes {
+                    project.focusMinutes = draft.focusMinutes
+                    project.lastFocusMinutes = nil
+                }
+                if draft.shortBreakMinutes != baseline.shortBreakMinutes {
+                    project.shortBreakMinutes = draft.shortBreakMinutes
+                }
+                if draft.longBreakMinutes != baseline.longBreakMinutes {
+                    project.longBreakMinutes = draft.longBreakMinutes
+                }
+                candidate.projects[index] = project
+            }
+
+            if draft.isNew { candidate.projects.append(project) }
+            if let daily = draft.dailySchedule, daily != draft.baseline?.dailySchedule {
+                try GoalEngine.setDaily(&candidate.goalPlan, projectID: draft.projectID, minutes: daily,
+                                        now: committedAt, calendar: c)
+            }
+            if draft.weeklyMinutes != draft.baseline?.weeklyMinutes {
+                try GoalEngine.setWeekly(&candidate.goalPlan, projectID: draft.projectID,
+                    minutes: draft.weeklyMinutes, now: committedAt, calendar: c)
+            }
+            for (day, edit) in draft.scheduledWeeklyEdits.sorted(by: { $0.key < $1.key }) {
+                guard let date = day.date(calendar: c), day > currentWeek else {
+                    throw AppError.invalid("Only future weekly changes can be edited here.")
+                }
+                switch edit {
+                case .set(let minutes): try GoalEngine.setWeekly(&candidate.goalPlan, projectID: draft.projectID,
+                    minutes: minutes, now: committedAt, calendar: c, effectiveWeek: date)
+                case .cancel:
+                    candidate.goalPlan.weeklyProjectRevisions.removeAll {
+                        $0.projectID == draft.projectID && $0.effectiveFrom == day
+                    }
+                }
+            }
+        }
+    }
+
     func saveProject(_ project: Project, focusDuration: Int? = nil) -> Bool {
         update { state in
             if let index = state.projects.firstIndex(where: { $0.id == project.id }) {

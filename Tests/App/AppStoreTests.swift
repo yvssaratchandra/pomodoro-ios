@@ -4,6 +4,123 @@ import UserNotifications
 @testable import Pomodoro
 
 @MainActor final class AppStoreTests: XCTestCase {
+    func testProjectSettingsSaveCommitsTogetherAndFailurePreservesWholeSnapshot() throws {
+        let calendar = GoalEngine.calendar()
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 12))!
+        let writing = Project(name: "Writing", lastFocusMinutes: 40,
+                              breadcrumb: ProjectBreadcrumb(text: "Next chapter", updatedAt: now, originSessionID: nil))
+        let reading = Project(name: "Reading")
+        var snapshot = AppSnapshot(projects: [writing, reading])
+        try GoalEngine.setDaily(&snapshot.goalPlan, projectID: writing.id,
+                                minutes: Array(repeating: 180, count: 7),
+                                now: calendar.date(byAdding: .day, value: -7, to: now)!, calendar: calendar)
+        try GoalEngine.setDaily(&snapshot.goalPlan, projectID: writing.id,
+                                minutes: Array(repeating: 240, count: 5) + [0, 0], now: now, calendar: calendar)
+        try GoalEngine.setDaily(&snapshot.goalPlan, projectID: reading.id,
+                                minutes: Array(repeating: 60, count: 7), now: now, calendar: calendar)
+        try GoalEngine.setWeekly(&snapshot.goalPlan, projectID: writing.id, minutes: 1200, now: now, calendar: calendar)
+        let futureWeek = calendar.date(byAdding: .day, value: 14, to: GoalEngine.week(containing: now, calendar: calendar).start)!
+        try GoalEngine.setWeekly(&snapshot.goalPlan, projectID: writing.id, minutes: 900,
+                                 now: now, calendar: calendar, effectiveWeek: futureWeek)
+        let secondFutureWeek = calendar.date(byAdding: .day, value: 21, to: GoalEngine.week(containing: now, calendar: calendar).start)!
+        try GoalEngine.setWeekly(&snapshot.goalPlan, projectID: writing.id, minutes: nil,
+                                 now: now, calendar: calendar, effectiveWeek: secondFutureWeek)
+        snapshot.sessions = [FocusSession(id: UUID(), projectID: writing.id, startedAt: now,
+            endedAt: now.addingTimeInterval(600), plannedSeconds: 1500, outcome: .interrupted,
+            intention: "Draft section", nextStep: nil)]
+        snapshot.activeTimer = ActiveTimer(projectID: writing.id, kind: .focus, startedAt: now,
+            plannedSeconds: 1500, shortBreakMinutes: 5, longBreakMinutes: 15, longBreakInterval: 4,
+            intention: "Current task")
+
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot))
+        let publisher = RecordingSnapshotPublisher()
+        let store = try AppStore(persistence: persistence, now: { now }, calendar: calendar,
+                                 publisher: publisher, notificationCenter: RecordingNotificationCenter())
+        let draft = try XCTUnwrap(store.makeProjectSettingsDraft(projectID: writing.id))
+        var edited = draft
+        edited.name = "Book"
+        edited.shortBreakMinutes = 8
+        edited.dailySchedule = Array(repeating: 300, count: 5) + [0, 0]
+        edited.weeklyMinutes = 1500
+        let scheduledDay = LocalDay(futureWeek, calendar: calendar)
+        edited.setScheduledWeeklyGoal(1000, for: scheduledDay)
+        let cancelledDay = LocalDay(secondFutureWeek, calendar: calendar)
+        edited.cancelScheduledWeeklyGoal(for: cancelledDay)
+
+        let originalState = store.state
+        let originalBytes = persistence.payload
+        let originalSaveCount = persistence.saveAttempts
+        let originalPublishCount = publisher.states.count
+        persistence.failSave = true
+        XCTAssertFalse(store.saveProjectSettings(edited))
+        XCTAssertEqual(store.state, originalState)
+        XCTAssertEqual(persistence.payload, originalBytes)
+        XCTAssertEqual(persistence.saveAttempts, originalSaveCount + 1)
+        XCTAssertEqual(publisher.states.count, originalPublishCount)
+
+        persistence.failSave = false
+        XCTAssertTrue(store.saveProjectSettings(edited))
+        XCTAssertEqual(persistence.saveAttempts, originalSaveCount + 2)
+        let saved = store.state
+        XCTAssertEqual(saved.projects.first(where: { $0.id == writing.id })?.name, "Book")
+        XCTAssertEqual(saved.projects.first(where: { $0.id == writing.id })?.preferredFocusMinutes, 40)
+        XCTAssertEqual(saved.projects.first(where: { $0.id == writing.id })?.shortBreakMinutes, 8)
+        XCTAssertEqual(saved.projects.first(where: { $0.id == writing.id })?.breadcrumb, writing.breadcrumb)
+        XCTAssertEqual(saved.sessions, snapshot.sessions)
+        XCTAssertEqual(saved.activeTimer, snapshot.activeTimer)
+        XCTAssertEqual(GoalEngine.dailySchedule(projectID: writing.id, on: now, plan: saved.goalPlan), edited.dailySchedule)
+        XCTAssertEqual(GoalEngine.dailySchedule(projectID: reading.id, on: now, plan: saved.goalPlan),
+                       Array(repeating: 60, count: 7))
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: writing.id, weekStart: now, plan: saved.goalPlan), 1500)
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: writing.id, weekStart: futureWeek, plan: saved.goalPlan), 1000)
+        XCTAssertEqual(GoalEngine.weeklyTarget(projectID: writing.id, weekStart: secondFutureWeek, plan: saved.goalPlan), 1000)
+        XCTAssertFalse(saved.goalPlan.weeklyProjectRevisions.contains {
+            $0.projectID == writing.id && $0.effectiveFrom == cancelledDay
+        })
+        XCTAssertTrue(saved.goalPlan.dailyProjectRevisions.contains {
+            $0.projectID == writing.id && $0.effectiveFrom == LocalDay(calendar.date(byAdding: .day, value: -7, to: now)!, calendar: calendar)
+        })
+    }
+
+    func testProjectSettingsRejectStaleProjectAndDateDrafts() throws {
+        let calendar = GoalEngine.calendar()
+        var now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 12))!
+        let project = Project(name: "Writing")
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(AppSnapshot(projects: [project])))
+        let store = try AppStore(persistence: persistence, now: { now }, calendar: calendar,
+                                 notificationCenter: RecordingNotificationCenter())
+
+        var stale = try XCTUnwrap(store.makeProjectSettingsDraft(projectID: project.id))
+        stale.name = "Renamed"
+        XCTAssertTrue(store.update { $0.projects[0].name = "Changed elsewhere" })
+        let stateBeforeConflict = store.state
+        XCTAssertFalse(store.saveProjectSettings(stale))
+        XCTAssertEqual(store.state, stateBeforeConflict)
+
+        var independent = try XCTUnwrap(store.makeProjectSettingsDraft(projectID: project.id))
+        independent.shortBreakMinutes = 9
+        let updatedBreadcrumb = ProjectBreadcrumb(text: "Changed elsewhere", updatedAt: now, originSessionID: nil)
+        XCTAssertTrue(store.update { $0.projects[0].breadcrumb = updatedBreadcrumb })
+        XCTAssertTrue(store.saveProjectSettings(independent))
+        XCTAssertEqual(store.state.projects[0].breadcrumb, updatedBreadcrumb)
+        XCTAssertEqual(store.state.projects[0].shortBreakMinutes, 9)
+        XCTAssertNil(GoalEngine.dailySchedule(projectID: project.id, on: now, plan: store.state.goalPlan))
+
+        var dayDraft = try XCTUnwrap(store.makeProjectSettingsDraft(projectID: project.id))
+        dayDraft.dailySchedule = Array(repeating: 60, count: 7)
+        now = calendar.date(byAdding: .day, value: 1, to: now)!
+        let stateBeforeRollover = store.state
+        XCTAssertFalse(store.saveProjectSettings(dayDraft))
+        XCTAssertEqual(store.state, stateBeforeRollover)
+
+        var missing = try XCTUnwrap(store.makeProjectSettingsDraft(projectID: project.id))
+        missing.name = "Must not return"
+        XCTAssertTrue(store.update { $0.projects.removeAll { $0.id == project.id } })
+        let count = store.state.projects.count
+        XCTAssertFalse(store.saveProjectSettings(missing))
+        XCTAssertEqual(store.state.projects.count, count)
+    }
+
     func testPendingPlanIsConsumedOnceAndFailedStartPreservesIt() throws {
         let date = Date()
         let writing = Project(name: "Writing")
