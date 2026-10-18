@@ -56,7 +56,7 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Review chapter two"].waitForExistence(timeout: 5))
     }
 
-    func testDimFocusCaptureReturnsAfterTenSeconds() {
+    func testEmptyDimFocusCaptureWaitsBeforeReturning() {
         continueAfterFailure = false
         let app = newApp()
         app.launch()
@@ -70,10 +70,12 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertTrue(reveal.waitForExistence(timeout: 5))
         app.buttons["dimFocusCapture"].tap()
         XCTAssertTrue(app.buttons["thought.capture.done"].waitForExistence(timeout: 5))
-        enterText("Keep this thought", into: "thought.text", in: app)
-        app.buttons["thought.capture.add"].tap()
         app.buttons["thought.capture.done"].tap()
-        XCTAssertTrue(reveal.waitForExistence(timeout: 15))
+        XCTAssertFalse(reveal.exists)
+        let prematureReturn = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true"), object: reveal)
+        prematureReturn.isInverted = true
+        XCTAssertEqual(XCTWaiter.wait(for: [prematureReturn], timeout: 7), .completed)
+        XCTAssertTrue(reveal.waitForExistence(timeout: 5))
     }
 
     func testURLProjectCreationAndTimerRecoveryAcrossRelaunch() {
