@@ -13,6 +13,11 @@ private struct HistoryDay: Identifiable {
     let sessions: [FocusSession]
     var id: Date { date }
 }
+private struct StatsProjectSettingsRequest: Identifiable {
+    let projectID: UUID
+    let page: ProjectSettingsPage
+    var id: String { "\(projectID)-\(page)" }
+}
 
 struct StatsView: View {
     @Bindable var store: AppStore
@@ -20,6 +25,7 @@ struct StatsView: View {
     @State private var anchor = Date()
     @State private var projectID: UUID?
     @State private var showConsistency = false
+    @State private var settingsRequest: StatsProjectSettingsRequest?
 
     var body: some View {
         NavigationStack {
@@ -48,12 +54,17 @@ struct StatsView: View {
                             }
                             if range == .today, let projectID,
                                let goal = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: store.state.goalPlan) {
-                                NavigationLink {
-                                    DailyGoalsEditor(store: store, projectID: projectID)
+                                Button {
+                                    settingsRequest = StatsProjectSettingsRequest(projectID: projectID, page: .daily)
                                 } label: {
-                                    Text(goal == 0 ? "Rest day" : "Daily goal: \(DurationText.summary(Double(goal * 60)))")
-                                        .font(.subheadline).foregroundStyle(.secondary)
+                                    HStack {
+                                        Text(goal == 0 ? "Rest day" : "of \(DurationText.summary(Double(goal * 60)))")
+                                            .font(.subheadline).foregroundStyle(.secondary)
+                                        Spacer()
+                                        Text("Edit goal").font(.subheadline)
+                                    }
                                 }
+                                .buttonStyle(.plain)
                                 .accessibilityIdentifier("stats.dailyGoal")
                                 if goal > 0 {
                                     let worked = Statistics.total(store.state, projectID: projectID, interval: interval, now: now)
@@ -63,8 +74,13 @@ struct StatsView: View {
                             }
                             if range == .week, let projectID,
                                let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: anchor, plan: store.state.goalPlan) {
-                                Text("Weekly goal: \(DurationText.summary(Double(target * 60)))")
-                                    .font(.subheadline).foregroundStyle(.secondary)
+                                Button {
+                                    settingsRequest = StatsProjectSettingsRequest(projectID: projectID, page: .weekly)
+                                } label: {
+                                    LabeledContent("Weekly goal", value: DurationText.summary(Double(target * 60)))
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }.padding(.vertical, 5)
                     }
@@ -125,14 +141,11 @@ struct StatsView: View {
                     .accessibilityIdentifier("stats.project")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Consistency", systemImage: "calendar.badge.checkmark") { showConsistency = true }
-                        NavigationLink { GoalsView(store: store) } label: {
-                            Label("Goals", systemImage: "target")
-                        }
-                    } label: { Image(systemName: "ellipsis.circle") }
-                    .accessibilityLabel("More statistics")
-                    .accessibilityIdentifier("stats.more")
+                    Button { showConsistency = true } label: {
+                        Image(systemName: "calendar")
+                    }
+                    .accessibilityLabel("Consistency")
+                    .accessibilityIdentifier("stats.consistency")
                 }
             }
             .onChange(of: range) { _, _ in anchor = Date() }
@@ -141,6 +154,14 @@ struct StatsView: View {
             }
             .navigationDestination(isPresented: $showConsistency) {
                 ConsistencyDetailsView(store: store)
+            }
+            .sheet(item: $settingsRequest) { request in
+                if let project = store.state.projects.first(where: { $0.id == request.projectID }) {
+                    ProjectEditor(store: store, project: project, initialPage: request.page)
+                } else {
+                    ContentUnavailableView("Project unavailable", systemImage: "folder",
+                        description: Text("Return to Stats and select another project."))
+                }
             }
             .alert("Unable to delete", isPresented: Binding(get: { deletionError != nil }, set: { if !$0 { deletionError = nil } })) {
                 Button("OK") { deletionError = nil }

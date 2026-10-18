@@ -14,21 +14,28 @@ struct BackupDocument: FileDocument {
 
 struct SettingsView: View {
     @Bindable var store: AppStore
+    @Environment(AppNavigation.self) private var navigation
 
     var body: some View {
         Form {
             Section {
-                NavigationLink("Goals") { GoalsView(store: store) }
+                NavigationLink("Projects") {
+                    ProjectsView(store: store, navigation: navigation)
+                }
+            }
+            Section("Preferences") {
                 NavigationLink("Timer defaults") { TimerDefaultsView(store: store) }
                 NavigationLink("Sounds & haptics") { SoundSettingsView(store: store) }
+                NavigationLink("Appearance") { AppearanceSettingsView(store: store) }
+            }
+            Section("Access") {
                 NavigationLink("Widgets & shortcuts") { QuickStartSetupView(store: store) }
                     .accessibilityIdentifier("settings.quickstart")
-                NavigationLink("Appearance") { AppearanceSettingsView(store: store) }
                 #if NATIVE_INTEGRATIONS
                 NavigationLink("Lock Screen privacy") { LockScreenPrivacyView(store: store) }
                 #endif
             }
-            Section {
+            Section("Data & support") {
                 NavigationLink("Backup & restore") { BackupSettingsView(store: store) }
                 NavigationLink("Help") { SettingsHelpView(store: store) }
             }

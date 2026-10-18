@@ -6,10 +6,28 @@ struct ConsistencyDetailsView: View {
         TimelineView(.periodic(from: .now, by: 60)) { timeline in
             let now = timeline.date
             let current = Statistics.consistency(store.state, weekStart: now, now: now)
+            let days = Statistics.dailySummaries(store.state, interval: current.week, now: now)
             List {
                 Section("This week · All projects") {
                     Text("\(current.focusedDays) of \(current.targetDays) focused days")
                         .font(.title2.bold())
+                    HStack(spacing: 0) {
+                        ForEach(days) { day in
+                            VStack(spacing: 7) {
+                                Image(systemName: day.focusSeconds >= 600 ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(day.focusSeconds >= 600 ? Color.indigo : Color.secondary)
+                                    .accessibilityHidden(true)
+                                Text(day.date.formatted(.dateTime.weekday(.narrow)))
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(day.date.formatted(date: .complete, time: .omitted))
+                            .accessibilityValue(day.focusSeconds >= 600 ? "Focused" : "Not focused")
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .accessibilityIdentifier("consistency.week")
                 }
                 Section {
                     Picker("Focused days per week", selection: Binding(
