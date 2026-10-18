@@ -73,7 +73,8 @@ private struct FocusWidgetView: View {
     private var smallContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label { Text("Pomodoro") } icon: {
-                Image("PomodoroMark").clipShape(RoundedRectangle(cornerRadius: 4))
+                Image("PomodoroMark").resizable().scaledToFit().frame(width: 18, height: 18)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }.font(.headline)
             primaryContent
         }
