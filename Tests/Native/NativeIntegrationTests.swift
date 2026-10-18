@@ -31,6 +31,9 @@ final class NativeIntegrationTests: XCTestCase {
     }
 
     func testNativeMetadataAndPrivacyPayload() throws {
+        for sound in CompletionSound.allCases where sound.filename != nil {
+            XCTAssertNotNil(Bundle.main.url(forResource: sound.rawValue, withExtension: "wav"))
+        }
         XCTAssertNotNil(Bundle.main.object(forInfoDictionaryKey: "PomodoroAppGroup"))
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSSupportsLiveActivities") as? Bool, true)
         var state = AppSnapshot(projects: [Project(name: "Private project")])

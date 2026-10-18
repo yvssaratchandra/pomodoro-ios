@@ -1,7 +1,7 @@
 import Foundation
 
 enum CompletionSound: String, Codable, CaseIterable, Identifiable {
-    case systemDefault, silent, bell, chime, softTap, digital
+    case systemDefault, silent, bell, chime, softTap, digital, mellow, wood, ripple
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -11,6 +11,9 @@ enum CompletionSound: String, Codable, CaseIterable, Identifiable {
         case .chime: return "Chime"
         case .softTap: return "Soft Tap"
         case .digital: return "Digital"
+        case .mellow: return "Mellow"
+        case .wood: return "Wood"
+        case .ripple: return "Ripple"
         }
     }
     var filename: String? { self == .systemDefault || self == .silent ? nil : rawValue + ".wav" }

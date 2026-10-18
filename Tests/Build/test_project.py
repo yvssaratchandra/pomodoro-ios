@@ -167,7 +167,7 @@ class ProjectTests(unittest.TestCase):
             self.assertNotIn("CFBundleURLTypes", plistlib.load(file))
 
     def test_original_sounds_are_short_pcm_and_bundled_in_both_apps(self):
-        paths = {f"Pomodoro/Sounds/{name}.wav" for name in ("bell", "chime", "softTap", "digital")}
+        paths = {f"Pomodoro/Sounds/{name}.wav" for name in ("bell", "chime", "softTap", "digital", "mellow", "wood", "ripple")}
         for path in paths:
             with wave.open(str(ROOT / path), "rb") as sound:
                 self.assertEqual((sound.getnchannels(), sound.getsampwidth(), sound.getframerate()), (1, 2, 44100))
