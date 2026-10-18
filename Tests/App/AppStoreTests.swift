@@ -32,7 +32,7 @@ import UserNotifications
             plannedSeconds: 1500, shortBreakMinutes: 5, longBreakMinutes: 15, longBreakInterval: 4,
             intention: "Current task")
 
-        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot))
+        let persistence = MemorySnapshotPersistence(payload: try BackupService.encode(snapshot, forBackup: false))
         let publisher = RecordingSnapshotPublisher()
         let store = try AppStore(persistence: persistence, now: { now }, calendar: calendar,
                                  publisher: publisher, notificationCenter: RecordingNotificationCenter())

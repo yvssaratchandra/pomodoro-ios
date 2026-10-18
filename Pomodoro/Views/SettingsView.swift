@@ -245,15 +245,22 @@ private struct BackupSettingsView: View {
             Section {
                 Button("Export backup") {
                     do {
-                        backupDocument = BackupDocument(data: try BackupService.encode(store.state))
+                        let snapshot = store.state
+                        backupDocument = BackupDocument(data: try BackupService.exportSavedData(snapshot))
                         exporting = true
                     } catch { store.errorMessage = error.localizedDescription }
                 }
-                Button("Restore backup") { importing = true }
             } footer: {
-                Text("End the timer before exporting or restoring. Restoring replaces all app data.")
+                if store.state.activeTimer != nil {
+                    Text("The running session isn’t included. Saved thoughts are included.")
+                }
             }
-            .disabled(store.state.activeTimer != nil)
+            Section {
+                Button("Restore backup") { importing = true }
+                    .disabled(store.state.activeTimer != nil)
+            } footer: {
+                Text("End the timer before restoring a backup. Restoring replaces all app data.")
+            }
             if let message {
                 Section { Text(message).foregroundStyle(.secondary) }
             }

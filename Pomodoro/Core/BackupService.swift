@@ -3,6 +3,13 @@ import Foundation
 enum BackupService {
     static let currentSchemaVersion = AppSnapshot.currentSchemaVersion
 
+    static func exportSavedData(_ state: AppSnapshot) throws -> Data {
+        try validate(state)
+        var saved = state
+        saved.activeTimer = nil
+        return try encode(saved)
+    }
+
     static func encode(_ state: AppSnapshot, forBackup: Bool = true) throws -> Data {
         if forBackup && state.activeTimer != nil { throw AppError.invalid("End the timer before exporting a backup.") }
         try validate(state)

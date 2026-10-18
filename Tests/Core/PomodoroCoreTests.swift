@@ -215,6 +215,41 @@ final class PomodoroCoreTests: XCTestCase {
         XCTAssertEqual(Statistics.total(state, now: now), before)
     }
 
+    func testSavedDataExportExcludesRunningTimersWithoutChangingLiveState() throws {
+        let idle = fixture()
+        XCTAssertEqual(try BackupService.decode(BackupService.exportSavedData(idle)), idle)
+        for kind in [TimerKind.focus, .shortBreak, .longBreak] {
+            var state = fixture()
+            let projectID = state.projects[0].id
+            try GoalEngine.setDaily(&state.goalPlan, projectID: projectID,
+                                    minutes: [60, 60, 60, 60, 60, 0, 0], now: now)
+            state.sessions.append(FocusSession(id: UUID(), projectID: projectID,
+                startedAt: now.addingTimeInterval(-900), endedAt: now.addingTimeInterval(-300),
+                plannedSeconds: 600, outcome: .completed, intention: "Earlier plan", nextStep: nil))
+            if kind == .focus {
+                try TimerEngine.startFocus(&state, projectID: projectID, minutes: 10, now: now)
+                state.activeTimer?.intention = "Current plan"
+            } else {
+                state.breakOffer = BreakOffer(projectID: projectID, kind: kind, minutes: 5)
+                try TimerEngine.startBreak(&state, now: now)
+            }
+            state.completedInCycle = 2
+            state.projects[0].breadcrumb = ProjectBreadcrumb(text: "Next session", updatedAt: now, originSessionID: nil)
+            state.thoughts.append(CapturedThought(projectID: projectID, originSessionID: state.activeTimer?.id,
+                createdAt: now, text: "Saved during the current timer"))
+            let original = state
+            let originalBytes = try BackupService.encode(state, forBackup: false)
+            let exported = try BackupService.decode(BackupService.exportSavedData(state))
+            var expected = original
+            expected.activeTimer = nil
+            XCTAssertEqual(exported, expected)
+            XCTAssertEqual(state, original)
+            XCTAssertEqual(try BackupService.encode(state, forBackup: false), originalBytes)
+            XCTAssertThrowsError(try BackupService.encode(state))
+            XCTAssertThrowsError(try BackupService.decode(originalBytes))
+        }
+    }
+
     func testBackupRoundTripAndInvalidData() throws {
         var state = fixture()
         let id = state.projects[0].id
