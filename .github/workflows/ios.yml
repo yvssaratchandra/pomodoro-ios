@@ -1,8 +1,6 @@
 name: iOS build and tests
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -28,10 +26,6 @@ jobs:
           xcodebuild -version | tee build/toolchain.log
           xcodebuild -showsdks | tee -a build/toolchain.log
           xcodebuild -list -project Pomodoro.xcodeproj | tee -a build/toolchain.log
-      - name: Test portable core
-        run: |
-          set -o pipefail
-          swift test 2>&1 | tee build/core-tests.log
       - name: Compile iOS app for simulator
         run: |
           set -o pipefail

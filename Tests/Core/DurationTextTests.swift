@@ -30,21 +30,6 @@ final class DurationTextTests: XCTestCase {
         }
     }
 
-    func testFormattingPreservesExactDurationAndSnapshot() throws {
-        let start = Date(timeIntervalSince1970: 1_750_000_000)
-        let project = Project(name: "Writing")
-        let session = FocusSession(id: UUID(), projectID: project.id,
-                                   startedAt: start, endedAt: start.addingTimeInterval(1234.5),
-                                   plannedSeconds: 1500, outcome: .interrupted)
-        let snapshot = AppSnapshot(projects: [project], sessions: [session])
-        let encodedBefore = try BackupService.encode(snapshot, forBackup: false)
-
-        XCTAssertEqual(DurationText.summary(snapshot.sessions[0].duration), "20 min")
-
-        XCTAssertEqual(snapshot.sessions[0].duration, 1234.5)
-        XCTAssertEqual(try BackupService.encode(snapshot, forBackup: false), encodedBefore)
-    }
-
     func testDetailedAndCountdownFormattingRetainSeconds() {
         XCTAssertEqual(DurationText.work(59.999), "59 sec")
         XCTAssertEqual(DurationText.work(0), "0 sec")

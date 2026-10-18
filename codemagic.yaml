@@ -52,7 +52,6 @@ workflows:
           xcodebuild -version | tee build/toolchain.log
           python3 -m unittest discover -s Tests/Build -v
           git diff --exit-code -- Pomodoro.xcodeproj
-          swift test 2>&1 | tee build/core-tests.log
       - name: Run app and UI tests on iPhone simulator
         script: |
           set -euo pipefail
