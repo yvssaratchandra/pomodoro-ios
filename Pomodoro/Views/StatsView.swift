@@ -43,7 +43,7 @@ struct StatsView: View {
                     }
                     Section {
                         VStack(alignment: .leading, spacing: 7) {
-                            Text("Saved focus time").font(.subheadline).foregroundStyle(.secondary)
+                            Text("Focus time").font(.subheadline).foregroundStyle(.secondary)
                             Text(DurationText.summary(Statistics.total(store.state, projectID: projectID, interval: interval, now: now)))
                                 .font(.largeTitle.bold())
                                 .accessibilityIdentifier("stats.savedFocusTime")

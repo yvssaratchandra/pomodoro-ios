@@ -12,7 +12,23 @@ final class PomodoroUITests: XCTestCase {
         app.buttons["thought.capture.done"].tap()
         XCTAssertTrue(app.tabBars.buttons["Thoughts"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Thoughts"].tap()
-        XCTAssertTrue(app.buttons["Remember this before creating a project"].waitForExistence(timeout: 5))
+        let savedThought = app.buttons["Remember this before creating a project"]
+        XCTAssertTrue(savedThought.waitForExistence(timeout: 5))
+        let status = app.segmentedControls["thoughts.status"]
+        XCTAssertTrue(status.buttons["Open"].isSelected)
+        app.buttons["thought.check"].firstMatch.tap()
+        XCTAssertFalse(savedThought.exists)
+        status.buttons["Done"].tap()
+        XCTAssertTrue(savedThought.waitForExistence(timeout: 5))
+        status.buttons["All"].tap()
+        XCTAssertTrue(savedThought.exists)
+        app.buttons["thoughts.more"].tap()
+        app.buttons["thoughts.select"].tap()
+        app.buttons["thought.check"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["1 selected"].exists)
+        status.buttons["Open"].tap()
+        XCTAssertTrue(app.staticTexts["0 selected"].waitForExistence(timeout: 5))
+        XCTAssertFalse(savedThought.exists)
         XCTAssertFalse(app.staticTexts["timer.countdown"].exists)
     }
 

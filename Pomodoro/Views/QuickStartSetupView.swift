@@ -1,6 +1,21 @@
 import SwiftUI
 
 struct QuickStartSetupView: View {
+    static var title: String {
+        #if NATIVE_INTEGRATIONS
+        "Widgets & shortcuts"
+        #else
+        "Shortcuts"
+        #endif
+    }
+    static var helpTitle: String {
+        #if NATIVE_INTEGRATIONS
+        "Widgets & shortcuts help"
+        #else
+        "Shortcut help"
+        #endif
+    }
+
     @Bindable var store: AppStore
     @Environment(AppNavigation.self) private var navigation
     @State private var projectID: UUID?
@@ -55,7 +70,7 @@ struct QuickStartSetupView: View {
                     .font(.footnote)
                 }
             }
-            Section("Home Screen widget") {
+            Section("Widgets") {
                 Text("Add the Pomodoro widget from your iPhone's widget gallery, then choose a project.")
                     .foregroundStyle(.secondary)
             }
@@ -75,7 +90,9 @@ struct QuickStartSetupView: View {
                         LabeledContent("Focus duration", value: "\(project.preferredFocusMinutes) min")
                     }
                 }
-            } header: { Text("Project") }
+            } header: { Text("Shortcuts") } footer: {
+                Text("Start a project or open thought capture from Apple Shortcuts.")
+            }
             #if !NATIVE_INTEGRATIONS
             Section {
                 NavigationLink {
@@ -137,7 +154,7 @@ struct QuickStartSetupView: View {
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()
-        .navigationTitle("Widgets & shortcuts")
+        .navigationTitle(Self.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { if projectID == nil { projectID = projects.first?.id } }
         .onChange(of: projectID) { _, _ in copiedMessage = nil }

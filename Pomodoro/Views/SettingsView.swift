@@ -19,30 +19,60 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                NavigationLink("Projects") {
-                    ProjectsView(store: store, navigation: navigation)
+                NavigationLink { ProjectsView(store: store, navigation: navigation) } label: {
+                    SettingsRowLabel(title: "Projects", icon: "folder")
                 }
             }
             Section("Preferences") {
-                NavigationLink("Timer defaults") { TimerDefaultsView(store: store) }
-                NavigationLink("Sounds & haptics") { SoundSettingsView(store: store) }
-                NavigationLink("Appearance") { AppearanceSettingsView(store: store) }
+                NavigationLink { TimerDefaultsView(store: store) } label: {
+                    SettingsRowLabel(title: "Timer defaults", icon: "timer")
+                }
+                NavigationLink { SoundSettingsView(store: store) } label: {
+                    SettingsRowLabel(title: "Sounds & haptics", icon: "bell")
+                }
+                NavigationLink { AppearanceSettingsView(store: store) } label: {
+                    SettingsRowLabel(title: "Appearance", icon: "paintpalette")
+                }
             }
             Section("Access") {
-                NavigationLink("Widgets & shortcuts") { QuickStartSetupView(store: store) }
-                    .accessibilityIdentifier("settings.quickstart")
+                NavigationLink { QuickStartSetupView(store: store) } label: {
+                    SettingsRowLabel(title: QuickStartSetupView.title, icon: "square.grid.2x2")
+                }
+                .accessibilityIdentifier("settings.quickstart")
                 #if NATIVE_INTEGRATIONS
-                NavigationLink("Lock Screen privacy") { LockScreenPrivacyView(store: store) }
+                NavigationLink { LockScreenPrivacyView(store: store) } label: {
+                    SettingsRowLabel(title: "Lock Screen privacy", icon: "lock.shield")
+                }
                 #endif
             }
             Section("Data & support") {
-                NavigationLink("Backup & restore") { BackupSettingsView(store: store) }
-                NavigationLink("Help") { SettingsHelpView(store: store) }
+                NavigationLink { BackupSettingsView(store: store) } label: {
+                    SettingsRowLabel(title: "Backup & restore", icon: "externaldrive")
+                }
+                NavigationLink { SettingsHelpView(store: store) } label: {
+                    SettingsRowLabel(title: "Help", icon: "questionmark.circle")
+                }
             }
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()
         .navigationTitle("Settings")
+    }
+}
+
+private struct SettingsRowLabel: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        Label {
+            Text(title).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: icon)
+                .frame(width: 24)
+                .foregroundStyle(Color.indigo)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -276,7 +306,7 @@ private struct SettingsHelpView: View {
                 }
             }
             Section("Shortcuts") {
-                NavigationLink("Shortcut troubleshooting") { QuickStartTroubleshootingView(store: store) }
+                NavigationLink(QuickStartSetupView.helpTitle) { QuickStartTroubleshootingView(store: store) }
             }
         }
         .listRowBackground(AppTheme.surface)
