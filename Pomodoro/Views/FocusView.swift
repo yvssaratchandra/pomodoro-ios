@@ -209,7 +209,6 @@ struct FocusView: View {
                     navigation.requestNextSessionPlan(projectID: project.id)
                 }.accessibilityIdentifier("focus.nextStep")
             }
-            GoalProgress(state: store.state, projectID: project.id, now: Date())
         }
     }
 
@@ -232,7 +231,6 @@ struct FocusView: View {
                 Button("Add a thought", systemImage: "text.bubble") {
                     navigation.requestThoughtCapture(context: ThoughtCaptureContext(projectID: active.projectID, originSessionID: active.id))
                 }.accessibilityIdentifier("focus.captureThought")
-                GoalProgress(state: store.state, projectID: active.projectID, now: Date())
             } else {
                 Button("End Break", systemImage: "stop.fill") { store.endTimer() }
                     .buttonStyle(.bordered).controlSize(.large)
@@ -419,36 +417,5 @@ private struct TimerFace: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 4)
-    }
-}
-
-struct GoalProgress: View {
-    let state: AppSnapshot
-    let projectID: UUID
-    let now: Date
-    var body: some View {
-        let worked = Statistics.total(state, projectID: projectID, interval: Statistics.today(now), now: now)
-        let target = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: state.goalPlan)
-        let goal = Double((target ?? 0) * 60)
-        VStack(alignment: .leading, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(DurationText.summary(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : target == 0 ? "rest day" : "no daily goal").foregroundStyle(.secondary)
-                }
-                VStack(alignment: .leading) {
-                    Text(DurationText.summary(worked)).font(.system(.title2, design: .rounded).weight(.bold)).monospacedDigit()
-                    Text(goal > 0 ? "of \(DurationText.summary(goal))" : target == 0 ? "rest day" : "no daily goal").foregroundStyle(.secondary)
-                }
-            }
-            if goal > 0 {
-                ProgressView(value: min(worked, goal), total: goal).tint(worked >= goal ? .green : .indigo)
-                    .accessibilityLabel("Daily goal progress")
-                    .accessibilityValue("\(Int(worked / goal * 100)) percent")
-                if worked >= goal { Label("Daily goal reached", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
-            } else {
-                Text(target == 0 ? "Rest day" : "No recorded goal").foregroundStyle(.secondary)
-            }
-        }.padding(.vertical, 4)
     }
 }
