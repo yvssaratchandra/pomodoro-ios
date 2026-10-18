@@ -221,8 +221,12 @@ private struct LockScreenPrivacyView: View {
     @Bindable var store: AppStore
     var body: some View {
         Form {
-            Toggle("Show project name", isOn: settingsBinding(store, \.showProjectNameOnLockScreen))
-            Toggle("Show session text", isOn: settingsBinding(store, \.showIntentionOnLockScreen))
+            Section {
+                Toggle("Show project name", isOn: settingsBinding(store, \.showProjectNameOnLockScreen))
+                Toggle("Show session plan", isOn: settingsBinding(store, \.showIntentionOnLockScreen))
+            } footer: {
+                Text("Shows the current focus plan on the Lock Screen and expanded Dynamic Island. Thoughts stay private.")
+            }
         }
         .listRowBackground(AppTheme.surface)
         .appScreen()

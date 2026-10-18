@@ -9,8 +9,12 @@ final class LiveActivityProjectionTests: XCTestCase {
     func testPrivateTextIsAbsentFromEncodedPayloadUnlessExplicitlyEnabled() throws {
         var state = AppSnapshot(projects: [Project(name: "Private project")])
         XCTAssertNil(LiveActivityProjection(state: state))
+        let plan = "Private task one\nPrivate task two"
+        state.projects[0].breadcrumb = ProjectBreadcrumb(text: plan, updatedAt: Date(), originSessionID: nil)
         try TimerEngine.startFocus(&state, projectID: state.projects[0].id, minutes: 25, now: Date())
-        state.activeTimer?.intention = "Private intention"
+        XCTAssertNil(state.projects[0].breadcrumb)
+        state.projects[0].breadcrumb = ProjectBreadcrumb(text: "Private next session", updatedAt: Date(), originSessionID: nil)
+        state.thoughts = [CapturedThought(createdAt: Date(), text: "Private captured thought")]
         let hidden = try XCTUnwrap(LiveActivityProjection(state: state))
         XCTAssertNil(hidden.projectName)
         XCTAssertNil(hidden.intention)
@@ -19,7 +23,10 @@ final class LiveActivityProjectionTests: XCTestCase {
         XCTAssertEqual(LiveActivityProjection(state: state)?.projectName, "Private project")
         XCTAssertNil(LiveActivityProjection(state: state)?.intention)
         state.settings.showIntentionOnLockScreen = true
-        XCTAssertEqual(LiveActivityProjection(state: state)?.intention, "Private intention")
+        XCTAssertEqual(LiveActivityProjection(state: state)?.intention, plan)
+        let visible = try JSONEncoder().encode(XCTUnwrap(LiveActivityProjection(state: state)))
+        XCTAssertFalse(String(decoding: visible, as: UTF8.self).contains("Private next session"))
+        XCTAssertFalse(String(decoding: visible, as: UTF8.self).contains("Private captured thought"))
         XCTAssertEqual(LiveActivityProjection(state: state)?.deadline, state.activeTimer?.deadline)
     }
     func testUnicodePreviewsStayWithinActivityPayloadBudgetWithoutChangingSavedText() throws {

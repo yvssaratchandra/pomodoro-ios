@@ -641,6 +641,46 @@ import UserNotifications
         XCTAssertEqual(activities.states.last, store.state)
     }
 
+    func testCurrentPlanPrivacyChangesReachLiveActivityManager() async throws {
+        let date = Date()
+        let plan = "Read chapter two\nWrite a summary"
+        let project = Project(name: "Reading", breadcrumb: ProjectBreadcrumb(
+            text: plan, updatedAt: date, originSessionID: nil))
+        let activities = RecordingLiveActivityManager()
+        let loaded = expectation(description: "Initial activity synchronization")
+        activities.onSynchronize = { _ in loaded.fulfill() }
+        let initial = AppSnapshot(projects: [project])
+        let store = try AppStore(persistence: MemorySnapshotPersistence(payload: BackupService.encode(initial)),
+            now: { date }, liveActivities: activities, notificationCenter: RecordingNotificationCenter())
+        await fulfillment(of: [loaded], timeout: 2)
+        activities.onSynchronize = nil
+        XCTAssertTrue(store.startFocus(projectID: project.id, minutes: 25))
+        let timerID = try XCTUnwrap(store.state.activeTimer?.id)
+        XCTAssertTrue(store.setPendingPlan(projectID: project.id, text: "Next session only"))
+        XCTAssertTrue(store.captureThought(context: ThoughtCaptureContext(projectID: project.id,
+            originSessionID: timerID), text: "Private captured thought"))
+        let editedPlan = "Read chapter three\nRevise summary"
+        XCTAssertTrue(store.editIntention(id: timerID, active: true, text: editedPlan))
+        let visible = expectation(description: "Current session plan published")
+        activities.onSynchronize = { state in
+            if state.settings.showIntentionOnLockScreen { visible.fulfill() }
+        }
+        XCTAssertTrue(store.update { $0.settings.showIntentionOnLockScreen = true })
+        await fulfillment(of: [visible], timeout: 2)
+        let published = try XCTUnwrap(activities.states.last)
+        XCTAssertEqual(LiveActivityProjection(state: published)?.intention, editedPlan)
+        XCTAssertEqual(published.projects[0].breadcrumb?.text, "Next session only")
+        XCTAssertEqual(published.thoughts.first?.text, "Private captured thought")
+        let hidden = expectation(description: "Session plan removed from published content")
+        activities.onSynchronize = { state in
+            if !state.settings.showIntentionOnLockScreen { hidden.fulfill() }
+        }
+        XCTAssertTrue(store.update { $0.settings.showIntentionOnLockScreen = false })
+        await fulfillment(of: [hidden], timeout: 2)
+        XCTAssertNil(LiveActivityProjection(state: try XCTUnwrap(activities.states.last))?.intention)
+        XCTAssertEqual(store.state.activeTimer?.intention, editedPlan)
+    }
+
     func testActivitySynchronizationIsSerializedAndSkipsSupersededCommits() async throws {
         let activities = RecordingLiveActivityManager()
         let loaded = expectation(description: "Initial activity synchronization")
