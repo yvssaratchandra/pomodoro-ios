@@ -203,9 +203,40 @@ private enum AppWidgetTheme {
     static let accent = Color(red: 0.49, green: 0.34, blue: 0.94)
 }
 
+// The app icon's stopwatch silhouette, without its blue square background.
+private struct PomodoroStopwatchMark: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let side = min(geometry.size.width, geometry.size.height)
+            ZStack {
+                Circle()
+                    .strokeBorder(lineWidth: side * 0.065)
+                    .frame(width: side * 0.70, height: side * 0.70)
+                    .offset(y: side * 0.09)
+                Capsule()
+                    .frame(width: side * 0.19, height: side * 0.055)
+                    .offset(y: -side * 0.405)
+                Capsule()
+                    .frame(width: side * 0.055, height: side * 0.14)
+                    .offset(y: -side * 0.305)
+                Path { path in
+                    path.move(to: CGPoint(x: side * 0.5, y: side * 0.34))
+                    path.addLine(to: CGPoint(x: side * 0.5, y: side * 0.59))
+                    path.addLine(to: CGPoint(x: side * 0.65, y: side * 0.68))
+                }
+                .stroke(style: StrokeStyle(lineWidth: side * 0.055, lineCap: .round, lineJoin: .round))
+            }
+            .frame(width: side, height: side)
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
 private struct ThoughtCaptureWidgetView: View {
     @Environment(\.widgetFamily) private var family
-    private var route: URL { AppURLRouter(scheme: .native).url(for: .captureThought(sessionID: nil)) }
+    private var route: URL {
+        AppURLRouter(scheme: .native).url(for: family == .accessoryCircular ? .timer : .captureThought(sessionID: nil))
+    }
 
     var body: some View {
         Group {
@@ -237,13 +268,13 @@ private struct ThoughtCaptureWidgetView: View {
                             .accessibilityHidden(true)
                     }
                 } else {
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .medium))
+                    PomodoroStopwatchMark()
+                        .frame(width: 36, height: 36)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .accessibilityLabel("Add a thought")
+        .accessibilityLabel(family == .accessoryCircular ? "Open Focus" : "Add a thought")
         .widgetURL(route)
     }
 }
@@ -265,8 +296,8 @@ struct ThoughtCaptureWidget: Widget {
         StaticConfiguration(kind: "PomodoroThoughtCapture", provider: ThoughtCaptureProvider()) { _ in
             ThoughtCaptureWidgetView()
         }
-        .configurationDisplayName("Add a thought")
-        .description("Open Pomodoro's thought capture screen.")
+        .configurationDisplayName("Pomodoro")
+        .description("Open Focus from the Lock Screen or add a thought from the Home Screen.")
         .supportedFamilies([.systemSmall, .accessoryCircular])
     }
 }

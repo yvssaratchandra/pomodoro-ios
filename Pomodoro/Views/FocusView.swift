@@ -181,15 +181,13 @@ struct FocusView: View {
             }
             .accessibilityIdentifier("focus.project")
             Button { durationProject = project } label: {
-                VStack(spacing: 1) {
-                    TimerFace(seconds: Double(minutes * 60), fraction: 1, title: "", project: "", isBreak: false, isRunning: false)
-                    Text("Change duration").font(.caption).foregroundStyle(.secondary)
-                }
+                TimerFace(seconds: Double(minutes * 60), fraction: 1, title: "", project: "", isBreak: false, isRunning: false, showsEditCue: true)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("focus.duration")
             .accessibilityLabel("Focus duration")
             .accessibilityValue("\(minutes) min")
+            .accessibilityHint("Double-tap to change duration")
             Button {
                 store.startFocus(projectID: project.id, minutes: minutes)
             } label: {
@@ -257,15 +255,13 @@ struct FocusView: View {
         VStack(spacing: 18) {
             Text("Focus saved").font(.headline)
             Button { breakDuration = BreakDurationRequest(offer: offer) } label: {
-                VStack(spacing: 1) {
-                    TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false)
-                    Text("Change duration").font(.caption).foregroundStyle(.secondary)
-                }
+                TimerFace(seconds: Double(offer.minutes * 60), fraction: 1, title: "", project: store.projectName(offer.projectID), isBreak: true, isRunning: false, showsEditCue: true)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("break.duration")
             .accessibilityLabel("Break duration")
             .accessibilityValue("\(offer.minutes) min")
+            .accessibilityHint("Double-tap to change duration")
             Button { store.startBreak() } label: {
                 Label("Start Break", systemImage: "cup.and.saucer.fill")
                     .foregroundStyle(AppTheme.breakButtonForeground)
@@ -373,11 +369,18 @@ private struct TimerFace: View {
     let project: String
     let isBreak: Bool
     let isRunning: Bool
+    var showsEditCue = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var tint: Color { isBreak ? AppTheme.breakAccent : .indigo }
+    private var editCue: some View {
+        Image(systemName: "pencil")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+    }
     private var digits: some View {
         Text(DurationText.countdown(seconds))
             .font(dynamicTypeSize.isAccessibilitySize
@@ -400,6 +403,7 @@ private struct TimerFace: View {
             }
             if dynamicTypeSize.isAccessibilitySize {
                 digits.frame(maxWidth: .infinity)
+                if showsEditCue { editCue }
                 ProgressView(value: min(1, max(0, fraction))).tint(tint).accessibilityHidden(true)
             } else {
                 ZStack {
@@ -409,6 +413,7 @@ private struct TimerFace: View {
                         .stroke(tint.gradient, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                     digits.padding(.horizontal, 16)
+                    if showsEditCue { editCue.offset(y: 47) }
                 }
                 .frame(maxWidth: 200)
                 .aspectRatio(1, contentMode: .fit)
