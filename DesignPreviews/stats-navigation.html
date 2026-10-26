@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pomodoro — Stats date navigation</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #111113; color: #f3f3f5; --muted: #a1a1aa; --review-accent: #b5a0ff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; color: inherit; }
+    button:disabled { opacity: .3; cursor: default; }
+    button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--review-accent); outline-offset: 3px; }
+    svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    a { color: var(--review-accent); }
+    .shell { max-width: 1190px; margin: auto; padding: 30px 28px 60px; }
+    .review-header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 1px solid #2b2b30; padding-bottom: 23px; margin-bottom: 34px; }
+    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--review-accent); font-weight: 650; }
+    .review-header h1 { font-size: 27px; letter-spacing: -.7px; margin: 9px 0; }
+    .review-header p { font-size: 14px; color: var(--muted); margin: 0; line-height: 1.6; }
+    .review-badge { white-space: nowrap; height: fit-content; border: 1px solid #3b354d; color: #cfbfff; border-radius: 20px; font-size: 12px; padding: 8px 13px; }
+    .workspace { display: grid; grid-template-columns: 195px 393px minmax(210px, 1fr); gap: 40px; align-items: start; }
+    .review-nav { position: sticky; top: 24px; }
+    .review-nav h2, .review-notes h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; color: var(--muted); margin: 8px 0 15px; }
+    .review-nav > button { width: 100%; display: flex; align-items: center; gap: 10px; background: none; border: 0; border-radius: 9px; text-align: left; color: #adadb6; padding: 12px 10px; font-size: 14px; margin-bottom: 3px; }
+    .review-nav > button svg { width: 18px; height: 18px; }
+    .review-nav > button.active { background: #292433; color: #e3d8ff; }
+    .review-nav > button:hover { background: #232326; color: white; }
+    .review-controls { border-top: 1px solid #303036; margin-top: 20px; padding-top: 8px; }
+    .review-controls label { display: block; font-size: 12px; color: var(--muted); margin: 16px 0 7px; }
+    .review-controls select { width: 100%; padding: 9px; border-radius: 8px; background: #202024; border: 1px solid #393940; color: #eee; font-size: 13px; }
+    .review-controls .checkbox { display: flex; align-items: center; gap: 8px; line-height: 1.5; }
+    .review-nav .context { font-size: 12px; color: #84848f; line-height: 1.65; margin-top: 22px; }
+    .review-nav .context a { text-decoration: none; }
+    .review-notes { padding-top: 5px; }
+    .review-notes .tag { font-size: 11px; color: var(--review-accent); letter-spacing: 1px; text-transform: uppercase; }
+    .review-notes h3 { font-size: 22px; font-weight: 550; letter-spacing: -.4px; line-height: 1.35; margin: 11px 0 20px; }
+    .review-notes p { font-size: 14px; color: #b0b0b9; line-height: 1.7; margin: 0 0 17px; }
+    .review-notes strong { color: #f0eaf9; font-weight: 550; }
+    .review-notes .try { border-top: 1px solid #303036; padding-top: 19px; margin-top: 24px; }
+    .review-notes .fine { font-size: 12px; color: #84848f; }
+    .phone { --bg: #000; --surface: #1c1c1e; --line: #353538; --text: #f5f5f7; --secondary: #a4a4ac; --tint: #0a84ff; --chart: #7270ee; --field: #29292d; width: 393px; max-width: 100%; height: 852px; position: relative; background: var(--bg); color: var(--text); border-radius: 48px; box-shadow: 0 0 0 1px #515158, 0 0 0 7px #202023, 0 22px 65px #0005; overflow: hidden; color-scheme: dark; font-size: 16px; isolation: isolate; }
+    .phone.light { --bg: #f2f2f7; --surface: #fff; --line: #dedee3; --text: #17171a; --secondary: #6e6e78; --tint: #007aff; --chart: #5856d6; --field: #e3e3e8; color-scheme: light; }
+    .status { height: 57px; display: flex; align-items: center; justify-content: space-between; padding: 10px 29px 0; font-size: 15px; font-weight: 650; position: relative; }
+    .island { position: absolute; background: #000; width: 118px; height: 34px; top: 10px; left: calc(50% - 59px); border-radius: 25px; }
+    .status-right { display: flex; align-items: center; gap: 7px; }
+    .status-right svg { width: 15px; height: 15px; }
+    .battery { font-size: 10px; background: var(--text); color: var(--bg); padding: 1px 5px; border-radius: 5px; }
+    .app { height: calc(100% - 57px); position: relative; }
+    .phone-main { height: 100%; display: flex; flex-direction: column; }
+    .navbar { height: 44px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: none; color: var(--tint); min-width: 44px; min-height: 44px; padding: 0 6px; }
+    .icon-button .project-name { max-width: 245px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
+    .page { flex: 1; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 0 20px 26px; }
+    .page::-webkit-scrollbar { display: none; }
+    .large-title { font-size: 34px; font-weight: 700; letter-spacing: -.8px; margin: 5px 0 23px; }
+    .group { border-radius: 12px; background: var(--surface); overflow: hidden; margin-bottom: 22px; }
+    .range-row { padding: 11px 14px; }
+    .segmented { display: flex; background: var(--field); border-radius: 8px; padding: 2px; }
+    .segmented button { flex: 1; font-size: 13px; min-height: 30px; border: 0; background: none; color: var(--text); border-radius: 6px; padding: 4px; }
+    .segmented button[aria-selected=true] { background: #636366; box-shadow: 0 1px 4px #0003; font-weight: 600; }
+    .light .segmented button[aria-selected=true] { background: white; }
+    .date-row { border-top: .5px solid var(--line); padding: 1px 4px; display: flex; align-items: center; gap: 8px; }
+    .date-row .icon-button { flex-shrink: 0; }
+    .date-button { min-height: 50px; flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 0; background: none; border: 0; color: var(--tint); font-size: 14px; line-height: 1.45; text-align: center; }
+    .date-button svg { width: 14px; height: 14px; }
+    .return-row { min-height: 51px; border: 0; border-top: .5px solid var(--line); padding: 8px 16px; background: none; color: var(--tint); text-align: left; font-size: 16px; width: 100%; }
+    .hero { padding: 17px 16px 19px; }
+    .caption { font-size: 14px; color: var(--secondary); line-height: 1.45; }
+    .total { font-size: 35px; font-weight: 700; letter-spacing: -.8px; margin: 5px 0 3px; font-variant-numeric: tabular-nums; }
+    .in-progress { color: var(--secondary); font-size: 14px; line-height: 1.5; margin-top: 8px; }
+    .goal-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--secondary); font-size: 14px; margin-top: 9px; }
+    .goal-line button { min-height: 28px; background: none; border: 0; padding: 0; color: var(--tint); font-size: inherit; }
+    .progress { height: 4px; border-radius: 6px; background: var(--field); overflow: hidden; margin-top: 11px; }
+    .progress span { display: block; height: 100%; border-radius: inherit; background: var(--tint); }
+    .section-label { font-size: 13px; color: var(--secondary); margin: 2px 16px 9px; }
+    .session { display: block; border: 0; background: none; padding: 13px 30px 13px 16px; position: relative; width: 100%; text-align: left; min-height: 64px; }
+    .session + .session::before, .list-row + .list-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--line); }
+    .session strong { display: block; font-size: 16px; font-weight: 600; margin-bottom: 3px; }
+    .session .task { display: block; font-size: 15px; line-height: 1.4; }
+    .session .meta { display: block; color: var(--secondary); font-size: 13px; line-height: 1.5; margin-top: 2px; }
+    .session > svg, .list-row > svg { position: absolute; width: 12px; height: 12px; right: 12px; top: calc(50% - 6px); color: var(--secondary); opacity: .55; }
+    .list-row { min-height: 49px; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 11px 32px 11px 16px; font-size: 15px; position: relative; background: none; border: 0; text-align: left; }
+    .list-row .value { color: var(--secondary); text-align: right; }
+    .day-heading { padding: 10px 16px 4px; font-size: 12px; color: var(--secondary); }
+    .empty { padding: 27px 16px; text-align: center; color: var(--secondary); font-size: 14px; }
+    .empty svg { display: block; width: 28px; height: 28px; margin: 0 auto 9px; }
+    .empty strong { color: var(--text); font-size: 16px; display: block; margin-bottom: 6px; }
+    .chart-group { padding: 16px 16px 0; }
+    .chart { height: 158px; display: flex; gap: 9px; align-items: stretch; padding: 6px 0 21px; position: relative; border-bottom: .5px solid var(--line); margin-bottom: 27px; }
+    .chart::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; border-top: .5px dashed var(--line); }
+    .chart.month { gap: 3px; }
+    .bar-column { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; position: relative; z-index: 1; }
+    .bar { display: block; width: 100%; background: var(--chart); border-radius: 3px 3px 0 0; min-height: 1px; }
+    .bar-column.future .bar { background: var(--field); }
+    .bar-column > small { position: absolute; top: calc(100% + 6px); width: 100%; text-align: center; color: var(--secondary); font-size: 10px; }
+    .chart-group .caption { font-size: 14px; padding: 0 0 14px; }
+    .chart-group .list-row { border-top: .5px solid var(--line); padding-left: 0; }
+    .tabbar { display: flex; height: 82px; flex-shrink: 0; padding: 7px 22px 24px; border-top: .5px solid var(--line); background: var(--bg); }
+    .tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--secondary); font-size: 10px; }
+    .tab svg { width: 25px; height: 25px; }
+    .tab.active { color: var(--tint); }
+    .home-indicator { position: absolute; bottom: 8px; left: calc(50% - 65px); width: 130px; height: 4px; border-radius: 10px; background: var(--text); z-index: 15; pointer-events: none; }
+    .scrim { position: absolute; inset: 0; z-index: 10; background: #0007; }
+    .sheet { position: absolute; inset: 12px 0 0; border-radius: 25px 25px 0 0; background: var(--surface); overflow: auto; scrollbar-width: none; }
+    .sheet-toolbar { height: 62px; display: grid; grid-template-columns: 72px 1fr 72px; align-items: center; padding: 9px 12px 0; }
+    .sheet-toolbar button { border: 0; background: none; color: var(--tint); min-height: 44px; font-size: 16px; padding: 0 6px; }
+    .sheet-toolbar button:first-child { text-align: left; }
+    .sheet-toolbar button:last-child { text-align: right; font-weight: 600; }
+    .sheet-title { text-align: center; font-size: 16px; font-weight: 600; }
+    .calendar { padding: 19px 20px; }
+    .calendar-toolbar { display: flex; align-items: center; margin-bottom: 11px; }
+    .calendar-title { flex: 1; background: none; border: 0; text-align: left; padding: 0; font-size: 18px; font-weight: 650; min-height: 44px; display: flex; align-items: center; gap: 4px; }
+    .calendar-title svg { width: 13px; height: 13px; color: var(--tint); }
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px 0; text-align: center; }
+    .weekday { color: var(--secondary); font-size: 12px; padding: 4px 0 10px; }
+    .calendar-day { height: 44px; width: 44px; max-width: 100%; justify-self: center; background: none; border: 0; border-radius: 50%; font-size: 19px; padding: 0; font-variant-numeric: tabular-nums; }
+    .calendar-day.today { color: var(--tint); }
+    .calendar-day[aria-pressed=true] { color: white; background: var(--tint); }
+    .calendar-day:disabled { opacity: .22; }
+    .calendar-chooser { display: flex; gap: 12px; padding: 8px 0 20px; }
+    .calendar-chooser select { min-width: 0; max-width: 65%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--text); }
+    .sheet-content { padding: 12px 20px 40px; }
+    .sheet-content .group { background: var(--bg); }
+    .sheet-content .caption { margin: 16px 0; }
+    .project-options { padding: 8px 20px; }
+    .project-options button { padding-right: 16px; }
+    .project-options button svg { position: static; width: 18px; height: 18px; color: var(--tint); opacity: 1; }
+    @media (max-width: 1050px) { .workspace { grid-template-columns: 180px 393px; justify-content: center; gap: 32px; } .review-notes { grid-column: 1 / -1; max-width: 605px; padding-top: 10px; } }
+    @media (max-width: 660px) { .shell { padding: 22px 16px 40px; } .review-header { display: block; margin-bottom: 24px; } .review-badge { display: inline-block; margin-top: 16px; } .workspace { display: flex; flex-direction: column; align-items: center; gap: 26px; } .review-nav { position: static; width: 100%; max-width: 393px; display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; } .review-nav h2, .review-controls, .review-nav .context { grid-column: 1 / -1; } .review-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; margin-top: 10px; } .review-controls > div:last-child { grid-column: 1 / -1; } .review-nav .context { margin: 6px 0 0; } .review-notes { width: 100%; max-width: 393px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="review-header">
+      <div><div class="eyebrow">Pomodoro / Design review</div><h1>Stats, one date at a time</h1><p>An interactive preview of the implemented date navigation.</p></div>
+      <span class="review-badge">Implementation preview · Sample data</span>
+    </header>
+    <div class="workspace">
+      <aside class="review-nav" aria-label="Preview scenarios">
+        <h2>Explore the changes</h2>
+        <button data-scenario="today">Today</button>
+        <button data-scenario="yesterday">Previous day</button>
+        <button data-scenario="week">Previous week</button>
+        <button data-scenario="month">Previous month</button>
+        <button data-scenario="calendar">Calendar picker</button>
+        <div class="review-controls">
+          <div><label for="appearance">Appearance</label><select id="appearance"><option value="dark">Dark</option><option value="light">Light</option></select></div>
+          <div><label for="project">Project filter</label><select id="project"><option value="all">All projects</option><option value="work">Work</option><option value="reading">Reading</option></select></div>
+          <div><label class="checkbox"><input id="running" type="checkbox"> Show a session in progress</label></div>
+        </div>
+        <p class="context">Sample today: 26 October 2026.<br>All interactions use fictional history.<br><a href="declutter.html">Open the existing app preview ↗</a></p>
+      </aside>
+      <section class="phone" id="phone" aria-label="Interactive Stats preview">
+        <div class="status"><span>9:41</span><span class="island" aria-hidden="true"></span><span class="status-right"><span aria-hidden="true">▮▮▮</span><span id="wifi"></span><span class="battery">83</span></span></div>
+        <div class="app"><div class="phone-main" id="phone-main"></div><div id="overlay"></div></div>
+        <div class="home-indicator" aria-hidden="true"></div>
+      </section>
+      <aside class="review-notes" id="notes" aria-live="polite"></aside>
+    </div>
+  </main>
+  <script>
+    'use strict';
+    const paths = {
+      left: '<path d="m15 5-7 7 7 7"/>', right: '<path d="m9 5 7 7-7 7"/>', down: '<path d="m6 9 6 6 6-6"/>',
+      calendar: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 2v6M17 2v6M3 10h18M7 14h3M14 14h3"/>',
+      filter: '<path d="M3 5h18M6 12h12M10 19h4"/>', chart: '<path d="M4 20V12h3v8ZM10 20V4h3v16ZM16 20V8h3v12Z"/>',
+      timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3M18 5l2 2"/>',
+      thought: '<path d="M5 3h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4H3V5a2 2 0 0 1 2-2Z"/><path d="M7 8h10M7 12h7"/>',
+      check: '<path d="m5 12 4 4L19 6"/>', wifi: '<path d="M2 8a17 17 0 0 1 20 0M5 12a12 12 0 0 1 14 0M8 16a6 6 0 0 1 8 0M12 20h.01"/>'
+    };
+    const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]}</svg>`;
+    const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+    const today = new Date(2026, 9, 26);
+    const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+    const monthStart = date => new Date(date.getFullYear(), date.getMonth(), 1);
+    const key = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const format = (date, options) => date.toLocaleDateString('en-US', options);
+    const fullDate = date => format(date, {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'});
+    const shortDate = date => format(date, {month: 'short', day: 'numeric', year: 'numeric'});
+    const duration = minutes => minutes >= 60 ? `${Math.floor(minutes / 60)} hr${minutes % 60 ? ` ${minutes % 60} min` : ''}` : `${minutes} min`;
+    const projects = {work: 'Work', reading: 'Reading'};
+    const state = {range: 'Day', anchor: null, project: 'all', running: false, sheet: null, draft: null, calendarMonth: null, choosingMonth: false};
+    const sessions = [];
+    for (let offset = 0; offset < 65; offset++) {
+      const date = addDays(today, -offset), weekday = date.getDay();
+      let samples;
+      if (offset === 0) samples = [['work', 25, 'Draft the introduction'], ['work', 25, 'Review the source material'], ['work', 25, 'Outline the next section'], ['reading', 20, 'Read chapter four']];
+      else if (offset === 1) samples = [['work', 30, 'Revise the discussion'], ['reading', 15, 'Notes from chapter three']];
+      else if (offset === 2) samples = [['work', 10, 'Collect the references'], ['reading', 25, 'Read chapter three']];
+      else if (weekday === 0) samples = offset % 3 === 0 ? [['reading', 25, 'Weekend reading']] : [];
+      else samples = [['work', 25 * (1 + offset % 2), 'Continue the draft'], ['reading', 10 + (offset % 3) * 5, 'Read and take notes']];
+      samples.forEach(([project, minutes, task], i) => sessions.push({id: sessions.length + 1, date, project, minutes, task, time: `${String(10 - i).padStart(2, '0')}:${i % 2 ? '25' : '00'}`, interrupted: minutes === 10}));
+    }
+    function bounds(range = state.range, date = state.anchor || today) {
+      if (range === 'All') return null;
+      if (range === 'Month') return {start: monthStart(date), end: new Date(date.getFullYear(), date.getMonth() + 1, 1)};
+      const start = range === 'Week' ? addDays(date, -((date.getDay() + 6) % 7)) : addDays(date, 0);
+      return {start, end: addDays(start, range === 'Week' ? 7 : 1)};
+    }
+    function isCurrent() { return !bounds() || +bounds().start === +bounds(state.range, today).start; }
+    function selectDate(date) {
+      if (state.range === 'All') return;
+      const selected = bounds(state.range, date), current = bounds(state.range, today);
+      state.anchor = selected.start < current.start ? selected.start : null;
+    }
+    function move(offset) {
+      if (state.range === 'All' || (offset > 0 && isCurrent())) return;
+      const start = bounds().start;
+      selectDate(state.range === 'Month' ? new Date(start.getFullYear(), start.getMonth() + offset, 1) : addDays(start, offset * (state.range === 'Week' ? 7 : 1)));
+    }
+    function visibleSessions(interval = bounds()) {
+      return sessions.filter(s => (state.project === 'all' || s.project === state.project) && (!interval || (s.date >= interval.start && s.date < interval.end)));
+    }
+    const total = interval => visibleSessions(interval).reduce((sum, s) => sum + s.minutes, 0);
+    function dailyGoal(date) {
+      if (state.project === 'all' || date < new Date(2026, 9, 1)) return null;
+      if (state.project === 'reading') return 60;
+      if (date.getDay() === 0 || date.getDay() === 6) return 0;
+      return date < today ? 120 : 240;
+    }
+    function dateLabel() {
+      const interval = bounds();
+      if (state.range === 'Day') return `${isCurrent() ? 'Today · ' : ''}${format(interval.start, {weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'})}`;
+      if (state.range === 'Month') return format(interval.start, {month: 'long', year: 'numeric'});
+      return `${shortDate(interval.start)} – ${shortDate(addDays(interval.end, -1))}`;
+    }
+    function navigation() {
+      let html = `<section class="group"><div class="range-row"><div class="segmented" role="tablist" aria-label="Stats range">${['Day', 'Week', 'Month', 'All'].map(range => `<button role="tab" aria-selected="${range === state.range}" data-action="range" data-value="${range}">${range}</button>`).join('')}</div></div>`;
+      if (bounds()) html += `<div class="date-row"><button class="icon-button" id="previous" data-action="previous" aria-label="Previous ${state.range.toLowerCase()}">${icon('left')}</button><button class="date-button" id="date-label" data-action="calendar" aria-label="${esc(dateLabel())}. Choose a date"><span>${dateLabel()}</span>${icon('calendar')}</button><button class="icon-button" id="next" data-action="next" aria-label="Next ${state.range.toLowerCase()}" ${isCurrent() ? 'disabled' : ''}>${icon('right')}</button></div>`;
+      if (!isCurrent()) html += `<button class="return-row" id="return-current" data-action="current">${state.range === 'Day' ? 'Today' : `This ${state.range.toLowerCase()}`}</button>`;
+      return html + '</section>';
+    }
+    function hero() {
+      const minutes = total(bounds()), interval = bounds(), goal = state.range === 'Day' ? dailyGoal(interval.start) : null;
+      let html = `<section class="group hero"><div class="caption">Focus time</div><div class="total" id="saved-total">${duration(minutes)}</div>`;
+      if (state.running && (!interval || today >= interval.start && today < interval.end) && state.project !== 'reading') html += '<div class="in-progress">1 session in progress · not included yet</div>';
+      if (goal !== null) {
+        html += `<div class="goal-line" id="daily-goal"><span>${isCurrent() ? (goal ? `of ${duration(goal)}` : 'Rest day') : 'Goal on this day'}</span>${isCurrent() ? '<button data-action="goal">Edit goal</button>' : `<span>${goal ? duration(goal) : 'Rest day'}</span>`}</div>`;
+        if (goal > 0) html += `<div class="progress" role="progressbar" aria-label="Daily goal" aria-valuenow="${Math.min(minutes, goal)}" aria-valuemin="0" aria-valuemax="${goal}"><span style="width:${Math.min(100, minutes / goal * 100)}%"></span></div>`;
+      }
+      if (state.range === 'Week' && state.project === 'work' && interval.start >= new Date(2026, 9, 1)) html += `<div class="goal-line"><span>Weekly goal</span>${isCurrent() ? '<button data-action="goal">20 hr</button>' : '<span>15 hr</span>'}</div>`;
+      return html + '</section>';
+    }
+    function periodData() {
+      const interval = bounds(), days = [];
+      for (let date = interval.start; date < interval.end; date = addDays(date, 1)) days.push({date, minutes: total({start: date, end: addDays(date, 1)}), future: date > today});
+      const previousStart = state.range === 'Week' ? addDays(interval.start, -7) : new Date(interval.start.getFullYear(), interval.start.getMonth() - 1, 1);
+      const previousEnd = isCurrent() ? new Date(Math.min(+interval.start, +addDays(previousStart, days.filter(d => !d.future).length))) : interval.start;
+      return {days, previous: total({start: previousStart, end: previousEnd}), current: total(interval)};
+    }
+    function chart() {
+      if (!['Week', 'Month'].includes(state.range)) return '';
+      const {days, previous, current} = periodData(), max = Math.max(60, ...days.map(d => d.minutes)), delta = current - previous;
+      const comparison = delta === 0 ? `Same as last ${state.range.toLowerCase()}` : `${duration(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than last ${state.range.toLowerCase()}`;
+      return `<section class="group chart-group"><div class="chart ${state.range === 'Month' ? 'month' : ''}" role="img" aria-label="Daily saved focus minutes: ${days.map(d => `${shortDate(d.date)}, ${d.minutes}`).join('; ')}">${days.map((d, i) => `<div class="bar-column ${d.future ? 'future' : ''}" title="${esc(fullDate(d.date))}: ${duration(d.minutes)}"><span class="bar" style="height:${d.minutes / max * 100}%"></span>${state.range === 'Week' || i % 7 === 0 ? `<small>${state.range === 'Week' ? format(d.date, {weekday: 'narrow'}) : d.date.getDate()}</small>` : ''}</div>`).join('')}</div><div class="caption">${comparison}${isCurrent() ? ' so far' : ''}</div><button class="list-row" data-action="details">Details${icon('right')}</button></section>`;
+    }
+    function sessionRow(s) {
+      return `<button class="session" data-action="session" data-value="${s.id}">${state.project === 'all' ? `<strong>${projects[s.project]}</strong>` : ''}<span class="task">${s.task}</span><span class="meta">${s.time} · ${duration(s.minutes)}${s.interrupted ? ' · Ended early' : ''}</span>${icon('right')}</button>`;
+    }
+    function history(all = false) {
+      const list = visibleSessions(), shown = all ? list : list.slice(0, 5);
+      if (!list.length) return `<div class="group empty">${icon('timer')}<strong>No saved sessions</strong>Saved focus sessions will appear here.</div>`;
+      let lastDay = '', html = '';
+      shown.forEach(s => {
+        if (state.range !== 'Day' && key(s.date) !== lastDay) { html += `<div class="day-heading">${shortDate(s.date)}</div>`; lastDay = key(s.date); }
+        html += sessionRow(s);
+      });
+      if (!all && list.length > 5) html += `<button class="list-row" data-action="history">View all sessions${icon('right')}</button>`;
+      return `<div class="group">${html}</div>`;
+    }
+    function render() {
+      const project = state.project === 'all' ? '' : `<span class="project-name">${projects[state.project]}</span>`;
+      document.querySelector('#phone-main').innerHTML = `<header class="navbar"><button class="icon-button" id="project-filter" data-action="projects" aria-label="Project: ${state.project === 'all' ? 'All projects' : projects[state.project]}">${icon('filter')}${project}</button><button class="icon-button" data-action="consistency" aria-label="Consistency">${icon('calendar')}</button></header><div class="page"><h1 class="large-title">Stats</h1>${navigation()}${hero()}${chart()}<div class="section-label">Recent sessions</div>${history()}</div><nav class="tabbar" aria-label="Main app tabs"><span class="tab">${icon('timer')}Focus</span><span class="tab">${icon('thought')}Thoughts</span><span class="tab active" aria-current="page">${icon('chart')}Stats</span></nav>`;
+      document.querySelector('#project').value = state.project;
+      document.querySelectorAll('[data-scenario]').forEach(button => button.classList.toggle('active', button.dataset.scenario === (state.sheet === 'calendar' ? 'calendar' : state.range === 'Week' ? 'week' : state.range === 'Month' ? 'month' : state.range === 'Day' && isCurrent() ? 'today' : state.range === 'Day' ? 'yesterday' : '')));
+      renderSheet(); renderNotes();
+    }
+    function renderNotes() {
+      const calendar = state.sheet === 'calendar', historical = !isCurrent();
+      const title = calendar ? 'Jump straight to a date.' : state.range === 'Day' ? (historical ? 'A past day gets its own view.' : 'Day starts with today.') : state.range === 'All' ? 'The whole history, together.' : 'Back and forward, one period at a time.';
+      const body = calendar ? 'Choose a day, then tap <strong>Done</strong>. In Week or Month, the same picker opens the period containing that date. <strong>Cancel</strong> leaves your selection unchanged.' : state.range === 'Day' ? 'The Day segment replaces Today. The date row shows what you are looking at; the total and session list follow that date.' : state.range === 'All' ? 'All keeps the full saved history and project filter. Date controls disappear because no single period is selected.' : 'Each arrow moves exactly one week or month. You can move forward to the current period; future periods are unavailable.';
+      document.querySelector('#notes').innerHTML = `<h2>What you are seeing</h2><div class="tag">${calendar ? 'Calendar sheet' : historical ? 'Browsing history' : 'Current period'}</div><h3>${title}</h3><p>${body}</p><p>${historical ? `<strong>${state.range === 'Day' ? 'Today' : `This ${state.range.toLowerCase()}`}</strong> appears below the date row for a direct return.` : 'The right arrow is disabled only when you reach the current period.'}</p><div class="try"><p><strong>Try it</strong><br>${calendar ? 'Select a different date, then compare Done with Cancel. Tap the month heading to jump further back.' : 'Go back twice, then forward twice. Tap the date label to open the calendar. Select Work to see the recorded goal for that day.'}</p></div><p class="fine">Matches the implemented controls and navigation. Sample history is illustrative. Native SwiftUI fonts, calendar styling, and sheet rendering may differ on the phone.</p>`;
+    }
+    function openSheet(name) {
+      state.sheet = name;
+      if (name === 'calendar') { state.draft = new Date(bounds().start); state.calendarMonth = monthStart(state.draft); state.choosingMonth = false; }
+      render();
+      document.querySelector('.sheet button')?.focus({preventScroll: true});
+    }
+    function closeSheet() { state.sheet = null; render(); document.querySelector('#date-label')?.focus({preventScroll: true}); }
+    function calendarBody() {
+      const month = state.calendarMonth, firstIndex = (month.getDay() + 6) % 7, count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+      let chooser = '';
+      if (state.choosingMonth) chooser = `<div class="calendar-chooser"><select id="calendar-month" aria-label="Calendar month">${Array.from({length: 12}, (_, i) => `<option value="${i}" ${i === month.getMonth() ? 'selected' : ''}>${format(new Date(2026, i, 1), {month: 'long'})}</option>`).join('')}</select><select id="calendar-year" aria-label="Calendar year">${Array.from({length: 101}, (_, i) => today.getFullYear() - i).map(year => `<option ${year === month.getFullYear() ? 'selected' : ''}>${year}</option>`).join('')}</select></div>`;
+      return `<div class="calendar"><div class="calendar-toolbar"><button class="calendar-title" data-action="month-menu" aria-expanded="${state.choosingMonth}">${format(month, {month: 'long', year: 'numeric'})}${icon('right')}</button><button class="icon-button" data-action="calendar-previous" aria-label="Previous calendar month">${icon('left')}</button><button class="icon-button" data-action="calendar-next" aria-label="Next calendar month" ${month >= monthStart(today) ? 'disabled' : ''}>${icon('right')}</button></div>${chooser}<div class="calendar-grid">${['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => `<span class="weekday">${day}</span>`).join('')}${'<span></span>'.repeat(firstIndex)}${Array.from({length: count}, (_, i) => { const date = new Date(month.getFullYear(), month.getMonth(), i + 1); return `<button class="calendar-day ${+date === +today ? 'today' : ''}" data-action="choose-day" data-value="${i + 1}" aria-label="${fullDate(date)}" aria-pressed="${+date === +state.draft}" ${date > today ? 'disabled' : ''}>${i + 1}</button>`; }).join('')}</div></div>`;
+    }
+    function renderSheet() {
+      const container = document.querySelector('#overlay');
+      document.querySelector('#phone-main').inert = Boolean(state.sheet);
+      if (!state.sheet) { container.innerHTML = ''; return; }
+      let title = 'Choose a date', content = '', cancel = true;
+      if (state.sheet === 'calendar') content = calendarBody();
+      else if (state.sheet === 'projects') {
+        title = 'Project filter'; cancel = false;
+        content = `<div class="project-options">${[['all', 'All projects'], ...Object.entries(projects)].map(([id, name]) => `<button class="list-row" data-action="project" data-value="${id}">${name}${state.project === id ? icon('check') : ''}</button>`).join('')}</div>`;
+      } else if (state.sheet === 'history') { title = 'Sessions'; cancel = false; content = `<div class="sheet-content">${history(true)}</div>`; }
+      else if (state.sheet === 'details') {
+        title = 'Details'; cancel = false;
+        const {days, current} = periodData(), elapsed = days.filter(d => !d.future).length;
+        content = `<div class="sheet-content"><div class="section-label">Daily breakdown</div><div class="group">${days.filter(d => !d.future).map(d => `<div class="list-row"><span>${format(d.date, {month: 'short', day: 'numeric'})}</span><span class="value">${duration(d.minutes)}</span></div>`).join('')}</div><div class="section-label">Overview</div><div class="group"><div class="list-row">Daily average<span class="value">${duration(Math.floor(current / elapsed))}</span></div><div class="list-row">Completed<span class="value">${visibleSessions().filter(s => !s.interrupted).length}</span></div><div class="list-row">Ended early<span class="value">${visibleSessions().filter(s => s.interrupted).length}</span></div></div></div>`;
+      } else if (state.sheet === 'session') {
+        title = 'Session'; cancel = false;
+        const s = sessions.find(s => s.id === state.session);
+        content = `<div class="sheet-content"><div class="group"><div class="list-row">Project<span class="value">${projects[s.project]}</span></div><div class="list-row">Date<span class="value">${shortDate(s.date)}</span></div><div class="list-row">Saved focus<span class="value">${duration(s.minutes)}</span></div></div><div class="section-label">Session plan</div><div class="group"><div class="list-row">${s.task}</div></div></div>`;
+      } else {
+        title = state.sheet === 'goal' ? 'Project settings' : 'Consistency'; cancel = false;
+        content = `<div class="sheet-content"><p class="caption">${state.sheet === 'goal' ? 'In the app, this opens the existing project goal editor. Historical goals remain read-only.' : 'The existing Consistency screen stays behind this toolbar button. Date selection lives in the date row below the range selector.'}</p></div>`;
+      }
+      container.innerHTML = `<div class="scrim"><section class="sheet" role="dialog" aria-modal="true" aria-label="${title}"><div class="sheet-toolbar">${cancel ? '<button data-action="cancel">Cancel</button>' : '<span></span>'}<div class="sheet-title">${title}</div><button data-action="${state.sheet === 'calendar' ? 'apply' : 'cancel'}">Done</button></div>${content}</section></div>`;
+    }
+    document.addEventListener('click', event => {
+      const button = event.target.closest('button'); if (!button || button.disabled) return;
+      if (button.dataset.scenario) {
+        const scenario = button.dataset.scenario;
+        state.sheet = null; state.anchor = null; state.range = scenario === 'week' ? 'Week' : scenario === 'month' ? 'Month' : 'Day';
+        if (['yesterday', 'week', 'month'].includes(scenario)) move(-1);
+        if (scenario === 'calendar') { openSheet('calendar'); return; }
+        render(); return;
+      }
+      const action = button.dataset.action, value = button.dataset.value;
+      if (action === 'range') { state.range = value; state.anchor = null; }
+      if (action === 'previous') move(-1);
+      if (action === 'next') move(1);
+      if (action === 'current') state.anchor = null;
+      if (['calendar', 'projects', 'details', 'history', 'goal', 'consistency'].includes(action)) { openSheet(action); return; }
+      if (action === 'session') { state.session = Number(value); openSheet('session'); return; }
+      if (action === 'cancel') { closeSheet(); return; }
+      if (action === 'apply') { selectDate(state.draft); closeSheet(); return; }
+      if (action === 'project') { state.project = value; closeSheet(); return; }
+      if (action === 'choose-day') { state.draft = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth(), Number(value)); renderSheet(); return; }
+      if (action === 'month-menu') { state.choosingMonth = !state.choosingMonth; renderSheet(); return; }
+      if (action === 'calendar-previous' || action === 'calendar-next') {
+        state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() + (action === 'calendar-next' ? 1 : -1), 1);
+        renderSheet(); return;
+      }
+      render();
+    });
+    document.querySelector('#appearance').addEventListener('change', event => document.querySelector('#phone').classList.toggle('light', event.target.value === 'light'));
+    document.querySelector('#project').addEventListener('change', event => { state.project = event.target.value; render(); });
+    document.querySelector('#running').addEventListener('change', event => { state.running = event.target.checked; render(); });
+    document.addEventListener('change', event => {
+      if (!['calendar-month', 'calendar-year'].includes(event.target.id)) return;
+      const year = Number(document.querySelector('#calendar-year').value), month = Number(document.querySelector('#calendar-month').value);
+      state.calendarMonth = new Date(Math.min(+monthStart(today), +new Date(year, month, 1)));
+      renderSheet();
+    });
+    document.addEventListener('keydown', event => {
+      if (!state.sheet) return;
+      if (event.key === 'Escape') { event.preventDefault(); closeSheet(); }
+      if (event.key === 'Tab') {
+        const controls = [...document.querySelectorAll('.sheet button:not(:disabled), .sheet select')], first = controls[0], last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      }
+    });
+    document.querySelector('#wifi').innerHTML = icon('wifi');
+    render();
+  </script>
+</body>
+</html>
