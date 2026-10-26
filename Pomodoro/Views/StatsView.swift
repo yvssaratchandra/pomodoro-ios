@@ -1,13 +1,6 @@
 import SwiftUI
 import Charts
 
-private enum HistoryRange: String, CaseIterable, Identifiable {
-    case today = "Today", week = "Week", month = "Month", all = "All"
-    var id: String { rawValue }
-    var period: FocusPeriod? {
-        switch self { case .week: .week; case .month: .month; default: nil }
-    }
-}
 private struct HistoryDay: Identifiable {
     let date: Date
     let sessions: [FocusSession]
@@ -21,25 +14,29 @@ private struct StatsProjectSettingsRequest: Identifiable {
 
 struct StatsView: View {
     @Bindable var store: AppStore
-    @State private var range: HistoryRange = .today
-    @State private var anchor = Date()
+    @State private var selection = StatsDateSelection()
+    @State private var showingDatePicker = false
+    @State private var calendarDate = Date()
     @State private var projectID: UUID?
     @State private var showConsistency = false
     @State private var settingsRequest: StatsProjectSettingsRequest?
+    private var range: StatsDateRange { selection.range }
 
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { timeline in
                 let now = timeline.date
-                let interval = selectedInterval(now: now)
+                let interval = selection.interval(now: now)
                 let sessions = savedSessions(in: interval)
-                let hasFocusInProgress = Statistics.hasFocusInProgress(store.state, projectID: projectID, interval: interval, now: Date())
+                let hasFocusInProgress = Statistics.hasFocusInProgress(store.state, projectID: projectID, interval: interval, now: now)
                 List {
                     Section {
-                        Picker("Range", selection: $range) {
-                            ForEach(HistoryRange.allCases) { Text($0.rawValue).tag($0) }
-                        }.pickerStyle(.segmented)
-                        if range.period != nil { periodNavigation(now: now) }
+                        Picker("Range", selection: Binding(get: { range }, set: { selection.setRange($0) })) {
+                            ForEach(StatsDateRange.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("stats.range")
+                        if let interval { periodNavigation(interval: interval, now: now) }
                     }
                     Section {
                         VStack(alignment: .leading, spacing: 7) {
@@ -52,35 +49,13 @@ struct StatsView: View {
                                     .font(.subheadline).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("stats.sessionInProgress")
                             }
-                            if range == .today, let projectID,
-                               let goal = GoalEngine.dailyTarget(projectID: projectID, on: now, plan: store.state.goalPlan) {
-                                Button {
-                                    settingsRequest = StatsProjectSettingsRequest(projectID: projectID, page: .daily)
-                                } label: {
-                                    HStack {
-                                        Text(goal == 0 ? "Rest day" : "of \(DurationText.summary(Double(goal * 60)))")
-                                            .font(.subheadline).foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text("Edit goal").font(.subheadline)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("stats.dailyGoal")
-                                if goal > 0 {
-                                    let worked = Statistics.total(store.state, projectID: projectID, interval: interval, now: now)
-                                    ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
-                                        .accessibilityLabel("Daily goal")
-                                }
+                            if range == .day, let interval, let projectID,
+                               let goal = GoalEngine.dailyTarget(projectID: projectID, on: interval.start, plan: store.state.goalPlan) {
+                                dailyGoal(goal, projectID: projectID, interval: interval, now: now)
                             }
-                            if range == .week, let projectID,
-                               let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: anchor, plan: store.state.goalPlan) {
-                                Button {
-                                    settingsRequest = StatsProjectSettingsRequest(projectID: projectID, page: .weekly)
-                                } label: {
-                                    LabeledContent("Weekly goal", value: DurationText.summary(Double(target * 60)))
-                                        .font(.subheadline).foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
+                            if range == .week, let interval, let projectID,
+                               let target = GoalEngine.weeklyTarget(projectID: projectID, weekStart: interval.start, plan: store.state.goalPlan) {
+                                weeklyGoal(target, projectID: projectID, now: now)
                             }
                         }.padding(.vertical, 5)
                     }
@@ -91,7 +66,7 @@ struct StatsView: View {
                         if sessions.isEmpty {
                             ContentUnavailableView("No saved sessions", systemImage: "timer")
                         } else {
-                            if range == .today {
+                            if range == .day {
                                 sessionRows(Array(sessions.prefix(5)), day: interval)
                             } else {
                                 ForEach(grouped(Array(sessions.prefix(5)))) { group in
@@ -102,7 +77,7 @@ struct StatsView: View {
                             }
                             if sessions.count > 5 {
                                 NavigationLink("View all sessions") {
-                                    historyView(interval: interval, title: "Sessions")
+                                    historyView(interval: interval, title: "Sessions", day: range == .day ? interval : nil)
                                 }
                             }
                         }
@@ -148,12 +123,22 @@ struct StatsView: View {
                     .accessibilityIdentifier("stats.consistency")
                 }
             }
-            .onChange(of: range) { _, _ in anchor = Date() }
+            .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                selection.reconcile(now: Date())
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+                selection.reconcile(now: Date())
+            }
             .onChange(of: store.state.projects.map(\.id)) { _, ids in
                 if let projectID, !ids.contains(projectID) { self.projectID = nil }
             }
             .navigationDestination(isPresented: $showConsistency) {
                 ConsistencyDetailsView(store: store)
+            }
+            .sheet(isPresented: $showingDatePicker) {
+                StatsDatePicker(date: calendarDate) { date in
+                    selection.select(date, now: Date())
+                }
             }
             .sheet(item: $settingsRequest) { request in
                 if let project = store.state.projects.first(where: { $0.id == request.projectID }) {
@@ -170,20 +155,113 @@ struct StatsView: View {
     }
     @State private var deletionError: String?
 
-    @ViewBuilder private func periodNavigation(now: Date) -> some View {
-        if let period = range.period {
-            let interval = Statistics.interval(for: period, containing: anchor)
-            HStack {
-                Button("Previous", systemImage: "chevron.left") { move(-1) }.labelStyle(.iconOnly)
-                Spacer()
-                Text(period == .week
-                     ? "\(interval.start.formatted(.dateTime.month(.abbreviated).day())) – \(interval.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day()))"
-                     : interval.start.formatted(.dateTime.month(.wide).year()))
-                    .font(.subheadline).multilineTextAlignment(.center)
-                Spacer()
-                Button("Next", systemImage: "chevron.right") { move(1) }
-                    .labelStyle(.iconOnly).disabled(interval.end > now)
+    @ViewBuilder private func periodNavigation(interval: DateInterval, now: Date) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                selection.move(-1, now: now)
+            } label: {
+                Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44)
             }
+            .accessibilityLabel("Previous \(range.rawValue.lowercased())")
+            .accessibilityIdentifier("stats.previous")
+            Spacer(minLength: 0)
+            Button {
+                calendarDate = min(interval.start, now)
+                showingDatePicker = true
+            } label: {
+                HStack(spacing: 5) {
+                    Text(dateLabel(interval: interval, now: now))
+                        .font(.subheadline).multilineTextAlignment(.center)
+                    Image(systemName: "calendar").font(.caption).accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+            }
+            .accessibilityLabel(dateLabel(interval: interval, now: now))
+            .accessibilityValue(interval.start.formatted(date: .complete, time: .omitted))
+            .accessibilityHint("Choose a date")
+            .accessibilityIdentifier("stats.date")
+            Spacer(minLength: 0)
+            Button {
+                selection.move(1, now: now)
+            } label: {
+                Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44)
+            }
+            .disabled(!selection.canMoveForward(now: now))
+            .accessibilityLabel("Next \(range.rawValue.lowercased())")
+            .accessibilityIdentifier("stats.next")
+        }
+        // List's automatic style can invoke every button in the row from one tap.
+        .buttonStyle(.borderless)
+        if !selection.isCurrent(now: now) {
+            Button(currentPeriodTitle) { selection.resetToCurrent() }
+                .frame(minHeight: 44)
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("stats.current")
+        }
+    }
+
+    private var currentPeriodTitle: String {
+        switch range {
+        case .day: "Today"
+        case .week: "This week"
+        case .month: "This month"
+        case .all: "All"
+        }
+    }
+
+    private func dateLabel(interval: DateInterval, now: Date) -> String {
+        switch range {
+        case .day:
+            let date = interval.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year())
+            return selection.isCurrent(now: now) ? "Today · \(date)" : date
+        case .week:
+            let end = GoalEngine.calendar().date(byAdding: .day, value: -1, to: interval.end)!
+            return "\(interval.start.formatted(.dateTime.month(.abbreviated).day().year())) – \(end.formatted(.dateTime.month(.abbreviated).day().year()))"
+        case .month:
+            return interval.start.formatted(.dateTime.month(.wide).year())
+        case .all:
+            return "All"
+        }
+    }
+
+    @ViewBuilder private func dailyGoal(_ goal: Int, projectID: UUID, interval: DateInterval, now: Date) -> some View {
+        if selection.isCurrent(now: now) {
+            Button {
+                settingsRequest = StatsProjectSettingsRequest(projectID: projectID, page: .daily)
+            } label: {
+                HStack {
+                    Text(goal == 0 ? "Rest day" : "of \(DurationText.summary(Double(goal * 60)))")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("Edit goal").font(.subheadline)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("stats.dailyGoal")
+        } else {
+            LabeledContent("Goal on this day", value: goal == 0 ? "Rest day" : DurationText.summary(Double(goal * 60)))
+                .font(.subheadline).foregroundStyle(.secondary)
+                .accessibilityIdentifier("stats.historicalDailyGoal")
+        }
+        if goal > 0 {
+            let worked = Statistics.total(store.state, projectID: projectID, interval: interval, now: now)
+            ProgressView(value: min(worked, Double(goal * 60)), total: Double(goal * 60))
+                .accessibilityLabel("Daily goal")
+        }
+    }
+
+    @ViewBuilder private func weeklyGoal(_ target: Int, projectID: UUID, now: Date) -> some View {
+        if selection.isCurrent(now: now) {
+            Button {
+                settingsRequest = StatsProjectSettingsRequest(projectID: projectID, page: .weekly)
+            } label: {
+                LabeledContent("Weekly goal", value: DurationText.summary(Double(target * 60)))
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        } else {
+            LabeledContent("Weekly goal", value: DurationText.summary(Double(target * 60)))
+                .font(.subheadline).foregroundStyle(.secondary)
         }
     }
 
@@ -281,20 +359,6 @@ struct StatsView: View {
             HistoryDay(date: $0, sessions: groups[$0]!.sorted { $0.startedAt > $1.startedAt })
         }
     }
-    private func selectedInterval(now: Date) -> DateInterval? {
-        switch range {
-        case .today: Statistics.today(now)
-        case .week, .month: Statistics.interval(for: range.period!, containing: anchor)
-        case .all: nil
-        }
-    }
-    private func move(_ value: Int) {
-        guard let period = range.period else { return }
-        let c = GoalEngine.calendar()
-        let start = Statistics.interval(for: period, containing: anchor).start
-        anchor = c.date(byAdding: period == .week ? .day : .month,
-                        value: period == .week ? value * 7 : value, to: start)!
-    }
     private func savedSessions(in interval: DateInterval?) -> [FocusSession] {
         store.state.sessions.filter { session in
             guard projectID == nil || session.projectID == projectID else { return false }
@@ -320,6 +384,40 @@ struct StatsView: View {
         if !store.deleteSession(session.id) {
             deletionError = store.errorMessage ?? "The session could not be deleted."
             store.errorMessage = nil
+        }
+    }
+}
+
+private struct StatsDatePicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var date: Date
+    let select: (Date) -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                DatePicker("Choose a date", selection: $date, in: ...Date(), displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+                    .environment(\.calendar, GoalEngine.calendar())
+                    .accessibilityIdentifier("stats.datePicker")
+                    .padding()
+            }
+            .appScreen()
+            .navigationTitle("Choose a date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .accessibilityIdentifier("stats.datePicker.cancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        select(date)
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("stats.datePicker.done")
+                }
+            }
         }
     }
 }

@@ -80,6 +80,28 @@ extension View {
                                             minutes: Array(repeating: 60, count: 7), now: now)
                 }
             }
+            if testing, ProcessInfo.processInfo.environment["POMODORO_TEST_SCENARIO"] == "stats-history" {
+                let work = Project(name: "Work"), reading = Project(name: "Reading")
+                let now = Date(), calendar = GoalEngine.calendar()
+                let today = calendar.startOfDay(for: now)
+                let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+                let earlier = calendar.date(byAdding: .day, value: -2, to: today)!
+                loadedStore?.update { state in
+                    state.projects = [work, reading]
+                    state.sessions = [
+                        FocusSession(id: UUID(), projectID: work.id, startedAt: yesterday.addingTimeInterval(3600),
+                                     endedAt: yesterday.addingTimeInterval(5400), plannedSeconds: 1800, outcome: .completed),
+                        FocusSession(id: UUID(), projectID: reading.id, startedAt: yesterday.addingTimeInterval(7200),
+                                     endedAt: yesterday.addingTimeInterval(8100), plannedSeconds: 900, outcome: .completed),
+                        FocusSession(id: UUID(), projectID: work.id, startedAt: earlier.addingTimeInterval(3600),
+                                     endedAt: earlier.addingTimeInterval(4200), plannedSeconds: 600, outcome: .completed)
+                    ]
+                    try GoalEngine.setDaily(&state.goalPlan, projectID: work.id,
+                                            minutes: Array(repeating: 60, count: 7), now: earlier, calendar: calendar)
+                    try GoalEngine.setDaily(&state.goalPlan, projectID: work.id,
+                                            minutes: Array(repeating: 240, count: 7), now: now, calendar: calendar)
+                }
+            }
         } catch {
             loadError = error.localizedDescription
         }

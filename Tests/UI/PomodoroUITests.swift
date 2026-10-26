@@ -1,6 +1,93 @@
 import XCTest
 
 final class PomodoroUITests: XCTestCase {
+    func testStatsWeekAndMonthArrowsReturnToCurrentPeriod() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launch()
+        app.tabBars.buttons["Stats"].tap()
+        let range = app.segmentedControls["stats.range"]
+        XCTAssertTrue(range.waitForExistence(timeout: 5))
+        for period in ["Week", "Month"] {
+            range.buttons[period].tap()
+            let date = app.buttons["stats.date"]
+            let current = date.value as? String
+            let previous = app.buttons["stats.previous"], next = app.buttons["stats.next"]
+            XCTAssertFalse(next.isEnabled)
+            previous.tap()
+            let firstPrevious = date.value as? String
+            XCTAssertNotEqual(firstPrevious, current)
+            XCTAssertTrue(next.isEnabled)
+            previous.tap()
+            XCTAssertNotEqual(date.value as? String, firstPrevious)
+            next.tap()
+            XCTAssertEqual(date.value as? String, firstPrevious)
+            next.tap()
+            XCTAssertEqual(date.value as? String, current)
+            XCTAssertFalse(next.isEnabled)
+            previous.tap()
+            app.buttons["stats.current"].tap()
+            XCTAssertEqual(date.value as? String, current)
+            XCTAssertFalse(next.isEnabled)
+        }
+    }
+
+    func testStatsHistoricalDayAndCalendarPreserveProjectFilter() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchEnvironment["POMODORO_TEST_SCENARIO"] = "stats-history"
+        app.launch()
+        app.tabBars.buttons["Stats"].tap()
+        let range = app.segmentedControls["stats.range"]
+        XCTAssertTrue(range.buttons["Day"].isSelected)
+        let date = app.buttons["stats.date"], total = app.staticTexts["stats.savedFocusTime"]
+        let currentDate = date.value as? String
+        XCTAssertEqual(total.label, "0 min")
+        app.buttons["stats.previous"].tap()
+        XCTAssertEqual(total.label, "45 min")
+        app.buttons["stats.project"].tap()
+        app.buttons["Work"].tap()
+        XCTAssertEqual(total.label, "30 min")
+        XCTAssertFalse(app.buttons["stats.dailyGoal"].exists)
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "stats.historicalDailyGoal").firstMatch.exists)
+        app.buttons["stats.previous"].tap()
+        XCTAssertEqual(total.label, "10 min")
+        app.buttons["stats.next"].tap()
+        XCTAssertEqual(total.label, "30 min")
+        app.buttons["stats.next"].tap()
+        XCTAssertEqual(date.value as? String, currentDate)
+        XCTAssertEqual(total.label, "0 min")
+        XCTAssertTrue(app.buttons["stats.dailyGoal"].label.contains("4 hr"))
+
+        app.buttons["stats.previous"].tap()
+        let historicalDate = date.value as? String
+        date.tap()
+        XCTAssertTrue(app.buttons["stats.datePicker.cancel"].waitForExistence(timeout: 5))
+        app.buttons["stats.datePicker.cancel"].tap()
+        XCTAssertEqual(date.value as? String, historicalDate)
+        date.tap()
+        let picker = app.descendants(matching: .any).matching(identifier: "stats.datePicker").firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        let calendar = Calendar.current
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date())!
+        // Pick a different date in the displayed month, even at a month boundary.
+        let offset = calendar.component(.day, from: yesterday) == 1 ? 1 : -1
+        let chosen = calendar.date(byAdding: .day, value: offset, to: yesterday)!
+        let day = calendar.component(.day, from: chosen)
+        let dayButton = picker.buttons.matching(NSPredicate(format: "label MATCHES %@", ".*\\b\(day)\\b.*")).firstMatch
+        XCTAssertTrue(dayButton.waitForExistence(timeout: 5))
+        dayButton.tap()
+        app.buttons["stats.datePicker.done"].tap()
+        XCTAssertNotEqual(date.value as? String, historicalDate)
+        XCTAssertEqual(total.label, offset == 1 ? "0 min" : "10 min")
+        XCTAssertTrue(app.buttons["stats.project"].label.contains("Work"))
+        range.buttons["All"].tap()
+        XCTAssertFalse(date.exists)
+        XCTAssertFalse(app.buttons["stats.previous"].exists)
+        XCTAssertEqual(total.label, "40 min")
+    }
+
     func testColdCaptureLinkWorksWithoutProjectsAndSavesUnassignedThought() {
         continueAfterFailure = false
         let app = newApp()
