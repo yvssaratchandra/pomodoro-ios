@@ -121,6 +121,17 @@
     .calendar-day:disabled { opacity: .22; }
     .calendar-chooser { display: flex; gap: 12px; padding: 8px 0 20px; }
     .calendar-chooser select { min-width: 0; max-width: 65%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--field); color: var(--text); }
+    .period-content { padding: 18px 20px 40px; }
+    .period-content .group { background: var(--bg); }
+    .year-row { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 8px 16px; }
+    .year-row select { border: 0; background: none; color: var(--tint); padding: 8px; }
+    .week-option { min-height: 62px; padding-right: 16px; font-size: 14px; line-height: 1.5; }
+    .week-option > svg { position: static; width: 19px; height: 19px; color: var(--tint); opacity: 1; }
+    .wheels { display: flex; position: relative; margin: 30px 20px 0; }
+    .wheels::before { content: ""; position: absolute; left: 0; right: 0; top: 88px; height: 44px; border-radius: 9px; background: var(--field); pointer-events: none; }
+    .wheel { position: relative; flex: 1; min-width: 0; height: 220px; padding-block: 88px; overflow: auto; scrollbar-width: none; scroll-snap-type: y mandatory; mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent); }
+    .wheel button { display: block; width: 100%; min-height: 44px; border: 0; background: none; padding: 6px 8px; font-size: 21px; color: var(--secondary); scroll-snap-align: center; }
+    .wheel button[aria-selected=true] { color: var(--text); }
     .sheet-content { padding: 12px 20px 40px; }
     .sheet-content .group { background: var(--bg); }
     .sheet-content .caption { margin: 16px 0; }
@@ -144,7 +155,9 @@
         <button data-scenario="yesterday">Previous day</button>
         <button data-scenario="week">Previous week</button>
         <button data-scenario="month">Previous month</button>
-        <button data-scenario="calendar">Calendar picker</button>
+        <button data-scenario="calendar">Day calendar</button>
+        <button data-scenario="week-picker">Week selector</button>
+        <button data-scenario="month-picker">Month selector</button>
         <div class="review-controls">
           <div><label for="appearance">Appearance</label><select id="appearance"><option value="dark">Dark</option><option value="light">Light</option></select></div>
           <div><label for="project">Project filter</label><select id="project"><option value="all">All projects</option><option value="work">Work</option><option value="reading">Reading</option></select></div>
@@ -228,7 +241,7 @@
     }
     function navigation() {
       let html = `<section class="group"><div class="range-row"><div class="segmented" role="tablist" aria-label="Stats range">${['Day', 'Week', 'Month', 'All'].map(range => `<button role="tab" aria-selected="${range === state.range}" data-action="range" data-value="${range}">${range}</button>`).join('')}</div></div>`;
-      if (bounds()) html += `<div class="date-row"><button class="icon-button" id="previous" data-action="previous" aria-label="Previous ${state.range.toLowerCase()}">${icon('left')}</button><button class="date-button" id="date-label" data-action="calendar" aria-label="${esc(dateLabel())}. Choose a date"><span>${dateLabel()}</span>${icon('calendar')}</button><button class="icon-button" id="next" data-action="next" aria-label="Next ${state.range.toLowerCase()}" ${isCurrent() ? 'disabled' : ''}>${icon('right')}</button></div>`;
+      if (bounds()) html += `<div class="date-row"><button class="icon-button" id="previous" data-action="previous" aria-label="Previous ${state.range.toLowerCase()}">${icon('left')}</button><button class="date-button" id="date-label" data-action="calendar" aria-label="${esc(dateLabel())}. Choose a ${state.range.toLowerCase()}"><span>${dateLabel()}</span>${icon(state.range === 'Day' ? 'calendar' : 'down')}</button><button class="icon-button" id="next" data-action="next" aria-label="Next ${state.range.toLowerCase()}" ${isCurrent() ? 'disabled' : ''}>${icon('right')}</button></div>`;
       if (!isCurrent()) html += `<button class="return-row" id="return-current" data-action="current">${state.range === 'Day' ? 'Today' : `This ${state.range.toLowerCase()}`}</button>`;
       return html + '</section>';
     }
@@ -274,18 +287,24 @@
       const project = state.project === 'all' ? '' : `<span class="project-name">${projects[state.project]}</span>`;
       document.querySelector('#phone-main').innerHTML = `<header class="navbar"><button class="icon-button" id="project-filter" data-action="projects" aria-label="Project: ${state.project === 'all' ? 'All projects' : projects[state.project]}">${icon('filter')}${project}</button><button class="icon-button" data-action="consistency" aria-label="Consistency">${icon('calendar')}</button></header><div class="page"><h1 class="large-title">Stats</h1>${navigation()}${hero()}${chart()}<div class="section-label">Recent sessions</div>${history()}</div><nav class="tabbar" aria-label="Main app tabs"><span class="tab">${icon('timer')}Focus</span><span class="tab">${icon('thought')}Thoughts</span><span class="tab active" aria-current="page">${icon('chart')}Stats</span></nav>`;
       document.querySelector('#project').value = state.project;
-      document.querySelectorAll('[data-scenario]').forEach(button => button.classList.toggle('active', button.dataset.scenario === (state.sheet === 'calendar' ? 'calendar' : state.range === 'Week' ? 'week' : state.range === 'Month' ? 'month' : state.range === 'Day' && isCurrent() ? 'today' : state.range === 'Day' ? 'yesterday' : '')));
+      document.querySelectorAll('[data-scenario]').forEach(button => button.classList.toggle('active', button.dataset.scenario === (['calendar', 'week-picker', 'month-picker'].includes(state.sheet) ? state.sheet : state.range === 'Week' ? 'week' : state.range === 'Month' ? 'month' : state.range === 'Day' && isCurrent() ? 'today' : state.range === 'Day' ? 'yesterday' : '')));
       renderSheet(); renderNotes();
     }
     function renderNotes() {
-      const calendar = state.sheet === 'calendar', historical = !isCurrent();
-      const title = calendar ? 'Jump straight to a date.' : state.range === 'Day' ? (historical ? 'A past day gets its own view.' : 'Day starts with today.') : state.range === 'All' ? 'The whole history, together.' : 'Back and forward, one period at a time.';
-      const body = calendar ? 'Choose a day, then tap <strong>Done</strong>. In Week or Month, the same picker opens the period containing that date. <strong>Cancel</strong> leaves your selection unchanged.' : state.range === 'Day' ? 'The Day segment replaces Today. The date row shows what you are looking at; the total and session list follow that date.' : state.range === 'All' ? 'All keeps the full saved history and project filter. Date controls disappear because no single period is selected.' : 'Each arrow moves exactly one week or month. You can move forward to the current period; future periods are unavailable.';
-      document.querySelector('#notes').innerHTML = `<h2>What you are seeing</h2><div class="tag">${calendar ? 'Calendar sheet' : historical ? 'Browsing history' : 'Current period'}</div><h3>${title}</h3><p>${body}</p><p>${historical ? `<strong>${state.range === 'Day' ? 'Today' : `This ${state.range.toLowerCase()}`}</strong> appears below the date row for a direct return.` : 'The right arrow is disabled only when you reach the current period.'}</p><div class="try"><p><strong>Try it</strong><br>${calendar ? 'Select a different date, then compare Done with Cancel. Tap the month heading to jump further back.' : 'Go back twice, then forward twice. Tap the date label to open the calendar. Select Work to see the recorded goal for that day.'}</p></div><p class="fine">Matches the implemented controls and navigation. Sample history is illustrative. Native SwiftUI fonts, calendar styling, and sheet rendering may differ on the phone.</p>`;
+      const picking = ['calendar', 'week-picker', 'month-picker'].includes(state.sheet), historical = !isCurrent();
+      const title = state.sheet === 'calendar' ? 'Choose a specific day.' : state.sheet === 'week-picker' ? 'Select the whole week.' : state.sheet === 'month-picker' ? 'Choose a month and year.' : state.range === 'Day' ? (historical ? 'A past day gets its own view.' : 'Day starts with today.') : state.range === 'All' ? 'The whole history, together.' : 'Back and forward, one period at a time.';
+      const body = state.sheet === 'calendar' ? 'Day uses the native calendar. Choose a day, then tap <strong>Done</strong>. <strong>Cancel</strong> leaves your selection unchanged.' : state.sheet === 'week-picker' ? 'Week shows Monday–Sunday ranges, grouped by year. Select a range and tap <strong>Done</strong>. The checkmark tracks your selection until you confirm it.' : state.sheet === 'month-picker' ? 'Month has separate month and year controls. Only available months are shown; future months are excluded. Tap <strong>Done</strong> to apply the selection.' : state.range === 'Day' ? 'The Day segment replaces Today. The date row shows what you are looking at; the total and session list follow that date.' : state.range === 'All' ? 'All keeps the full saved history and project filter. Date controls disappear because no single period is selected.' : `Each arrow moves exactly one ${state.range.toLowerCase()}. Tap the range label to open the ${state.range === 'Week' ? 'week-range list' : 'month/year selector'}.`;
+      document.querySelector('#notes').innerHTML = `<h2>What you are seeing</h2><div class="tag">${picking ? `${state.range} selector` : historical ? 'Browsing history' : 'Current period'}</div><h3>${title}</h3><p>${body}</p><p>${historical ? `<strong>${state.range === 'Day' ? 'Today' : `This ${state.range.toLowerCase()}`}</strong> appears below the date row for a direct return.` : 'The right arrow is disabled only when you reach the current period.'}</p><div class="try"><p><strong>Try it</strong><br>${picking ? 'Change the selection, then compare Done with Cancel. Your project filter stays selected.' : `Go back twice, then forward twice. Tap the date label to choose a ${state.range.toLowerCase()}. Select Work to see its recorded goals.`}</p></div><p class="fine">Matches the implemented controls and navigation. Sample history is illustrative. Native SwiftUI fonts, picker styling, and sheet rendering may differ on the phone.</p>`;
     }
     function openSheet(name) {
+      if (name === 'calendar' && state.range !== 'Day') name = state.range === 'Week' ? 'week-picker' : 'month-picker';
       state.sheet = name;
       if (name === 'calendar') { state.draft = new Date(bounds().start); state.calendarMonth = monthStart(state.draft); state.choosingMonth = false; }
+      if (name === 'week-picker' || name === 'month-picker') {
+        state.draft = new Date(bounds().start);
+        state.periodYear = name === 'week-picker' ? weekYear(state.draft) : state.draft.getFullYear();
+        state.periodMonth = state.draft.getMonth();
+      }
       render();
       document.querySelector('.sheet button')?.focus({preventScroll: true});
     }
@@ -296,12 +315,37 @@
       if (state.choosingMonth) chooser = `<div class="calendar-chooser"><select id="calendar-month" aria-label="Calendar month">${Array.from({length: 12}, (_, i) => `<option value="${i}" ${i === month.getMonth() ? 'selected' : ''}>${format(new Date(2026, i, 1), {month: 'long'})}</option>`).join('')}</select><select id="calendar-year" aria-label="Calendar year">${Array.from({length: 101}, (_, i) => today.getFullYear() - i).map(year => `<option ${year === month.getFullYear() ? 'selected' : ''}>${year}</option>`).join('')}</select></div>`;
       return `<div class="calendar"><div class="calendar-toolbar"><button class="calendar-title" data-action="month-menu" aria-expanded="${state.choosingMonth}">${format(month, {month: 'long', year: 'numeric'})}${icon('right')}</button><button class="icon-button" data-action="calendar-previous" aria-label="Previous calendar month">${icon('left')}</button><button class="icon-button" data-action="calendar-next" aria-label="Next calendar month" ${month >= monthStart(today) ? 'disabled' : ''}>${icon('right')}</button></div>${chooser}<div class="calendar-grid">${['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => `<span class="weekday">${day}</span>`).join('')}${'<span></span>'.repeat(firstIndex)}${Array.from({length: count}, (_, i) => { const date = new Date(month.getFullYear(), month.getMonth(), i + 1); return `<button class="calendar-day ${+date === +today ? 'today' : ''}" data-action="choose-day" data-value="${i + 1}" aria-label="${fullDate(date)}" aria-pressed="${+date === +state.draft}" ${date > today ? 'disabled' : ''}>${i + 1}</button>`; }).join('')}</div></div>`;
     }
+    function weekYear(date) { return addDays(bounds('Week', date).start, 3).getFullYear(); }
+    function periodYears() {
+      const year = state.range === 'Week' ? weekYear : date => date.getFullYear();
+      const lower = Math.min(year(state.anchor || today), ...sessions.map(s => year(s.date)), year(today));
+      return Array.from({length: year(today) - lower + 1}, (_, i) => lower + i);
+    }
+    function weekOptions(year) {
+      const weeks = [], current = bounds('Week', today).start;
+      for (let start = bounds('Week', new Date(year, 0, 4)).start; weekYear(start) === year && start <= current; start = addDays(start, 7)) weeks.push(start);
+      return weeks.reverse();
+    }
+    function weekPickerBody() {
+      return `<div class="period-content"><div class="group"><label class="year-row">Year<select id="period-year">${periodYears().map(year => `<option ${year === state.periodYear ? 'selected' : ''}>${year}</option>`).join('')}</select></label></div><div class="section-label">Weeks</div><div class="group">${weekOptions(state.periodYear).map(start => `<button class="list-row week-option" data-action="choose-week" data-value="${key(start)}" aria-pressed="${+start === +state.draft}"><span>${shortDate(start)} – ${shortDate(addDays(start, 6))}</span>${+start === +state.draft ? icon('check') : ''}</button>`).join('')}</div></div>`;
+    }
+    function monthPickerBody() {
+      const count = state.periodYear === today.getFullYear() ? today.getMonth() + 1 : 12;
+      return `<div class="wheels"><div class="wheel" role="listbox" aria-label="Month">${Array.from({length: count}, (_, month) => `<button role="option" data-action="choose-month" data-value="${month}" aria-selected="${month === state.periodMonth}">${format(new Date(state.periodYear, month, 1), {month: 'long'})}</button>`).join('')}</div><div class="wheel" role="listbox" aria-label="Year">${periodYears().map(year => `<button role="option" data-action="choose-period-year" data-value="${year}" aria-selected="${year === state.periodYear}">${year}</button>`).join('')}</div></div>`;
+    }
+    function changePeriodYear(year) {
+      state.periodYear = year;
+      if (state.sheet === 'week-picker') state.draft = weekOptions(year)[0];
+      else if (year === today.getFullYear()) state.periodMonth = Math.min(state.periodMonth, today.getMonth());
+    }
     function renderSheet() {
       const container = document.querySelector('#overlay');
       document.querySelector('#phone-main').inert = Boolean(state.sheet);
       if (!state.sheet) { container.innerHTML = ''; return; }
-      let title = 'Choose a date', content = '', cancel = true;
+      let title = 'Choose a day', content = '', cancel = true;
       if (state.sheet === 'calendar') content = calendarBody();
+      else if (state.sheet === 'week-picker') { title = 'Choose a week'; content = weekPickerBody(); }
+      else if (state.sheet === 'month-picker') { title = 'Choose a month'; content = monthPickerBody(); }
       else if (state.sheet === 'projects') {
         title = 'Project filter'; cancel = false;
         content = `<div class="project-options">${[['all', 'All projects'], ...Object.entries(projects)].map(([id, name]) => `<button class="list-row" data-action="project" data-value="${id}">${name}${state.project === id ? icon('check') : ''}</button>`).join('')}</div>`;
@@ -318,15 +362,20 @@
         title = state.sheet === 'goal' ? 'Project settings' : 'Consistency'; cancel = false;
         content = `<div class="sheet-content"><p class="caption">${state.sheet === 'goal' ? 'In the app, this opens the existing project goal editor. Historical goals remain read-only.' : 'The existing Consistency screen stays behind this toolbar button. Date selection lives in the date row below the range selector.'}</p></div>`;
       }
-      container.innerHTML = `<div class="scrim"><section class="sheet" role="dialog" aria-modal="true" aria-label="${title}"><div class="sheet-toolbar">${cancel ? '<button data-action="cancel">Cancel</button>' : '<span></span>'}<div class="sheet-title">${title}</div><button data-action="${state.sheet === 'calendar' ? 'apply' : 'cancel'}">Done</button></div>${content}</section></div>`;
+      container.innerHTML = `<div class="scrim"><section class="sheet" role="dialog" aria-modal="true" aria-label="${title}"><div class="sheet-toolbar">${cancel ? '<button data-action="cancel">Cancel</button>' : '<span></span>'}<div class="sheet-title">${title}</div><button data-action="${['calendar', 'week-picker', 'month-picker'].includes(state.sheet) ? 'apply' : 'cancel'}">Done</button></div>${content}</section></div>`;
+      document.querySelectorAll('.wheel').forEach(wheel => {
+        const selected = wheel.querySelector('[aria-selected=true]');
+        if (selected) wheel.scrollTop = selected.offsetTop - 88;
+      });
     }
     document.addEventListener('click', event => {
       const button = event.target.closest('button'); if (!button || button.disabled) return;
       if (button.dataset.scenario) {
         const scenario = button.dataset.scenario;
-        state.sheet = null; state.anchor = null; state.range = scenario === 'week' ? 'Week' : scenario === 'month' ? 'Month' : 'Day';
+        state.sheet = null; state.anchor = null; state.range = scenario.startsWith('week') ? 'Week' : scenario.startsWith('month') ? 'Month' : 'Day';
         if (['yesterday', 'week', 'month'].includes(scenario)) move(-1);
         if (scenario === 'calendar') { openSheet('calendar'); return; }
+        if (scenario === 'week-picker' || scenario === 'month-picker') { openSheet(scenario); return; }
         render(); return;
       }
       const action = button.dataset.action, value = button.dataset.value;
@@ -337,9 +386,12 @@
       if (['calendar', 'projects', 'details', 'history', 'goal', 'consistency'].includes(action)) { openSheet(action); return; }
       if (action === 'session') { state.session = Number(value); openSheet('session'); return; }
       if (action === 'cancel') { closeSheet(); return; }
-      if (action === 'apply') { selectDate(state.draft); closeSheet(); return; }
+      if (action === 'apply') { selectDate(state.sheet === 'month-picker' ? new Date(state.periodYear, state.periodMonth, 1) : state.draft); closeSheet(); return; }
       if (action === 'project') { state.project = value; closeSheet(); return; }
       if (action === 'choose-day') { state.draft = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth(), Number(value)); renderSheet(); return; }
+      if (action === 'choose-week') { state.draft = new Date(`${value}T00:00:00`); renderSheet(); return; }
+      if (action === 'choose-month') { state.periodMonth = Number(value); renderSheet(); return; }
+      if (action === 'choose-period-year') { changePeriodYear(Number(value)); renderSheet(); return; }
       if (action === 'month-menu') { state.choosingMonth = !state.choosingMonth; renderSheet(); return; }
       if (action === 'calendar-previous' || action === 'calendar-next') {
         state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() + (action === 'calendar-next' ? 1 : -1), 1);
@@ -351,6 +403,7 @@
     document.querySelector('#project').addEventListener('change', event => { state.project = event.target.value; render(); });
     document.querySelector('#running').addEventListener('change', event => { state.running = event.target.checked; render(); });
     document.addEventListener('change', event => {
+      if (event.target.id === 'period-year') { changePeriodYear(Number(event.target.value)); renderSheet(); return; }
       if (!['calendar-month', 'calendar-year'].includes(event.target.id)) return;
       const year = Number(document.querySelector('#calendar-year').value), month = Number(document.querySelector('#calendar-month').value);
       state.calendarMonth = new Date(Math.min(+monthStart(today), +new Date(year, month, 1)));

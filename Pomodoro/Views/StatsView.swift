@@ -11,12 +11,16 @@ private struct StatsProjectSettingsRequest: Identifiable {
     let page: ProjectSettingsPage
     var id: String { "\(projectID)-\(page)" }
 }
+private struct StatsPeriodPickerRequest: Identifiable {
+    let range: StatsDateRange
+    let date: Date
+    var id: StatsDateRange { range }
+}
 
 struct StatsView: View {
     @Bindable var store: AppStore
     @State private var selection = StatsDateSelection()
-    @State private var showingDatePicker = false
-    @State private var calendarDate = Date()
+    @State private var periodPicker: StatsPeriodPickerRequest?
     @State private var projectID: UUID?
     @State private var showConsistency = false
     @State private var settingsRequest: StatsProjectSettingsRequest?
@@ -135,8 +139,9 @@ struct StatsView: View {
             .navigationDestination(isPresented: $showConsistency) {
                 ConsistencyDetailsView(store: store)
             }
-            .sheet(isPresented: $showingDatePicker) {
-                StatsDatePicker(date: calendarDate) { date in
+            .sheet(item: $periodPicker) { request in
+                StatsPeriodPicker(range: request.range, date: request.date,
+                                  earliestDate: store.state.sessions.map(\.startedAt).min()) { date in
                     selection.select(date, now: Date())
                 }
             }
@@ -166,19 +171,19 @@ struct StatsView: View {
             .accessibilityIdentifier("stats.previous")
             Spacer(minLength: 0)
             Button {
-                calendarDate = min(interval.start, now)
-                showingDatePicker = true
+                periodPicker = StatsPeriodPickerRequest(range: range, date: min(interval.start, now))
             } label: {
                 HStack(spacing: 5) {
                     Text(dateLabel(interval: interval, now: now))
                         .font(.subheadline).multilineTextAlignment(.center)
-                    Image(systemName: "calendar").font(.caption).accessibilityHidden(true)
+                    Image(systemName: range == .day ? "calendar" : "chevron.down")
+                        .font(.caption).accessibilityHidden(true)
                 }
                 .frame(minHeight: 44)
             }
             .accessibilityLabel(dateLabel(interval: interval, now: now))
             .accessibilityValue(interval.start.formatted(date: .complete, time: .omitted))
-            .accessibilityHint("Choose a date")
+            .accessibilityHint("Choose a \(range.rawValue.lowercased())")
             .accessibilityIdentifier("stats.date")
             Spacer(minLength: 0)
             Button {
@@ -388,37 +393,147 @@ struct StatsView: View {
     }
 }
 
-private struct StatsDatePicker: View {
+private struct StatsPeriodPicker: View {
     @Environment(\.dismiss) private var dismiss
-    @State var date: Date
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var date: Date
+    @State private var year: Int
+    @State private var month: Int
+    let range: StatsDateRange
+    let initialDate: Date
+    let earliestDate: Date?
     let select: (Date) -> Void
+
+    init(range: StatsDateRange, date: Date, earliestDate: Date?, select: @escaping (Date) -> Void) {
+        self.range = range
+        self.initialDate = date
+        self.earliestDate = earliestDate
+        self.select = select
+        let calendar = GoalEngine.calendar()
+        _date = State(initialValue: date)
+        _year = State(initialValue: calendar.component(range == .week ? .yearForWeekOfYear : .year, from: date))
+        _month = State(initialValue: calendar.component(.month, from: date))
+    }
+
+    private var calendar: Calendar { GoalEngine.calendar() }
+    private var years: ClosedRange<Int> {
+        StatsPeriodOptions.years(for: range, selected: initialDate, earliest: earliestDate, now: Date())
+    }
+    private var months: [Date] { StatsPeriodOptions.months(in: year, now: Date()) }
+    private var weeks: [DateInterval] { StatsPeriodOptions.weeks(in: year, now: Date()) }
 
     var body: some View {
         NavigationStack {
+            pickerContent
+                .appScreen()
+                .navigationTitle("Choose a \(range.rawValue.lowercased())")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                            .accessibilityIdentifier(range == .day ? "stats.datePicker.cancel" : "stats.periodPicker.cancel")
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            let selected = range == .month
+                                ? calendar.date(from: DateComponents(year: year, month: month, day: 1)) ?? date
+                                : date
+                            select(selected)
+                            dismiss()
+                        }
+                        .accessibilityIdentifier(range == .day ? "stats.datePicker.done" : "stats.periodPicker.done")
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder private var pickerContent: some View {
+        switch range {
+        case .day:
             ScrollView {
-                DatePicker("Choose a date", selection: $date, in: ...Date(), displayedComponents: .date)
+                DatePicker("Choose a day", selection: $date, in: ...Date(), displayedComponents: .date)
                     .datePickerStyle(.graphical)
-                    .environment(\.calendar, GoalEngine.calendar())
+                    .environment(\.calendar, calendar)
                     .accessibilityIdentifier("stats.datePicker")
                     .padding()
             }
-            .appScreen()
-            .navigationTitle("Choose a date")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .accessibilityIdentifier("stats.datePicker.cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        select(date)
-                        dismiss()
+        case .week:
+            List {
+                Section { yearPicker.pickerStyle(.menu) }
+                Section("Weeks") {
+                    ForEach(Array(weeks.reversed()), id: \.start) { week in
+                        Button { date = week.start } label: {
+                            HStack {
+                                Text(weekLabel(week)).foregroundStyle(.primary)
+                                Spacer()
+                                if date == week.start {
+                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                }
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityValue(date == week.start ? "Selected" : "")
+                        .accessibilityIdentifier("stats.weekOption.\(Int(week.start.timeIntervalSince1970))")
                     }
-                    .accessibilityIdentifier("stats.datePicker.done")
                 }
             }
+            .listRowBackground(AppTheme.surface)
+        case .month:
+            if dynamicTypeSize.isAccessibilitySize {
+                Form {
+                    monthPicker.pickerStyle(.menu)
+                    yearPicker.pickerStyle(.menu)
+                }
+            } else {
+                VStack {
+                    HStack(spacing: 0) {
+                        monthPicker.frame(maxWidth: .infinity).clipped().contentShape(Rectangle())
+                        yearPicker.frame(maxWidth: .infinity).clipped().contentShape(Rectangle())
+                    }
+                    .pickerStyle(.wheel)
+                    .labelsHidden()
+                    .padding()
+                    Spacer()
+                }
+            }
+        case .all:
+            EmptyView()
         }
+    }
+
+    private var yearPicker: some View {
+        Picker("Year", selection: Binding(get: { year }, set: setYear)) {
+            ForEach(years, id: \.self) { year in Text(String(year)).tag(year) }
+        }
+        .accessibilityLabel("Year")
+        .accessibilityIdentifier(range == .week ? "stats.weekYear" : "stats.monthYear")
+    }
+
+    private var monthPicker: some View {
+        Picker("Month", selection: $month) {
+            ForEach(months, id: \.self) { date in
+                Text(date.formatted(.dateTime.month(.wide))).tag(calendar.component(.month, from: date))
+            }
+        }
+        .accessibilityLabel("Month")
+        .accessibilityIdentifier("stats.month")
+    }
+
+    private func setYear(_ value: Int) {
+        year = value
+        if range == .month {
+            let available = StatsPeriodOptions.months(in: value, now: Date())
+            month = min(month, available.last.map { calendar.component(.month, from: $0) } ?? month)
+        } else if range == .week, let latest = StatsPeriodOptions.weeks(in: value, now: Date()).last {
+            date = latest.start
+        }
+    }
+
+    private func weekLabel(_ week: DateInterval) -> String {
+        let end = calendar.date(byAdding: .day, value: -1, to: week.end)!
+        return "\(week.start.formatted(.dateTime.month(.abbreviated).day().year())) – \(end.formatted(.dateTime.month(.abbreviated).day().year()))"
     }
 }
 

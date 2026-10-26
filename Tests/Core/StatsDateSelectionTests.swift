@@ -148,4 +148,47 @@ final class StatsDateSelectionTests: XCTestCase {
         XCTAssertEqual(GoalEngine.dailyTarget(projectID: work.id, on: selection.interval(now: now, calendar: calendar)!.start,
                                              plan: state.goalPlan, calendar: calendar), 240)
     }
+
+    func testMonthOptionsExcludeFutureMonthsAndIncludeEarlierYearsInFull() {
+        let now = date(2026, 10, 26)
+        let current = StatsPeriodOptions.months(in: 2026, now: now, calendar: calendar)
+        XCTAssertEqual(current.count, 10)
+        XCTAssertEqual(current.first, date(2026, 1, 1, 0))
+        XCTAssertEqual(current.last, date(2026, 10, 1, 0))
+        XCTAssertEqual(StatsPeriodOptions.months(in: 2025, now: now, calendar: calendar).count, 12)
+        XCTAssertTrue(StatsPeriodOptions.months(in: 2027, now: now, calendar: calendar).isEmpty)
+        XCTAssertTrue(StatsPeriodOptions.months(in: 0, now: now, calendar: calendar).isEmpty)
+        XCTAssertEqual(StatsPeriodOptions.months(in: 2026, now: date(2026, 1, 1, 0), calendar: calendar).count, 1)
+    }
+
+    func testWeekOptionsUseWeekYearsAndHandleWeek53AndDST() {
+        let endOf2020 = date(2020, 12, 31)
+        let weeks = StatsPeriodOptions.weeks(in: 2020, now: endOf2020, calendar: calendar)
+        XCTAssertEqual(weeks.count, 53)
+        XCTAssertEqual(weeks.first?.start, date(2019, 12, 30, 0))
+        XCTAssertEqual(weeks.last?.end, date(2021, 1, 4, 0))
+        for week in weeks {
+            XCTAssertEqual(calendar.component(.weekday, from: week.start), 2)
+            XCTAssertEqual(calendar.dateComponents([.day], from: week.start, to: week.end).day, 7)
+            XCTAssertLessThanOrEqual(week.start, endOf2020)
+        }
+        let december = date(2025, 12, 30)
+        let nextWeekYear = StatsPeriodOptions.weeks(in: 2026, now: december, calendar: calendar)
+        XCTAssertEqual(nextWeekYear.count, 1)
+        XCTAssertEqual(nextWeekYear.first?.start, date(2025, 12, 29, 0))
+        XCTAssertTrue(StatsPeriodOptions.weeks(in: 2027, now: december, calendar: calendar).isEmpty)
+        XCTAssertTrue(StatsPeriodOptions.weeks(in: 0, now: december, calendar: calendar).isEmpty)
+    }
+
+    func testPickerYearsIncludeHistoryAndSelectionUsingTheCorrectYearKind() {
+        let now = date(2025, 12, 30)
+        XCTAssertEqual(StatsPeriodOptions.years(for: .week, selected: now, earliest: date(2020, 12, 31),
+                                               now: now, calendar: calendar), 2020...2026)
+        XCTAssertEqual(StatsPeriodOptions.years(for: .month, selected: now, earliest: date(2020, 12, 31),
+                                               now: now, calendar: calendar), 2020...2025)
+        XCTAssertEqual(StatsPeriodOptions.years(for: .month, selected: date(2019, 1, 1), earliest: date(2020, 1, 1),
+                                               now: now, calendar: calendar), 2019...2025)
+        XCTAssertEqual(StatsPeriodOptions.years(for: .month, selected: now, earliest: nil,
+                                               now: now, calendar: calendar), 2025...2025)
+    }
 }

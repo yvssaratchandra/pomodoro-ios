@@ -71,3 +71,41 @@ struct StatsDateSelection {
         }
     }
 }
+
+enum StatsPeriodOptions {
+    static func months(in year: Int, now: Date, calendar: Calendar = .current) -> [Date] {
+        let c = GoalEngine.calendar(calendar)
+        guard year > 0, year <= c.component(.year, from: now) else { return [] }
+        let current = c.dateInterval(of: .month, for: now)!.start
+        return (1...12).compactMap { month in
+            c.date(from: DateComponents(year: year, month: month, day: 1))
+        }.filter { $0 <= current }
+    }
+
+    static func weeks(in year: Int, now: Date, calendar: Calendar = .current) -> [DateInterval] {
+        let c = GoalEngine.calendar(calendar)
+        guard year > 0, year <= c.component(.yearForWeekOfYear, from: now) else { return [] }
+        var components = DateComponents()
+        components.yearForWeekOfYear = year
+        components.weekOfYear = 1
+        components.weekday = c.firstWeekday
+        guard var start = c.date(from: components) else { return [] }
+        let current = GoalEngine.week(containing: now, calendar: c).start
+        var result: [DateInterval] = []
+        while c.component(.yearForWeekOfYear, from: start) == year, start <= current {
+            let week = GoalEngine.week(containing: start, calendar: c)
+            result.append(week)
+            start = week.end
+        }
+        return result
+    }
+
+    static func years(for range: StatsDateRange, selected: Date, earliest: Date?, now: Date,
+                      calendar: Calendar = .current) -> ClosedRange<Int> {
+        let c = GoalEngine.calendar(calendar)
+        let component: Calendar.Component = range == .week ? .yearForWeekOfYear : .year
+        let currentYear = c.component(component, from: now)
+        let firstYear = [selected, earliest ?? now, now].map { c.component(component, from: $0) }.min()!
+        return max(1, firstYear)...currentYear
+    }
+}

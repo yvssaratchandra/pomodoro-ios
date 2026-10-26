@@ -88,6 +88,53 @@ final class PomodoroUITests: XCTestCase {
         XCTAssertEqual(total.label, "40 min")
     }
 
+    func testStatsWeekAndMonthPresentMatchingSelectors() {
+        continueAfterFailure = false
+        let app = newApp()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        app.tabBars.buttons["Stats"].tap()
+        let range = app.segmentedControls["stats.range"], date = app.buttons["stats.date"]
+        range.buttons["Week"].tap()
+        let currentWeek = date.value as? String
+        // The previous week belongs to a year with at least two available weeks, even in January.
+        app.buttons["stats.previous"].tap()
+        let previousWeek = date.value as? String
+        date.tap()
+        XCTAssertTrue(app.navigationBars["Choose a week"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.datePickers["stats.datePicker"].exists)
+        let weeks = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "stats.weekOption."))
+        XCTAssertTrue(weeks.firstMatch.waitForExistence(timeout: 5))
+        let otherWeek = weeks.matching(NSPredicate(format: "value != %@", "Selected")).firstMatch
+        otherWeek.tap()
+        app.buttons["stats.periodPicker.cancel"].tap()
+        XCTAssertEqual(date.value as? String, previousWeek)
+        date.tap()
+        otherWeek.tap()
+        app.buttons["stats.periodPicker.done"].tap()
+        XCTAssertNotEqual(date.value as? String, previousWeek)
+        if date.value as? String != currentWeek { app.buttons["stats.current"].tap() }
+        XCTAssertEqual(date.value as? String, currentWeek)
+
+        range.buttons["Month"].tap()
+        // Include an earlier year so every month is selectable independent of today's month.
+        for _ in 0..<12 { app.buttons["stats.previous"].tap() }
+        let historicalMonth = date.value as? String
+        date.tap()
+        XCTAssertTrue(app.navigationBars["Choose a month"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.datePickers["stats.datePicker"].exists)
+        let month = app.pickerWheels.firstMatch
+        XCTAssertTrue(month.waitForExistence(timeout: 5))
+        let january = month.value as? String == "January"
+        month.adjust(toPickerWheelValue: january ? "February" : "January")
+        app.buttons["stats.periodPicker.cancel"].tap()
+        XCTAssertEqual(date.value as? String, historicalMonth)
+        date.tap()
+        app.pickerWheels.firstMatch.adjust(toPickerWheelValue: january ? "February" : "January")
+        app.buttons["stats.periodPicker.done"].tap()
+        XCTAssertNotEqual(date.value as? String, historicalMonth)
+    }
+
     func testColdCaptureLinkWorksWithoutProjectsAndSavesUnassignedThought() {
         continueAfterFailure = false
         let app = newApp()
