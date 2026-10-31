@@ -3,7 +3,8 @@ package com.jamesblack.pomodoro.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -42,7 +43,7 @@ internal fun SettingsScreen(
                 largeTitle = page == null,
                 leading = {
                     IconButton(onClick = { if (page == null) onExit() else page = null }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = if (page == null) "Back to Focus" else "Settings")
+                        Icon(Icons.Outlined.ChevronLeft, contentDescription = if (page == null) "Back to Focus" else "Settings", modifier = Modifier.size(18.dp))
                     }
                 }
             )
@@ -50,21 +51,21 @@ internal fun SettingsScreen(
             when (page) {
                 null -> {
                     GroupedSection("Projects & goals") {
-                        InsetGroupedRow("Projects", "Manage projects and goals", onClick = openProjects)
+                        InsetGroupedRow("Projects", leadingIcon = Icons.Outlined.Folder, onClick = openProjects)
                     }
                     GroupedSection("Preferences") {
-                        InsetGroupedRow("Timer defaults", onClick = { page = "timer" })
-                        InsetGroupedRow("Sounds & haptics", onClick = { page = "sounds" })
-                        InsetGroupedRow("Appearance", state.settings.appearance.title(), onClick = { page = "appearance" })
-                        InsetGroupedRow("Consistency", "${state.settings.consistencyTargetDays} days", onClick = { page = "consistency" })
+                        InsetGroupedRow("Timer defaults", leadingIcon = Icons.Outlined.Timer, onClick = { page = "timer" })
+                        InsetGroupedRow("Sounds & haptics", leadingIcon = Icons.Outlined.NotificationsNone, onClick = { page = "sounds" })
+                        InsetGroupedRow("Appearance", state.settings.appearance.title(), leadingIcon = Icons.Outlined.Palette, onClick = { page = "appearance" })
+                        InsetGroupedRow("Consistency", "${state.settings.consistencyTargetDays} days", leadingIcon = Icons.Outlined.CalendarMonth, onClick = { page = "consistency" })
                     }
                     GroupedSection("Access") {
-                        InsetGroupedRow("Shortcuts", onClick = { page = "shortcuts" })
-                        InsetGroupedRow("Lock Screen privacy", onClick = { page = "privacy" })
+                        InsetGroupedRow("Shortcuts", leadingIcon = Icons.Outlined.GridView, onClick = { page = "shortcuts" })
+                        InsetGroupedRow("Lock Screen privacy", leadingIcon = Icons.Outlined.Shield, onClick = { page = "privacy" })
                     }
                     GroupedSection("Data & support") {
-                        InsetGroupedRow("Backup & restore", onClick = { page = "backup" })
-                        InsetGroupedRow("Help", onClick = { page = "help" })
+                        InsetGroupedRow("Backup & restore", leadingIcon = Icons.Outlined.Storage, onClick = { page = "backup" })
+                        InsetGroupedRow("Help", leadingIcon = Icons.AutoMirrored.Outlined.HelpOutline, onClick = { page = "help" })
                     }
                     Hint("All app data stays on this phone.")
                 }

@@ -9,7 +9,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
@@ -19,6 +19,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -64,8 +65,8 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
             trailing = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box {
-                        IconButton(onClick = { actionsExpanded = true }) {
-                            Icon(Icons.Outlined.MoreVert, if (selecting) "Selection actions" else "Thought actions")
+                        IconButton(onClick = { actionsExpanded = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Outlined.MoreHoriz, if (selecting) "Selection actions" else "Thought actions", modifier = Modifier.size(18.dp))
                         }
                         DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
                             if (!selecting) {
@@ -102,8 +103,8 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
                             }
                         }
                     }
-                    IconButton(onClick = { capture(ThoughtCaptureContext(projectID?.takeUnless { it == unassignedThoughts })) }) {
-                        Icon(Icons.Outlined.Add, "Add a thought")
+                    IconButton(onClick = { capture(ThoughtCaptureContext(projectID?.takeUnless { it == unassignedThoughts })) }, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.Add, "Add a thought", modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -111,7 +112,12 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
     }) {
         if (selecting) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${selected.size} selected", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "${selected.size} selected",
+                    Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)
+                )
                 TextButton(onClick = { selecting = false; selected = emptySet() }) { Text("Done") }
             }
         }
@@ -130,7 +136,14 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
         )
         if (activeFilterSummary.isNotEmpty()) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(activeFilterSummary, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    activeFilterSummary,
+                    Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)
+                )
                 TextButton(onClick = { selectProject(null); query = ""; filter = "All"; selecting = false; selected = emptySet() }) { Text("Reset") }
             }
         }
@@ -182,11 +195,11 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
         else -> state.projects.find { it.id == projectID }?.name ?: "All projects"
     }
     Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
-            Icon(Icons.Outlined.FilterList, contentDescription = null)
+        TextButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 48.dp).widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
+            Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.Outlined.ExpandMore, contentDescription = null)
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp))
+            Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("All projects") }, onClick = { expanded = false; selectProject(null) })
@@ -222,7 +235,7 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
             Text(thought.text, textDecoration = if (thought.completedAt != null) TextDecoration.LineThrough else null)
             Text(
                 listOfNotNull(project, thoughtDate(thought.createdAt)).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

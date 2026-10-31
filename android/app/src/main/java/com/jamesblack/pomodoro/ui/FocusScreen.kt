@@ -4,19 +4,29 @@ import android.content.Context
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Brightness4
-import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Contrast
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -106,16 +116,28 @@ import kotlinx.coroutines.delay
                 title = headerTitle,
                 leading = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = settings) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
                         if (active?.kind == TimerKind.focus) {
-                            IconButton(onClick = { setDimEnabled(!dimEnabled) }) {
-                                Icon(Icons.Outlined.Brightness4, contentDescription = if (dimEnabled) "Disable Dim Focus" else "Enable Dim Focus")
+                            IconButton(
+                                onClick = { setDimEnabled(!dimEnabled) },
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Contrast,
+                                    contentDescription = if (dimEnabled) "Disable Dim Focus" else "Enable Dim Focus",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = if (dimEnabled) Indigo else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
+                        }
+                        IconButton(onClick = settings, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings", modifier = Modifier.size(18.dp))
                         }
                     }
                 },
                 trailing = {
-                    IconButton(onClick = projects) { Icon(Icons.Outlined.FolderOpen, contentDescription = "Projects") }
+                    IconButton(onClick = projects, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Outlined.Folder, contentDescription = "Projects", modifier = Modifier.size(18.dp))
+                    }
                 }
             )
         }
@@ -124,7 +146,7 @@ import kotlinx.coroutines.delay
             Text(
                 state.projects.find { it.id == active.projectID }?.name ?: "Project",
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center
             )
             val remaining = (active.deadline - now).coerceIn(0.0, active.plannedSeconds.toDouble())
@@ -135,16 +157,16 @@ import kotlinx.coroutines.delay
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
             if (active.kind == TimerKind.focus) {
-                DestructiveAction("End Focus") { confirmEnd = true }
-                val currentPlan = active.intention?.let { "Session plan · ${SessionPlanText.items(it).size} tasks" } ?: "Add session plan"
-                PlanRow(currentPlan) {
+                DestructiveAction("End Focus", Icons.Filled.Stop) { confirmEnd = true }
+                val taskCount = SessionPlanText.items(active.intention.orEmpty()).size
+                PlanRow("Session plan", taskCount) {
                     edit(NoteRequest("Session plan", active.intention.orEmpty()) { AppCommand.EditIntention(active.id, true, it) })
                 }
                 TextButton(
                     onClick = { capture(ThoughtCaptureContext(active.projectID, active.id)) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) {
-                    Icon(Icons.Outlined.Add, contentDescription = null)
+                    Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Add a thought")
                 }
@@ -155,8 +177,13 @@ import kotlinx.coroutines.delay
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     shape = MaterialTheme.shapes.small,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
-                ) { Text("End Break") }
-                PlanRow(planLabel(project), onClick = { plan(active.projectID) })
+                ) {
+                    Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("End Break")
+                }
+                val taskCount = project?.breadcrumb?.let { SessionPlanText.items(it.text).size } ?: 0
+                PlanRow("Plan next session", taskCount, onClick = { plan(active.projectID) })
                 TextButton(
                     onClick = { thoughts(active.projectID) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -165,7 +192,7 @@ import kotlinx.coroutines.delay
             }
         } else if (state.breakOffer != null) {
             val offer = requireNotNull(state.breakOffer)
-            Text("Focus saved", style = MaterialTheme.typography.titleLarge)
+            Text("Focus saved", modifier = Modifier.fillMaxWidth(), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
             MinuteControl(
                 "${offer.kind.title} duration",
                 offer.minutes,
@@ -178,17 +205,20 @@ import kotlinx.coroutines.delay
                         TimerFace(
                             seconds = offer.minutes * 60.0,
                             progress = 1f,
-                            kind = offer.kind
+                            kind = offer.kind,
+                            project = state.projects.find { it.id == offer.projectID }?.name,
+                            showEditCue = true
                         )
                     }
                 }
             )
-            SageAction("Start ${offer.kind.title}") { run(AppCommand.StartBreak) }
+            SageAction("Start Break", Icons.Filled.LocalCafe) { run(AppCommand.StartBreak) }
             TextButton(
                 onClick = { run(AppCommand.SkipBreak) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             ) { Text("Skip Break") }
-            PlanRow(planLabel(state.projects.find { it.id == offer.projectID }), onClick = { plan(offer.projectID) })
+            val taskCount = state.projects.find { it.id == offer.projectID }?.breadcrumb?.let { SessionPlanText.items(it.text).size } ?: 0
+            PlanRow("Plan next session", taskCount, onClick = { plan(offer.projectID) })
         } else if (project == null || ongoing.isEmpty()) {
             Spacer(Modifier.height(10.dp))
             Text(
@@ -201,7 +231,7 @@ import kotlinx.coroutines.delay
                 TextButton(onClick = projects, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Manage projects") }
             }
         } else {
-            ProjectSelector(ongoing, project, select)
+            ProjectSelector(ongoing, project, select, create, projects)
             MinuteControl(
                 "Focus duration",
                 project.preferredFocusMinutes,
@@ -214,13 +244,24 @@ import kotlinx.coroutines.delay
                         TimerFace(
                             seconds = project.preferredFocusMinutes * 60.0,
                             progress = 1f,
-                            kind = TimerKind.focus
+                            kind = TimerKind.focus,
+                            showEditCue = true
                         )
                     }
                 }
             )
-            Action("Start Focus") { run(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) }
-            PlanRow(planLabel(project), onClick = { plan(project.id) })
+            Button(
+                onClick = { run(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = MaterialTheme.shapes.small,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Start Focus", style = MaterialTheme.typography.bodyMedium)
+            }
+            val taskCount = project.breadcrumb?.let { SessionPlanText.items(it.text).size } ?: 0
+            PlanRow(if (taskCount == 0) "Plan this session" else "Session plan", taskCount, onClick = { plan(project.id) })
         }
     }
 
@@ -250,30 +291,41 @@ import kotlinx.coroutines.delay
     }
 }
 
-private fun planLabel(project: Project?): String = project?.breadcrumb?.let {
-    "Session plan · ${SessionPlanText.items(it.text).size} tasks"
-} ?: "Plan this session"
-
-@Composable private fun PlanRow(label: String, onClick: () -> Unit) {
-    TextButton(onClick, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+@Composable private fun PlanRow(title: String, taskCount: Int, onClick: () -> Unit) {
+    val label = if (taskCount > 0) "$title · $taskCount ${if (taskCount == 1) "task" else "tasks"}" else title
+    TextButton(
+        onClick,
+        Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 8.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, Modifier.weight(1f), maxLines = 1)
-            Text("›", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleLarge)
+            Text(
+                label,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
         }
     }
 }
 
-@Composable private fun DestructiveAction(label: String, onClick: () -> Unit) {
+@Composable private fun DestructiveAction(label: String, icon: ImageVector, onClick: () -> Unit) {
     val danger = MaterialTheme.colorScheme.error
     Button(
         onClick,
         Modifier.fillMaxWidth().heightIn(min = 48.dp),
         shape = MaterialTheme.shapes.small,
         colors = ButtonDefaults.buttonColors(containerColor = danger.copy(alpha = .1f), contentColor = danger)
-    ) { Text(label, style = MaterialTheme.typography.bodyMedium) }
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
-@Composable private fun SageAction(label: String, onClick: () -> Unit) {
+@Composable private fun SageAction(label: String, icon: ImageVector, onClick: () -> Unit) {
     Button(
         onClick,
         Modifier.fillMaxWidth().heightIn(min = 48.dp),
@@ -282,10 +334,21 @@ private fun planLabel(project: Project?): String = project?.breadcrumb?.let {
             containerColor = MaterialTheme.colorScheme.secondary,
             contentColor = if (MaterialTheme.colorScheme.background == Color.Black) Color.Black else Color.White
         )
-    ) { Text(label, style = MaterialTheme.typography.bodyMedium) }
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
-@Composable private fun TimerFace(seconds: Double, progress: Float, kind: TimerKind, modifier: Modifier = Modifier) {
+@Composable private fun TimerFace(
+    seconds: Double,
+    progress: Float,
+    kind: TimerKind,
+    modifier: Modifier = Modifier,
+    project: String? = null,
+    showEditCue: Boolean = false
+) {
     val accent = if (kind == TimerKind.focus) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary
     val linear = LocalDensity.current.fontScale >= 1.3f
     val ringSemantics = Modifier
@@ -294,18 +357,23 @@ private fun planLabel(project: Project?): String = project?.breadcrumb?.let {
             contentDescription = "${kind.title} time remaining"
             progressBarRangeInfo = ProgressBarRangeInfo(progress.coerceIn(0f, 1f), 0f..1f)
         }
-    BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val useLinear = linear || maxWidth < 240.dp
-        if (useLinear) {
-            Column(
-                ringSemantics.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    BoxWithConstraints(modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
+        val useLinear = linear || maxWidth < 224.dp
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (useLinear) {
+                Column(
+                    ringSemantics.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
                         DurationText.countdown(seconds),
                         style = MaterialTheme.typography.displayMedium.copy(
+                            fontFamily = TimerFontFamily,
                             fontWeight = FontWeight.SemiBold,
                             fontFeatureSettings = "tnum"
                         ),
@@ -313,45 +381,81 @@ private fun planLabel(project: Project?): String = project?.breadcrumb?.let {
                         maxLines = 1,
                         softWrap = false
                     )
-                    Text(kind.title, color = accent, style = MaterialTheme.typography.bodyMedium)
+                    if (showEditCue) {
+                        Icon(
+                            Icons.Outlined.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(13.dp).testTag("duration-edit-cue"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(8.dp),
+                        color = accent,
+                        trackColor = accent.copy(alpha = .13f)
+                    )
                 }
-                LinearProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(8.dp),
-                    color = accent,
-                    trackColor = accent.copy(alpha = .13f)
-                )
-            }
-        } else {
-            Box(ringSemantics.size(200.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxSize(),
-                    color = accent,
-                    strokeWidth = 8.dp,
-                    trackColor = accent.copy(alpha = .13f)
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            } else {
+                Box(ringSemantics.size(212.dp), contentAlignment = Alignment.Center) {
+                    val fill = if (MaterialTheme.colorScheme.background == Color.Black) {
+                        Color.Black
+                    } else {
+                        accent.copy(alpha = .04f)
+                    }
+                    Box(
+                        Modifier.size(200.dp).clip(CircleShape).background(fill)
+                    )
+                    CircularProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.size(208.dp),
+                        color = accent,
+                        strokeWidth = 8.dp,
+                        trackColor = accent.copy(alpha = .12f)
+                    )
                     Text(
                         DurationText.countdown(seconds),
                         style = MaterialTheme.typography.displayMedium.copy(
+                            fontFamily = TimerFontFamily,
                             fontSize = 58.sp,
+                            lineHeight = 64.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFeatureSettings = "tnum",
-                            letterSpacing = (-1.5).sp
+                            fontFeatureSettings = "tnum"
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         softWrap = false
                     )
-                    Text(kind.title, color = accent, style = MaterialTheme.typography.bodyMedium)
+                    if (showEditCue) {
+                        Icon(
+                            Icons.Outlined.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.align(Alignment.Center).offset(y = 47.dp).size(13.dp).testTag("duration-edit-cue"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
+            }
+            project?.takeIf(String::isNotBlank)?.let {
+                Text(
+                    it,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
 }
 
-@Composable private fun ProjectSelector(projects: List<Project>, selected: Project, onSelect: (String) -> Unit) {
+@Composable private fun ProjectSelector(
+    projects: List<Project>,
+    selected: Project,
+    onSelect: (String) -> Unit,
+    onCreate: () -> Unit,
+    onManage: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth()) {
         Row(
@@ -362,10 +466,10 @@ private fun planLabel(project: Project?): String = project?.breadcrumb?.let {
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Outlined.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(12.dp))
             Text(selected.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
-            Text("⌄", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleMedium)
+            Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
             projects.forEach { project ->
@@ -374,6 +478,17 @@ private fun planLabel(project: Project?): String = project?.breadcrumb?.let {
                     onClick = { expanded = false; onSelect(project.id) }
                 )
             }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("New project") },
+                leadingIcon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+                onClick = { expanded = false; onCreate() }
+            )
+            DropdownMenuItem(
+                text = { Text("Manage projects") },
+                leadingIcon = { Icon(Icons.Outlined.Folder, contentDescription = null) },
+                onClick = { expanded = false; onManage() }
+            )
         }
     }
 }

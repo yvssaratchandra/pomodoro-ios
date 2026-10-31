@@ -56,13 +56,16 @@ class UiRenderAcceptanceTest {
             val base = fixture(appearance)
             compose.runOnIdle { snapshot = base }
             compose.onNodeWithText("Start Focus").assertIsDisplayed()
+            compose.onNodeWithTag("duration-edit-cue", useUnmergedTree = true).assertExists()
             screenshot("${appearance.name}-focus-ready")
             compose.runOnIdle { snapshot = TimerEngine.startFocus(base, work.id, 25, now - 378) }
             compose.onNodeWithText("18:42").assertIsDisplayed()
             compose.onNodeWithTag("focus-timer").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.748f, 0f..1f)))
             compose.onNodeWithText("End Focus").assertIsDisplayed()
+            compose.onNodeWithTag("duration-edit-cue", useUnmergedTree = true).assertDoesNotExist()
             screenshot("${appearance.name}-focus-running")
             compose.runOnIdle { snapshot = base.copy(breakOffer = BreakOffer(work.id, TimerKind.shortBreak, 5)) }
+            compose.onNodeWithTag("duration-edit-cue", useUnmergedTree = true).assertExists()
             screenshot("${appearance.name}-break-ready")
             compose.runOnIdle { snapshot = TimerEngine.startBreak(snapshot, now - 102) }
             compose.onNodeWithText("03:18").assertIsDisplayed()

@@ -78,6 +78,20 @@ class EditorAcceptanceTest {
         compose.onNodeWithText("Backup & restore").assertExists()
     }
 
+    @Test fun readyTimerOpensDurationEditorAndPersistsChosenMinutes() {
+        val project = Project(name = "Work")
+        val snapshot = AppSnapshot(projects = listOf(project))
+        var received: AppCommand? = null
+        compose.setContent {
+            PomodoroUi(snapshot, Time.now(), null, null, null, {}, { received = it; MutationResult.Success }, Platform())
+        }
+        compose.onNodeWithContentDescription("Edit focus duration").performClick()
+        compose.onNodeWithText("Minutes (10–60)").performTextReplacement("30")
+        compose.onNodeWithText("Done").performClick()
+        assertEquals(AppCommand.RememberFocusDuration(project.id, 30), received)
+        compose.onNodeWithText("Minutes (10–60)").assertDoesNotExist()
+    }
+
     @Test fun countdownNeverExceedsPlannedDurationBeforeNextClockTick() {
         val startedAt = Time.now()
         val project = Project(name = "Work")

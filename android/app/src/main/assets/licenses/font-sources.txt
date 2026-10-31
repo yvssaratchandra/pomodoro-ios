@@ -1,0 +1,3 @@
+Font files and their original licenses from https://github.com/google/fonts/tree/6c1dbe27dcf7d817d4b62cec033ba77fa8e2a5ec
+Inter: ofl/inter/Inter[opsz,wght].ttf
+Nunito: ofl/nunito/Nunito[wght].ttf

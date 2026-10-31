@@ -1,11 +1,13 @@
 package com.jamesblack.pomodoro.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,17 +63,9 @@ private val DarkMuted = Color(0xFFAEAEB2)
             error = Color(0xFFFF3B30)
         )
     }
-    val typography = Typography(
-        bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
-        bodyMedium = TextStyle(fontSize = 16.sp, lineHeight = 23.sp),
-        bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-        titleMedium = TextStyle(fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold),
-        titleLarge = TextStyle(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold),
-        headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold)
-    )
     MaterialTheme(
         colorScheme = scheme,
-        typography = typography,
+        typography = AppTypography,
         shapes = Shapes(
             small = RoundedCornerShape(10.dp),
             medium = RoundedCornerShape(10.dp),
@@ -115,14 +108,15 @@ private val DarkMuted = Color(0xFFAEAEB2)
     header: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (header != null) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 20.dp)) {
+            Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(horizontal = 20.dp)) {
                 header()
             }
         }
         Column(
             Modifier
+                .widthIn(max = 600.dp)
                 .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
@@ -175,6 +169,7 @@ private val DarkMuted = Color(0xFFAEAEB2)
     value: String? = null,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
     onClick: (() -> Unit)? = null
 ) {
     val rowModifier = modifier
@@ -183,6 +178,10 @@ private val DarkMuted = Color(0xFFAEAEB2)
         .then(if (onClick == null) Modifier else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick))
         .padding(vertical = 7.dp)
     Row(rowModifier, verticalAlignment = Alignment.CenterVertically) {
+        leadingIcon?.let {
+            Icon(it, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.tertiary)
+            Spacer(Modifier.width(12.dp))
+        }
         Text(
             label,
             modifier = Modifier.weight(1f),
@@ -200,7 +199,7 @@ private val DarkMuted = Color(0xFFAEAEB2)
             )
         }
         if (onClick != null) {
-            Text("›", Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.titleLarge)
+            Icon(Icons.Outlined.ChevronRight, null, Modifier.padding(start = 8.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -212,29 +211,30 @@ private val DarkMuted = Color(0xFFAEAEB2)
 ) {
     val trackColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF1C1C1E) else Color(0xFFE5E5EA)
     val selectedColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF3A3A3C) else Color.White
-    Row(
-        Modifier.fillMaxWidth().background(trackColor, RoundedCornerShape(8.dp)).padding(2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        options.forEach { (key, label) ->
-            val isSelected = key == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .then(if (isSelected) Modifier.background(selectedColor) else Modifier)
-                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(key) })
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    label,
-                    style = if (isSelected) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+    Box(Modifier.fillMaxWidth()) {
+        Box(Modifier.matchParentSize().padding(vertical = 8.dp).background(trackColor, RoundedCornerShape(8.dp)))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            options.forEach { (key, label) ->
+                val isSelected = key == selected
+                Box(
+                    Modifier.weight(1f).heightIn(min = 48.dp)
+                        .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(key) })
+                        .padding(vertical = 10.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .then(if (isSelected) Modifier.background(selectedColor) else Modifier)
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -341,7 +341,8 @@ internal fun ChoiceRow(
     label: String,
     value: String? = null,
     enabled: Boolean = true,
+    leadingIcon: ImageVector? = null,
     onClick: (() -> Unit)? = null
 ) {
-    GroupedRow(label, value, enabled, modifier = Modifier.padding(horizontal = 16.dp), onClick = onClick)
+    GroupedRow(label, value, enabled, modifier = Modifier.padding(horizontal = 16.dp), leadingIcon = leadingIcon, onClick = onClick)
 }

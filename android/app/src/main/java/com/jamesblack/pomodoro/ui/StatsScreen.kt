@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.jamesblack.pomodoro.core.*
@@ -54,8 +55,8 @@ import kotlinx.coroutines.launch
             largeTitle = true,
             leading = { StatsProjectFilter(projectID, state) { projectID = it } },
             trailing = {
-                IconButton(onClick = { consistency = true }) {
-                    Icon(Icons.Outlined.CalendarMonth, "Consistency")
+                IconButton(onClick = { consistency = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Outlined.CalendarMonth, "Consistency", modifier = Modifier.size(18.dp))
                 }
             }
         )
@@ -70,20 +71,30 @@ import kotlinx.coroutines.launch
                 IconButton(
                     onClick = { anchor = selection.move(-1, now).anchor; drillDay = null },
                     modifier = Modifier.size(48.dp)
-                ) { Icon(Icons.Outlined.ChevronLeft, "Previous ${range.title.lowercase()}") }
+                ) { Icon(Icons.Outlined.ChevronLeft, "Previous ${range.title.lowercase()}", modifier = Modifier.size(18.dp)) }
                 TextButton(
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     onClick = { picker = true }
                 ) {
-                    Text(periodTitle(selection, interval, range, now), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        periodTitle(selection, interval, range, now),
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)
+                    )
                     Spacer(Modifier.width(4.dp))
-                    Icon(Icons.Outlined.ExpandMore, contentDescription = "Choose ${range.title.lowercase()}")
+                    Icon(
+                        if (range == StatsDateRange.day) Icons.Outlined.CalendarMonth else Icons.Outlined.ExpandMore,
+                        contentDescription = "Choose ${range.title.lowercase()}",
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
                 IconButton(
                     enabled = selection.canMoveForward(now),
                     onClick = { anchor = selection.move(1, now).anchor; drillDay = null },
                     modifier = Modifier.size(48.dp)
-                ) { Icon(Icons.Outlined.ChevronRight, "Next ${range.title.lowercase()}") }
+                ) { Icon(Icons.Outlined.ChevronRight, "Next ${range.title.lowercase()}", modifier = Modifier.size(18.dp)) }
             }
             if (!selection.isCurrent(now) && range != StatsDateRange.all) {
                 TextButton(onClick = { anchor = null; drillDay = null; fullHistory = false }) {
@@ -92,25 +103,39 @@ import kotlinx.coroutines.launch
             }
         }
         Section("Focus time") {
-            Text("Saved focus", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Saved focus",
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 DurationText.summary(Statistics.total(state, projectID, interval, now)),
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.SemiBold
             )
-            if (Statistics.hasFocusInProgress(state, projectID, interval, now)) Hint("1 session in progress · not included yet")
+            if (Statistics.hasFocusInProgress(state, projectID, interval, now)) {
+                Text(
+                    "1 session in progress · not included yet",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         if (projectID != null && range == StatsDateRange.day && interval != null) {
             val target = GoalEngine.dailyTarget(projectID!!, interval.start, state.goalPlan)
-            GroupedRow(
-                label = when (target) { null -> "Daily goal"; 0 -> "Rest day"; else -> "Daily goal" },
-                value = when (target) { null -> "No recorded goal"; 0 -> null; else -> "$target min" },
-                onClick = { editProject(projectID!!) }
-            )
+            CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)) {
+                GroupedRow(
+                    label = when (target) { null -> "Daily goal"; 0 -> "Rest day"; else -> "Daily goal" },
+                    value = when (target) { null -> "No recorded goal"; 0 -> null; else -> "$target min" },
+                    onClick = { editProject(projectID!!) }
+                )
+            }
         }
         if (projectID != null && range == StatsDateRange.week && interval != null) {
             GoalEngine.weeklyTarget(projectID!!, interval.start, state.goalPlan)?.let { target ->
-                GroupedRow(label = "Weekly goal", value = "$target min")
+                CompositionLocalProvider(LocalTextStyle provides MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)) {
+                    GroupedRow(label = "Weekly goal", value = "$target min")
+                }
             }
         }
         if (interval != null && range.period != null) {
@@ -125,8 +150,16 @@ import kotlinx.coroutines.launch
                     comparison.delta == 0.0 -> "Same as last $periodName${if (interval.end > now) " so far" else ""}"
                     else -> "${DurationText.summary(kotlin.math.abs(comparison.delta))} ${if (comparison.delta > 0) "more" else "less"} than last $periodName${if (interval.end > now) " so far" else ""}"
                 }
-                Hint(comparisonText)
-                Hint("${DurationText.summary(comparison.currentSeconds)} current · ${DurationText.summary(comparison.previousSeconds)} previous")
+                Text(
+                    comparisonText,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "${DurationText.summary(comparison.currentSeconds)} current · ${DurationText.summary(comparison.previousSeconds)} previous",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 TextButton(onClick = { details = true }) { Text("Details") }
             }
             if (details) Dialog(onDismissRequest = { details = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -153,7 +186,11 @@ import kotlinx.coroutines.launch
                             GroupedRow(label = "This period · ${periodLabel(comparison.current)}", value = DurationText.summary(comparison.currentSeconds))
                             GroupedRow(label = "Previous period · ${periodLabel(comparison.previous)}", value = DurationText.summary(comparison.previousSeconds))
                             comparison.percentage?.let { GroupedRow(label = "Change", value = "%+.1f%%".format(it)) }
-                            Hint(if (interval.end > now) "Compared with the same calendar days in the previous period, including the full matching day." else "Compared with the full previous period.")
+                            Text(
+                                if (interval.end > now) "Compared with the same calendar days in the previous period, including the full matching day." else "Compared with the full previous period.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 18.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         if (projectID == null && summary.projects.isNotEmpty()) {
                             Section("Projects") { summary.projects.forEach { GroupedRow(label = it.name, value = DurationText.summary(it.seconds)) } }
@@ -201,11 +238,11 @@ import kotlinx.coroutines.launch
     var expanded by remember { mutableStateOf(false) }
     val label = projectID?.let { id -> state.projects.find { it.id == id }?.name } ?: "All projects"
     Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
-            Icon(Icons.Outlined.FilterList, contentDescription = null)
+        TextButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 48.dp).widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
+            Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.Outlined.ExpandMore, contentDescription = null)
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp))
+            Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("All projects") }, onClick = { expanded = false; select(null) })
@@ -275,7 +312,7 @@ internal fun periodLabel(interval: DateInterval): String {
         Text(
             date.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy")),
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         val orderedSessions = sessions.sortedByDescending { it.startedAt }

@@ -85,7 +85,7 @@ internal class UiEditors : ViewModel() {
             Column {
                 if (undo != null) Snackbar(action = { TextButton({ run(AppCommand.UndoDeletion) }) { Text("Undo") } }, dismissAction = { IconButton({ run(AppCommand.DismissUndo) }) { Icon(Icons.Outlined.Close, "Dismiss Undo") } }) { Text("${undo.count} ${if (undo.count == 1) "item" else "items"} deleted") }
                 val labels = listOf("Focus", "Thoughts", "Stats")
-                val icons = listOf(Icons.Outlined.Timer, Icons.Outlined.CheckBox, Icons.Outlined.BarChart)
+                val icons = listOf(Icons.Outlined.Timer, Icons.Outlined.ChatBubbleOutline, Icons.Outlined.BarChart)
                 Row(
                     Modifier
                         .fillMaxWidth()

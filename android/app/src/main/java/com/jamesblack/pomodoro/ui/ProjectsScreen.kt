@@ -4,8 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
@@ -70,18 +70,18 @@ internal fun ProjectsScreen(
                 largeTitle = project == null,
                 leading = {
                     IconButton(onClick = { if (project == null) onExit() else { detailID = null; error = null } }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = if (project == null) "Back" else "All projects")
+                        Icon(Icons.Outlined.ChevronLeft, contentDescription = if (project == null) "Back" else "All projects", modifier = Modifier.size(18.dp))
                     }
                 },
                 trailing = {
                     if (project == null) {
                         IconButton(onClick = create) {
-                            Icon(Icons.Outlined.Add, contentDescription = "Create project")
+                            Icon(Icons.Outlined.Add, contentDescription = "Create project", modifier = Modifier.size(18.dp))
                         }
                     } else {
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
-                                Icon(Icons.Outlined.MoreVert, contentDescription = "Project actions")
+                                Icon(Icons.Outlined.MoreHoriz, contentDescription = "Project actions", modifier = Modifier.size(18.dp))
                             }
                             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                                 DropdownMenuItem(
