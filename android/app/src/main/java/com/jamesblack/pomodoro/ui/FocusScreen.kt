@@ -55,7 +55,7 @@ import kotlinx.coroutines.delay
                 TextButton({ plan(active.projectID) }, Modifier.fillMaxWidth()) { Text("Plan next session") }
             }
         } else if (state.breakOffer != null) {
-            val offer = state.breakOffer
+            val offer = requireNotNull(state.breakOffer)
             Text("Focus saved", style = MaterialTheme.typography.titleLarge)
             TimerFace(offer.minutes * 60.0, 0f, offer.kind, Modifier.align(Alignment.CenterHorizontally))
             MinuteControl("${offer.kind.title} duration", offer.minutes, 1, 60) { run(AppCommand.SetBreakDuration(offer, it)) }
@@ -72,7 +72,7 @@ import kotlinx.coroutines.delay
             SelectMenu("Project", ongoing.map { it.id to it.name }, project.id, select)
             TimerFace(project.preferredFocusMinutes * 60.0, 0f, TimerKind.focus, Modifier.align(Alignment.CenterHorizontally))
             MinuteControl("Focus duration", project.preferredFocusMinutes, 10, 60) { run(AppCommand.RememberFocusDuration(project.id, it)) }
-            OutlinedButton({ plan(project.id) }, Modifier.fillMaxWidth()) { Text(if (project.breadcrumb == null) "Add session plan" else "${SessionPlanText.items(project.breadcrumb.text).size} planned tasks") }
+            OutlinedButton({ plan(project.id) }, Modifier.fillMaxWidth()) { Text(if (project.breadcrumb == null) "Add session plan" else "${SessionPlanText.items(project.breadcrumb?.text).size} planned tasks") }
             project.breadcrumb?.let { Hint(it.text) }
             Action("Start Focus") { platform.requestNotifications(); run(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) }
             val target = GoalEngine.dailyTarget(project.id, now, state.goalPlan)
@@ -89,7 +89,7 @@ import kotlinx.coroutines.delay
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(200.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, Modifier.fillMaxSize(), color = accent, strokeWidth = 8.dp, trackColor = accent.copy(alpha = .13f))
-            Text(DurationText.countdown(seconds), fontSize = 58.sp, fontFamily = FontFamily.Monospace, color = accent, maxLines = 1, modifier = Modifier.semantics { liveRegion = LiveRegionMode.None })
+            Text(DurationText.countdown(seconds), fontSize = 58.sp, fontFamily = FontFamily.Monospace, color = accent, maxLines = 1)
         }
         Text(kind.title, color = accent, style = MaterialTheme.typography.titleMedium)
     }
