@@ -12,6 +12,8 @@ Install JDK 17 and Android SDK platform 36. Set `ANDROID_HOME` or create an untr
 
 Debug installations use `com.jamesblack.pomodoro.debug`; Play releases use `com.jamesblack.pomodoro`. Debug and release data are separate. Emulator checks do not prove notification delivery on a physical device.
 
+The local test suite includes core and transactional state tests plus Robolectric tests for Android storage, alarms, editor recovery, and the create-project → start-focus → capture-thought flow. UI renders are written to `app/build/reports/screenshots/`. To verify backup portability against the current Swift implementation, run `python3 Scripts/verify_android_backup.py` from the repository root; this requires Docker and the existing `swift:6.0.3` image.
+
 ## Release bundle
 
 Create and retain an upload key outside this repository. Supply the following environment variables through your local credential manager or build environment:
@@ -22,6 +24,8 @@ Create and retain an upload key outside this repository. Supply the following en
 - `POMODORO_UPLOAD_KEY_PASSWORD`
 
 Run `./gradlew :app:bundleRelease`. Without these inputs, a release bundle is unsigned and cannot be uploaded to Play. Never commit keys or passwords. Increment `versionCode` before each new Play upload; keep the application ID unchanged.
+
+The bundle is written to `app/build/outputs/bundle/release/app-release.aab`. The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. Completion sounds use Android notification channels; they do not bypass system volume, Do Not Disturb, or enterprise device policies. Home-screen widgets are deferred from this port.
 
 ## Google Play internal testing
 
