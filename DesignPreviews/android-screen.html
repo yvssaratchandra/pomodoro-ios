@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pomodoro preview screen</title>
+<link rel="stylesheet" href="android.css"><link rel="stylesheet" href="android-refinement.css"><link rel="stylesheet" href="android-frame.css">
+<script src="android.js" defer></script><script src="android-refinement.js" defer></script><script src="android-frame.js" defer></script></head>
+<body><div class="document"><main class="workspace"><section class="preview-stage" aria-label="Interactive app preview">
+<div class="phone" id="phone"><div class="system-status" aria-hidden="true"><span>9:41</span><span class="camera"></span><span class="status-icons">▂▄▆ <span class="battery">▰</span></span></div><div id="app" class="app"></div><div class="system-navigation" aria-hidden="true"><span></span></div><div id="overlay-root"></div></div>
+<p id="preview-feedback" class="preview-feedback" role="status" aria-live="polite"></p>
+</section></main></div>
+<!-- Existing preview renderer also maintains these controls; the comparison shell replaces their presentation. -->
+<div hidden><nav id="screen-navigation"></nav><select id="appearance"><option>light</option><option>dark</option></select><input type="checkbox" id="large-text"><select id="scenario"><option>ready</option><option>running</option><option>breakReady</option><option>breakRunning</option><option>dim</option><option>empty</option></select><aside id="design-notes"></aside></div>
+</body></html>
