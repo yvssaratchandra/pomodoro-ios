@@ -2,6 +2,9 @@ package com.jamesblack.pomodoro.core.store
 
 import com.jamesblack.pomodoro.core.*
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlin.test.*
 import java.time.ZoneId
 
@@ -135,6 +138,30 @@ class AppStoreTest {
         store.execute(AppCommand.UpdateSettings(store.snapshot.settings.copy(focusCompletionSound = CompletionSound.bell)))
         assertEquals(CompletionSound.bell, store.snapshot.activeTimer!!.completionSound)
         assertEquals(CompletionSound.bell, disk.document!!.alarmTickets.single().sound)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun callerCancellationCannotSplitSaveAndPublish() = runTest {
+        val enteredSave = CompletableDeferred<Unit>()
+        val releaseSave = CompletableDeferred<Unit>()
+        var saved = LocalDocument(snapshot = AppSnapshot(projects = listOf(project)))
+        var delaySave = false
+        val persistence = object : SnapshotPersistence {
+            override suspend fun load() = saved
+            override suspend fun save(document: LocalDocument) {
+                saved = document
+                if (delaySave) { enteredSave.complete(Unit); releaseSave.await() }
+            }
+        }
+        val store = AppStore(persistence, now = { timestamp })
+        store.initialize(); delaySave = true
+        val operation = launch { store.execute(AppCommand.StartFocus(project.id, 10)) }
+        enteredSave.await(); operation.cancel(); releaseSave.complete(Unit); operation.join(); runCurrent()
+        assertEquals(saved.snapshot, store.snapshot); assertNotNull(store.snapshot.activeTimer)
+        delaySave = false
+        store.execute(AppCommand.EditIntention(store.snapshot.activeTimer!!.id, true, "Continue"))
+        assertEquals(saved.snapshot, store.snapshot)
+        assertEquals("Continue", store.snapshot.activeTimer!!.intention)
     }
 
 }

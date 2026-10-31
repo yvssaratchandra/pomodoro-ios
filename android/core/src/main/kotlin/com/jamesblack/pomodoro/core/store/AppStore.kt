@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import java.time.ZoneId
 
 /** The only writer of authoritative state. Effects observe only durable documents. */
@@ -22,7 +24,7 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
     val snapshot: AppSnapshot get() = document?.snapshot ?: AppSnapshot()
     fun dismissError() { mutableError.value = null }
 
-    suspend fun initialize() = mutex.withLock {
+    suspend fun initialize() = withContext(NonCancellable) { mutex.withLock {
         if (document != null) return@withLock
         try {
             val loaded = persistence.load() ?: LocalDocument()
@@ -36,9 +38,9 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
             if (e is CancellationException) throw e
             mutableState.value = LoadState.Failed(e.message ?: "Unable to load saved data.")
         }
-    }
+    } }
 
-    suspend fun execute(command: AppCommand): MutationResult = mutex.withLock {
+    suspend fun execute(command: AppCommand): MutationResult = withContext(NonCancellable) { mutex.withLock {
         val before = document ?: return@withLock failure("Saved data is not available.")
         expireUndo()
         if (command == AppCommand.DismissUndo || command == AppCommand.ExpireUndo) {
@@ -174,7 +176,7 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
             if (e is CancellationException) throw e
             failure(e.message ?: "Unable to save changes.")
         }
-    }
+    } }
 
     fun canDeleteProject(id: String): Boolean {
         val state = snapshot
