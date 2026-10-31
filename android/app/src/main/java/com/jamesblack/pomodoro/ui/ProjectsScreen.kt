@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -15,12 +16,16 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
-@Composable internal fun ProjectsScreen(state: AppSnapshot, now: Double, run: (AppCommand) -> Unit, edit: (String) -> Unit, create: () -> Unit, focus: (String) -> Unit, thoughts: (String) -> Unit, session: (String) -> Unit, platform: PlatformActions) {
+@Composable internal fun ProjectsScreen(state: AppSnapshot, now: Double, run: (AppCommand) -> Unit, edit: (String) -> Unit, create: () -> Unit, focus: (String) -> Unit, thoughts: (String) -> Unit, session: (String) -> Unit, platform: PlatformActions, execute: suspend (AppCommand) -> MutationResult) {
     var detailID by rememberSaveable { mutableStateOf<String?>(null) }
     var merge by remember { mutableStateOf<String?>(null) }
     var destination by rememberSaveable { mutableStateOf<String?>(null) }
     var delete by remember { mutableStateOf<String?>(null) }
     var showInactive by rememberSaveable { mutableStateOf(false) }
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val project = state.projects.find { it.id == detailID }
     Page {
         if (project == null) {
@@ -47,20 +52,21 @@ import kotlinx.coroutines.launch
             TextButton({ thoughts(project.id) }) { Text("Review thoughts") }
             TextButton({ platform.pinShortcut(AppRoute.StartFocus(project.id)) }) { Text("Add quick-start shortcut") }
             Section("Recent sessions") {
-                val recent = state.sessions.filter { it.projectID == project.id }.sortedByDescending { it.startedAt }.take(5)
+                val recent = state.sessions.filter { it.projectID == project.id }.sortedByDescending { it.startedAt }.let { if (showAll) it else it.take(5) }
                 if (recent.isEmpty()) Hint("No saved sessions yet.")
-                recent.forEach { SessionListRow(it, project.name, null) { session(it.id) } }
+                recent.forEach { SessionListRow(it, project.name, null) { session(it.id) } }; if (state.sessions.count { it.projectID == project.id } > 5) TextButton({ showAll = !showAll }) { Text(if (showAll) "Recent sessions" else "View all sessions") }
             }
             TextButton({ merge = project.id; destination = null }) { Text("Merge into another project") }
             TextButton({ delete = project.id }) { Text("Delete empty project", color = MaterialTheme.colorScheme.error) }
         }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         if (state.goalPlan.pendingLegacyDailySchedule != null) Section("Assign your previous daily goal") {
             Hint("Choose the project this goal belongs to. It will not be applied to every project.")
             state.projects.forEach { p -> TextButton({ run(AppCommand.AssignLegacyDailyGoal(p.id)) }) { Text("Assign to ${p.name}") } }
             TextButton({ run(AppCommand.DiscardLegacyDailyGoal) }) { Text("Discard previous goal") }
         }
     }
-    merge?.let { source -> AlertDialog(onDismissRequest = { merge = null }, title = { Text("Merge project") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Hint("Sessions and thoughts move to the destination. Its existing goals are kept. Conflicting session plans must be resolved first."); SelectMenu("Destination", state.projects.filter { it.id != source }.map { it.id to it.name }, destination) { destination = it } } }, dismissButton = { TextButton({ merge = null }) { Text("Cancel") } }, confirmButton = { TextButton(enabled = destination != null, onClick = { run(AppCommand.MergeProjects(source, destination!!)); merge = null; detailID = destination }) { Text("Merge") } }) }
+    merge?.let { source -> AlertDialog(onDismissRequest = { merge = null }, title = { Text("Merge project") }, text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { Hint("Sessions and thoughts move to the destination. Its existing goals are kept. Conflicting session plans must be resolved first."); SelectMenu("Destination", state.projects.filter { it.id != source }.map { it.id to it.name }, destination) { destination = it }; error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, dismissButton = { TextButton({ merge = null }) { Text("Cancel") } }, confirmButton = { TextButton(enabled = destination != null && !busy, onClick = { scope.launch { busy = true; when (val result = execute(AppCommand.MergeProjects(source, destination!!))) { MutationResult.Success -> { merge = null; detailID = destination }; is MutationResult.Failure -> error = result.message }; busy = false } }) { Text("Merge") } }) }
     delete?.let { id -> Confirm("Delete empty project?", "Only a project without saved sessions, thoughts, a pending plan, or a running timer can be deleted.", "Delete", { delete = null }) { run(AppCommand.DeleteEmptyProject(id)); delete = null } }
 }
 
@@ -72,7 +78,7 @@ import kotlinx.coroutines.launch
     var longBreak by rememberSaveable { mutableIntStateOf(initial.longBreakMinutes) }
     var daily by rememberSaveable { mutableStateOf(initial.dailySchedule) }
     var weekly by rememberSaveable { mutableStateOf(initial.weeklyMinutes) }
-    var scheduled by remember { mutableStateOf(initial.scheduledWeeklyEdits) }
+    var scheduled by rememberSaveable(stateSaver = scheduledEditsSaver) { mutableStateOf(initial.scheduledWeeklyEdits) }
     var futureDate by rememberSaveable { mutableStateOf(Time.date(GoalEngine.week(now).end).toString()) }
     var futureGoal by rememberSaveable { mutableStateOf("") }
     var showTimers by rememberSaveable { mutableStateOf(!initial.isNew) }
@@ -129,3 +135,5 @@ import kotlinx.coroutines.launch
     }
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Discard changes?") }, dismissButton = { TextButton({ confirming = false }) { Text("Keep editing") } }, confirmButton = { TextButton(dismiss) { Text("Discard") } })
 }
+
+internal val scheduledEditsSaver = listSaver<Map<LocalDay, ScheduledWeeklyEdit>, String>(save = { edits -> edits.map { (day, edit) -> "${day.date()}|${when (edit) { ScheduledWeeklyEdit.Cancel -> "cancel"; is ScheduledWeeklyEdit.Set -> edit.minutes?.toString() ?: "off" }}" } }, restore = { saved -> saved.associate { val parts = it.split('|'); LocalDay(java.time.LocalDate.parse(parts[0])) to when (parts[1]) { "cancel" -> ScheduledWeeklyEdit.Cancel; "off" -> ScheduledWeeklyEdit.Set(null); else -> ScheduledWeeklyEdit.Set(parts[1].toInt()) } } })

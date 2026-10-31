@@ -7,10 +7,20 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
+
+internal class UiEditors : ViewModel() {
+    var dimEnabled by mutableStateOf(false)
+    var project by mutableStateOf<ProjectDraft?>(null)
+    var note by mutableStateOf<NoteRequest?>(null)
+    var capture by mutableStateOf<ThoughtCaptureContext?>(null)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun PomodoroUi(snapshot: AppSnapshot, now: Double, undo: PendingDeletion?, error: String?, route: AppRoute?, onRouteHandled: () -> Unit, execute: suspend (AppCommand) -> MutationResult, platform: PlatformActions, onDismissError: () -> Unit = {}) {
@@ -18,9 +28,11 @@ import com.jamesblack.pomodoro.core.store.*
     var destination by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedProject by rememberSaveable { mutableStateOf<String?>(null) }
     var thoughtsProject by rememberSaveable { mutableStateOf<String?>(null) }
-    var projectEditor by remember { mutableStateOf<ProjectDraft?>(null) }
-    var note by remember { mutableStateOf<NoteRequest?>(null) }
-    var capture by remember { mutableStateOf<ThoughtCaptureContext?>(null) }
+    val editors: UiEditors = viewModel()
+    var projectEditor by editors::project
+    var note by editors::note
+    var capture by editors::capture
+    val pageState = rememberSaveableStateHolder()
     var sessionID by rememberSaveable { mutableStateOf<String?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -35,13 +47,13 @@ import com.jamesblack.pomodoro.core.store.*
             when (route) {
                 AppRoute.Timer -> { tab = 0; destination = null }
                 AppRoute.NewProject -> { tab = 0; destination = null; create() }
-                is AppRoute.StartFocus -> { tab = 0; destination = null; val project = snapshot.projects.find { it.id == route.projectID }; if (snapshot.activeTimer == null && project?.status == ProjectStatus.ongoing) { selectedProject = project.id; execute(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) } }
+                is AppRoute.StartFocus -> { tab = 0; destination = null; val project = snapshot.projects.find { it.id == route.projectID }; execute(AppCommand.Reconcile); if ((snapshot.activeTimer == null || snapshot.activeTimer!!.deadline <= now) && project?.status == ProjectStatus.ongoing) { selectedProject = project.id; execute(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) } else if (project == null || project.status != ProjectStatus.ongoing) localError = "This project is no longer available for Focus." else localError = "A timer is already running." }
                 is AppRoute.CaptureThought -> {
-                    val active = snapshot.activeTimer?.takeIf { it.kind == TimerKind.focus && (route.sessionID == null || it.id == route.sessionID) }
+                    val active = snapshot.activeTimer?.takeIf { it.kind == TimerKind.focus && now < it.deadline && (route.sessionID == null || it.id == route.sessionID) }
                     val saved = snapshot.sessions.find { it.id == route.sessionID }
                     openCapture(ThoughtCaptureContext(projectID = active?.projectID ?: saved?.projectID, originSessionID = active?.id ?: saved?.id))
                 }
-                is AppRoute.PlanNextSession -> plan(route.projectID)
+                is AppRoute.PlanNextSession -> if (snapshot.projects.any { it.id == route.projectID }) plan(route.projectID) else localError = "This project is no longer available."
             }
             onRouteHandled()
         } else if (route is AppRoute.CaptureThought && capture != null) {
@@ -50,29 +62,31 @@ import com.jamesblack.pomodoro.core.store.*
         }
     }
     PomodoroTheme(snapshot.settings.appearance) {
-        Scaffold(topBar = { TopAppBar(title = { Text(destination?.replaceFirstChar { it.uppercase() } ?: listOf("Focus", "Thoughts", "Stats")[tab]) }, navigationIcon = { if (destination != null) IconButton({ destination = null }) { Icon(Icons.Outlined.ArrowBack, "Back") } }, actions = { if (destination == null && tab == 0) { IconButton({ destination = "settings" }) { Icon(Icons.Outlined.Settings, "Settings") }; IconButton({ destination = "projects" }) { Icon(Icons.Outlined.FolderOpen, "Projects") } } }) }, bottomBar = {
+        Scaffold(topBar = { TopAppBar(title = { Text(destination?.replaceFirstChar { it.uppercase() } ?: listOf("Focus", "Thoughts", "Stats")[tab]) }, navigationIcon = { if (destination != null) IconButton({ destination = null }) { Icon(Icons.Outlined.ArrowBack, "Back") } }, actions = { if (destination == null && tab == 0) { if (snapshot.activeTimer?.kind == TimerKind.focus) IconButton({ editors.dimEnabled = !editors.dimEnabled }) { Icon(Icons.Outlined.Brightness4, if (editors.dimEnabled) "Disable Dim Focus" else "Enable Dim Focus") }; IconButton({ destination = "settings" }) { Icon(Icons.Outlined.Settings, "Settings") }; IconButton({ destination = "projects" }) { Icon(Icons.Outlined.FolderOpen, "Projects") } } }) }, bottomBar = {
             Column {
                 if (undo != null) Snackbar(action = { TextButton({ run(AppCommand.UndoDeletion) }) { Text("Undo") } }, dismissAction = { IconButton({ run(AppCommand.DismissUndo) }) { Icon(Icons.Outlined.Close, "Dismiss Undo") } }) { Text("${undo.count} ${if (undo.count == 1) "item" else "items"} deleted") }
                 NavigationBar { listOf(Icons.Outlined.Timer, Icons.Outlined.CheckBox, Icons.Outlined.BarChart).forEachIndexed { index, icon -> NavigationBarItem(selected = tab == index && destination == null, onClick = { tab = index; destination = null }, icon = { Icon(icon, null) }, label = { Text(listOf("Focus", "Thoughts", "Stats")[index]) }) } }
             }
         }) { padding ->
             Box(Modifier.padding(padding)) {
+              pageState.SaveableStateProvider(destination ?: "tab$tab") {
                 when (destination) {
-                    "projects" -> ProjectsScreen(snapshot, now, run, { projectEditor = ProjectDraft.from(snapshot, it, now) }, create, { selectedProject = it; destination = null; tab = 0 }, { thoughtsProject = it; destination = null; tab = 1 }, { sessionID = it }, platform)
-                    "settings" -> SettingsScreen(snapshot, platform, run)
+                    "projects" -> ProjectsScreen(snapshot, now, run, { projectEditor = ProjectDraft.from(snapshot, it, now) }, create, { selectedProject = it; destination = null; tab = 0 }, { thoughtsProject = it; destination = null; tab = 1 }, { sessionID = it }, platform, execute)
+                    "settings" -> SettingsScreen(snapshot, platform, run, execute)
                     else -> when (tab) {
-                        0 -> FocusScreen(snapshot, now, selectedProject, { selectedProject = it }, run, create, { destination = "projects" }, plan, openCapture, { thoughtsProject = it; tab = 1 }, { note = it }, platform, editorOpen)
+                        0 -> FocusScreen(snapshot, now, selectedProject, { selectedProject = it }, run, create, { destination = "projects" }, plan, openCapture, { thoughtsProject = it; tab = 1 }, { note = it }, platform, editorOpen, editors.dimEnabled, { editors.dimEnabled = it }, execute)
                         1 -> ThoughtsScreen(snapshot, thoughtsProject, { thoughtsProject = it }, run, openCapture, { thought -> note = NoteRequest("Edit thought", thought.text, 500) { AppCommand.EditThought(thought.id, it) } })
                         else -> StatsScreen(snapshot, now, { sessionID = it }, { projectEditor = ProjectDraft.from(snapshot, it, now) })
                     }
                 }
+              }
             }
         }
         BackHandler(destination != null && !editorOpen) { destination = null }
-        note?.let { request -> key(request) { TextEditor(request.title, request.text, request.limit, { note = null }) { execute(request.command(it)) } } }
+        sessionID?.let { id -> SessionDetail(snapshot, id, { sessionID = null }, execute) { note = it } }
+        note?.let { request -> key(request) { if (request.title == "Session plan") PlanEditor(request.text, { note = null }) { execute(request.command(it)) } else TextEditor(request.title, request.text, request.limit, { note = null }) { execute(request.command(it)) } } }
         capture?.let { context -> key(context.id) { ThoughtComposer(snapshot, context, { capture = null }, execute) } }
         projectEditor?.let { draft -> key(draft.projectID) { ProjectEditor(draft, snapshot, now, { projectEditor = null }) { edited -> val result = execute(AppCommand.SaveProjectSettings(edited)); if (result == MutationResult.Success && edited.isNew) selectedProject = edited.projectID; result } } }
-        sessionID?.let { id -> SessionDetail(snapshot, id, { sessionID = null }, execute) }
-        (localError ?: error)?.let { message -> AlertDialog(onDismissRequest = { localError = null; onDismissError() }, title = { Text("Unable to save") }, text = { Text(message) }, confirmButton = { TextButton({ localError = null; onDismissError() }) { Text("OK") } }) }
+        (localError ?: error)?.let { message -> AlertDialog(onDismissRequest = { localError = null; onDismissError() }, title = { Text("Pomodoro") }, text = { Text(message) }, confirmButton = { TextButton({ localError = null; onDismissError() }) { Text("OK") } }) }
     }
 }

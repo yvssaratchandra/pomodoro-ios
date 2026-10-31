@@ -62,11 +62,12 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
 @Composable internal fun ThoughtComposer(state: AppSnapshot, context: ThoughtCaptureContext, dismiss: () -> Unit, execute: suspend (AppCommand) -> MutationResult) {
     var text by rememberSaveable(context.id) { mutableStateOf("") }
     var projectID by rememberSaveable(context.id) { mutableStateOf(context.projectID) }
-    val initialIDs = remember(context.id) { state.thoughts.map { it.id }.toSet() }
+    val initialIDs = rememberSaveable(context.id) { ArrayList(state.thoughts.map { it.id }) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf<CapturedThought?>(null) }
+    var editingID by rememberSaveable { mutableStateOf<String?>(null) }
+    val editing = state.thoughts.find { it.id == editingID }
     var deleting by remember { mutableStateOf<CapturedThought?>(null) }
     val scope = rememberCoroutineScope()
     val close = { if (!busy) { if (text.isNotBlank()) confirming = true else dismiss() } }
@@ -77,7 +78,7 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
             Column(Modifier.safeDrawingPadding().imePadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(if (context.originSessionID == null) "New thoughts" else "Session thoughts", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); TextButton(close) { Text("Done") } }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    saved.forEach { thought -> ThoughtRow(thought, state.projects.find { it.id == thought.projectID }?.name, check = { run(AppCommand.SetThoughtsCompleted(setOf(thought.id), thought.completedAt == null)) }, edit = { editing = thought }, delete = { deleting = thought }) }
+                    saved.forEach { thought -> ThoughtRow(thought, state.projects.find { it.id == thought.projectID }?.name, check = { run(AppCommand.SetThoughtsCompleted(setOf(thought.id), thought.completedAt == null)) }, edit = { editingID = thought.id }, delete = { deleting = thought }) }
                     if (saved.isEmpty()) Hint("Capture a thought and return to your focus. Saved thoughts remain even if you discard the session.")
                 }
                 if (context.originSessionID == null) SelectMenu("Project", listOf("" to "Unassigned") + state.projects.map { it.id to it.name }, projectID ?: "") { projectID = it.takeIf(String::isNotEmpty) }
@@ -90,6 +91,6 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
         }
     }
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Discard this draft?") }, text = { Text("Thoughts you've already added remain saved.") }, dismissButton = { TextButton({ confirming = false }) { Text("Keep editing") } }, confirmButton = { TextButton(dismiss) { Text("Discard draft") } })
-    editing?.let { thought -> key(thought.id) { TextEditor("Edit thought", thought.text, 500, { editing = null }) { execute(AppCommand.EditThought(thought.id, it)) } } }
+    editing?.let { thought -> key(thought.id) { TextEditor("Edit thought", thought.text, 500, { editingID = null }) { execute(AppCommand.EditThought(thought.id, it)) } } }
     deleting?.let { thought -> Confirm("Delete thought?", "You can Undo briefly after deleting.", "Delete", { deleting = null }) { run(AppCommand.DeleteThoughts(setOf(thought.id))); deleting = null } }
 }

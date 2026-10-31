@@ -8,7 +8,7 @@ import androidx.compose.ui.*
 import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
 
-@Composable internal fun SettingsScreen(state: AppSnapshot, platform: PlatformActions, run: (AppCommand) -> Unit) {
+@Composable internal fun SettingsScreen(state: AppSnapshot, platform: PlatformActions, run: (AppCommand) -> Unit, execute: suspend (AppCommand) -> MutationResult) {
     var help by rememberSaveable { mutableStateOf(false) }
     Page {
         Section("Appearance") { SelectMenu("Theme", Appearance.entries.map { it.name to it.name.replaceFirstChar(Char::uppercase) }, state.settings.appearance.name) { run(AppCommand.UpdateSettings(state.settings.copy(appearance = Appearance.valueOf(it)))) } }
@@ -18,7 +18,7 @@ import com.jamesblack.pomodoro.core.store.*
             TextButton({ platform.testSound(TimerKind.focus) }) { Text("Test focus completion alert") }
             SelectMenu("Break complete", CompletionSound.entries.map { it.name to it.title }, state.settings.breakCompletionSound.name) { run(AppCommand.UpdateSettings(state.settings.copy(breakCompletionSound = CompletionSound.valueOf(it)))) }
             TextButton({ platform.testSound(TimerKind.shortBreak) }) { Text("Test break completion alert") }
-            Hint("Completion alerts use system notifications and your phone's notification volume. Android notification settings and Do Not Disturb can silence them. New choices apply to the next timer.")
+            Hint("Completion alerts use system notifications and your phone's notification volume. Android notification settings and Do Not Disturb can silence them. Sound changes also update a running timer.")
             Hint(platform.notificationStatus)
             TextButton(platform::requestNotifications) { Text("Enable notifications") }
             TextButton(platform::openNotificationSettings) { Text("Open notification settings") }
@@ -29,9 +29,10 @@ import com.jamesblack.pomodoro.core.store.*
             Hint("Thoughts and next steps stay inside the app.")
         }
         Section("Timer defaults") {
-            MinuteControl("Focus", state.settings.defaultFocusMinutes, 10, 60) { run(AppCommand.UpdateSettings(state.settings.copy(defaultFocusMinutes = it))) }
-            MinuteControl("Short break", state.settings.defaultShortBreakMinutes, 1, 60) { run(AppCommand.UpdateSettings(state.settings.copy(defaultShortBreakMinutes = it))) }
-            MinuteControl("Long break", state.settings.defaultLongBreakMinutes, 1, 60) { run(AppCommand.UpdateSettings(state.settings.copy(defaultLongBreakMinutes = it))) }
+            Toggle("Haptics", state.settings.haptics) { run(AppCommand.UpdateSettings(state.settings.copy(haptics = it))) }
+            MinuteControl("Focus", state.settings.defaultFocusMinutes, 10, 60, save = { execute(AppCommand.UpdateSettings(state.settings.copy(defaultFocusMinutes = it))) }, onChange = {})
+            MinuteControl("Short break", state.settings.defaultShortBreakMinutes, 1, 60, save = { execute(AppCommand.UpdateSettings(state.settings.copy(defaultShortBreakMinutes = it))) }, onChange = {})
+            MinuteControl("Long break", state.settings.defaultLongBreakMinutes, 1, 60, save = { execute(AppCommand.UpdateSettings(state.settings.copy(defaultLongBreakMinutes = it))) }, onChange = {})
             SelectMenu("Long break after", (1..12).map { it.toString() to "$it focus sessions" }, state.settings.longBreakInterval.toString()) { run(AppCommand.UpdateSettings(state.settings.copy(longBreakInterval = it.toInt()))) }
         }
         Section("Consistency") { SelectMenu("Weekly focused-day target", (1..7).map { it.toString() to "$it days" }, state.settings.consistencyTargetDays.toString()) { run(AppCommand.UpdateSettings(state.settings.copy(consistencyTargetDays = it.toInt()))) }; Hint("At least 10 minutes of saved focus makes a focused day.") }

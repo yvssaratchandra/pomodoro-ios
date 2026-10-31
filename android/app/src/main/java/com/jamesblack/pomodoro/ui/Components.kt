@@ -19,11 +19,11 @@ import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
 
 internal val Indigo = Color(0xFF6860D8)
-internal val Sage = Color(0xFF789681)
+internal val Sage = Color(0xFF4E6B56)
 
 @Composable internal fun PomodoroTheme(appearance: Appearance, content: @Composable () -> Unit) {
     val dark = appearance == Appearance.dark || (appearance == Appearance.system && isSystemInDarkTheme())
-    val scheme = if (dark) darkColorScheme(primary = Indigo, secondary = Sage, background = Color.Black, surface = Color.Black, surfaceContainer = Color(0xFF171719))
+    val scheme = if (dark) darkColorScheme(primary = Indigo, secondary = Color(0xFF84A08C), background = Color.Black, surface = Color.Black, surfaceContainer = Color(0xFF171719))
     else lightColorScheme(primary = Indigo, secondary = Sage, background = Color(0xFFF6F5FA), surface = Color(0xFFF6F5FA), surfaceContainer = Color.White)
     MaterialTheme(colorScheme = scheme, shapes = Shapes(medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(22.dp)), content = content)
 }
@@ -36,8 +36,8 @@ internal val Sage = Color(0xFF789681)
         }
     }
 }
-@Composable internal fun Page(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp), content = content)
+@Composable internal fun Page(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp), content = content)
 }
 @Composable internal fun Hint(text: String) { Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 @Composable internal fun Action(label: String, enabled: Boolean = true, onClick: () -> Unit) { Button(onClick, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled) { Text(label) } }
@@ -77,9 +77,12 @@ internal val Sage = Color(0xFF789681)
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Discard changes?") }, text = { Text("Your unsaved text will be lost.") }, dismissButton = { TextButton({ confirming = false }) { Text("Keep editing") } }, confirmButton = { TextButton(onDismiss) { Text("Discard") } })
 }
 
-@Composable internal fun MinuteControl(label: String, value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
+@Composable internal fun MinuteControl(label: String, value: Int, min: Int, max: Int, save: (suspend (Int) -> MutationResult)? = null, onChange: (Int) -> Unit) {
     var editing by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var draft by rememberSaveable(value) { mutableStateOf(value.toString()) }
     TextButton({ editing = true }, Modifier.fillMaxWidth()) { Text("$label · $value min") }
-    if (editing) AlertDialog(onDismissRequest = { editing = false }, title = { Text(label) }, text = { Column { OutlinedTextField(draft, { draft = it.filter(Char::isDigit).take(4) }, label = { Text("Minutes ($min–$max)") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)); if (min == 0) Hint("0 means a rest day.") } }, dismissButton = { TextButton({ editing = false }) { Text("Cancel") } }, confirmButton = { TextButton(enabled = draft.toIntOrNull()?.let { it in min..max } == true, onClick = { onChange(draft.toInt()); editing = false }) { Text("Done") } })
+    if (editing) AlertDialog(onDismissRequest = { editing = false }, title = { Text(label) }, text = { Column { OutlinedTextField(draft, { draft = it.filter(Char::isDigit).take(4) }, label = { Text("Minutes ($min–$max)") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)); if (min == 0) Hint("0 means a rest day."); error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, dismissButton = { TextButton({ editing = false }) { Text("Cancel") } }, confirmButton = { TextButton(enabled = !busy && draft.toIntOrNull()?.let { it in min..max } == true, onClick = { if (save == null) { onChange(draft.toInt()); editing = false } else scope.launch { busy = true; when (val result = save(draft.toInt())) { MutationResult.Success -> editing = false; is MutationResult.Failure -> error = result.message }; busy = false } }) { Text("Done") } })
 }
