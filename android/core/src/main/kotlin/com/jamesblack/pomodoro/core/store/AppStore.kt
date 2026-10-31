@@ -63,7 +63,12 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
                     original.copy(projects = original.projects.map { if (it.id == command.projectID) it.copy(lastFocusMinutes = command.minutes) else it })
                 }
                 AppCommand.EndTimer -> { original.activeTimer?.let { timer -> tickets = tickets.map { if (it.timerID == timer.id) it.copy(disposition = AlarmDisposition.cancelled) else it } }; TimerEngine.finish(original, time, true) }
-                is AppCommand.DiscardFocus -> { tickets = tickets.map { if (it.timerID == command.timerID) it.copy(disposition = AlarmDisposition.cancelled) else it }; TimerEngine.discardFocus(original, command.timerID) }
+                is AppCommand.DiscardFocus -> {
+                    if (original.activeTimer?.id == command.timerID && original.activeTimer.kind == TimerKind.focus) {
+                        tickets = tickets.map { if (it.timerID == command.timerID) it.copy(disposition = AlarmDisposition.cancelled) else it }
+                    }
+                    TimerEngine.discardFocus(original, command.timerID)
+                }
                 AppCommand.Reconcile -> TimerEngine.finish(original, time)
                 AppCommand.Recover -> {
                     tickets = tickets.map { if (it.deadline <= time && it.disposition == AlarmDisposition.pending) it.copy(disposition = AlarmDisposition.cancelled) else it }
@@ -132,11 +137,17 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
                     original.copy(projects = original.projects.filterNot { it.id == command.id }, goalPlan = original.goalPlan.copy(dailyProjectRevisions = original.goalPlan.dailyProjectRevisions.filterNot { it.projectID == command.id }, weeklyProjectRevisions = original.goalPlan.weeklyProjectRevisions.filterNot { it.projectID == command.id }))
                 }
                 is AppCommand.UpdateSettings -> {
+                    val audioChanged = command.settings.notificationSound != original.settings.notificationSound ||
+                        command.settings.focusCompletionSound != original.settings.focusCompletionSound ||
+                        command.settings.breakCompletionSound != original.settings.breakCompletionSound
+                    // A sound edit applies to a future deadline. An already due alert keeps the
+                    // captured sound even when its receiver is still waiting to acquire the store.
+                    val settled = if (audioChanged) TimerEngine.finish(original, time) else original
                     val intervalChanged = command.settings.longBreakInterval != original.settings.longBreakInterval
-                    require(!intervalChanged || original.activeTimer == null) { "End the timer before changing the break cycle." }
-                    val timer = original.activeTimer?.copy(completionSound = command.settings.completionSound(original.activeTimer.kind))
-                    if (timer != null) tickets = tickets.map { if (it.timerID == timer.id && it.disposition == AlarmDisposition.pending) it.copy(sound = timer.completionSound) else it }
-                    original.copy(settings = command.settings, activeTimer = timer, completedInCycle = if (intervalChanged) 0 else original.completedInCycle)
+                    require(!intervalChanged || settled.activeTimer == null) { "End the timer before changing the break cycle." }
+                    val timer = settled.activeTimer?.let { if (audioChanged) it.copy(completionSound = command.settings.completionSound(it.kind)) else it }
+                    if (audioChanged && timer != null) tickets = tickets.map { if (it.timerID == timer.id && it.disposition == AlarmDisposition.pending) it.copy(sound = timer.completionSound) else it }
+                    settled.copy(settings = command.settings, activeTimer = timer, completedInCycle = if (intervalChanged) 0 else settled.completedInCycle)
                 }
                 is AppCommand.SaveDailyGoals -> { project(original, command.projectID); original.copy(goalPlan = GoalEngine.setDaily(original.goalPlan, command.projectID, command.minutes, time, zone())) }
                 is AppCommand.SaveWeeklyGoal -> { project(original, command.projectID); original.copy(goalPlan = GoalEngine.setWeekly(original.goalPlan, command.projectID, command.minutes, time, zone(), command.effectiveWeek)) }

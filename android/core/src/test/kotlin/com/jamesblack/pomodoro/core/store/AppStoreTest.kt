@@ -164,4 +164,46 @@ class AppStoreTest {
         assertEquals("Continue", store.snapshot.activeTimer!!.intention)
     }
 
+    @Test fun audioEditAtDeadlineKeepsDueAlertSoundAndCompletesSession() = runTest {
+        var time = timestamp
+        val disk = Disk(LocalDocument(snapshot = AppSnapshot(projects = listOf(project), settings = Settings(focusCompletionSound = CompletionSound.bell))))
+        var deliveredSound: CompletionSound? = null
+        val store = AppStore(disk, now = { time }, effects = object : StoreEffects {
+            override suspend fun synchronize(document: LocalDocument) {}
+            override suspend fun deliverCompletion(ticket: AlarmTicket, snapshot: AppSnapshot) { deliveredSound = ticket.sound }
+        })
+        store.initialize(); store.execute(AppCommand.StartFocus(project.id, 10))
+        val timer = store.snapshot.activeTimer!!; time = timer.deadline
+        assertEquals(MutationResult.Success, store.execute(AppCommand.UpdateSettings(store.snapshot.settings.copy(notificationSound = false))))
+        assertNull(store.snapshot.activeTimer); assertEquals(1, store.snapshot.sessions.size)
+        assertEquals(CompletionSound.bell, disk.document!!.alarmTickets.single().sound)
+        store.execute(AppCommand.AlarmFired(timer.id, timer.deadline))
+        assertEquals(CompletionSound.bell, deliveredSound)
+        assertFalse(store.snapshot.settings.notificationSound)
+    }
+    @Test fun unrelatedSettingsPreserveCapturedTimerSound() = runTest {
+        val started = TimerEngine.startFocus(AppSnapshot(projects = listOf(project)), project.id, 10, timestamp)
+        // Stored timers may have a different captured choice from settings, including imports.
+        val snapshot = started.copy(settings = started.settings.copy(focusCompletionSound = CompletionSound.ripple))
+        val disk = Disk(LocalDocument(snapshot = snapshot))
+        val store = AppStore(disk, now = { timestamp + 1 })
+        store.initialize(); val sound = store.snapshot.activeTimer!!.completionSound
+        store.execute(AppCommand.UpdateSettings(store.snapshot.settings.copy(appearance = Appearance.dark)))
+        assertEquals(sound, store.snapshot.activeTimer!!.completionSound)
+        assertEquals(sound, disk.document!!.alarmTickets.single().sound)
+    }
+
+    @Test fun staleDiscardCannotCancelNaturallyCompletedAlert() = runTest {
+        var time = timestamp
+        val disk = Disk(LocalDocument(snapshot = AppSnapshot(projects = listOf(project))))
+        val store = AppStore(disk, now = { time })
+        store.initialize(); store.execute(AppCommand.StartFocus(project.id, 10))
+        val timer = store.snapshot.activeTimer!!; time = timer.deadline
+        store.execute(AppCommand.Reconcile)
+        // An old confirmation can arrive after the foreground completion has committed.
+        store.execute(AppCommand.DiscardFocus(timer.id))
+        assertEquals(AlarmDisposition.pending, disk.document!!.alarmTickets.single().disposition)
+        assertEquals(1, store.snapshot.sessions.size)
+    }
+
 }
