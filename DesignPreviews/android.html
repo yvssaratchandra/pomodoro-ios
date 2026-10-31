@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive design reference for Pomodoro on Android: screens, components, states, and behavior.">
+  <title>Pomodoro · Android design reference</title>
+  <link rel="stylesheet" href="android.css">
+  <script src="android.js" defer></script>
+</head>
+<body>
+  <div class="document">
+    <header class="document-header">
+      <div>
+        <p class="eyebrow">Pomodoro / Android</p>
+        <h1>Pomodoro for Android</h1>
+        <p class="intro">The existing app’s components and visual language, carried into a native Android interface.</p>
+      </div>
+      <div class="document-meta"><span class="reference-badge">Interactive design reference</span><span>Based on the Android port · 31 October 2026</span></div>
+    </header>
+
+    <main>
+      <div class="workspace">
+        <aside class="review-sidebar" aria-label="Design controls">
+          <h2 class="small-heading">Explore the app</h2>
+          <nav id="screen-navigation" class="screen-navigation" aria-label="Preview screens"></nav>
+          <div class="review-controls">
+            <label for="appearance">Appearance</label>
+            <select id="appearance"><option value="light">Light</option><option value="dark">OLED dark</option></select>
+            <label for="scenario">Focus state</label>
+            <select id="scenario">
+              <option value="ready">Ready to focus</option>
+              <option value="running">Focus in progress</option>
+              <option value="breakReady">Focus saved · break ready</option>
+              <option value="breakRunning">Break in progress</option>
+              <option value="dim">Dim Focus</option>
+              <option value="empty">No projects yet</option>
+            </select>
+            <label class="check-control"><input id="large-text" type="checkbox"> Larger text</label>
+            <button class="reset-button" data-action="reset">Reset sample data</button>
+          </div>
+          <p class="sidebar-note">Tap the screen to explore. Sample changes stay in this page; timers are frozen for review.</p>
+          <a class="reference-link" href="#design-foundations">Design foundations <span aria-hidden="true">↗</span></a>
+        </aside>
+
+        <section class="preview-stage" aria-label="Interactive Android screen">
+          <div class="device-label"><span class="platform-dot"></span> Android reference <span>412 dp layout</span></div>
+          <div class="phone" id="phone">
+            <div class="system-status" aria-hidden="true"><span>9:41</span><span class="camera"></span><span class="status-icons">▂▄▆ <span class="battery">▰</span></span></div>
+            <div id="app" class="app"></div>
+            <div class="system-navigation" aria-hidden="true"><span></span></div>
+            <div id="overlay-root"></div>
+          </div>
+          <p class="preview-caption">HTML/CSS interpretation of the implemented screens. Illustrative content; Android system surfaces vary by phone.</p>
+          <p id="preview-feedback" class="preview-feedback" role="status" aria-live="polite"></p>
+        </section>
+
+        <aside class="design-notes" aria-label="Screen behavior and design decisions" id="design-notes"></aside>
+      </div>
+
+      <section class="foundations" id="design-foundations">
+        <div class="section-intro"><p class="eyebrow">Design foundations</p><h2>Keep the app recognisable.</h2><p>Reuse the same hierarchy and components. Android supplies the navigation, permissions, file picker, and notification controls.</p></div>
+        <div class="foundation-grid">
+          <article class="foundation-card"><h3>Colour and surfaces</h3><div class="swatches"><div><i style="--swatch:#6860D8"></i><strong>Focus</strong><code>#6860D8</code></div><div><i style="--swatch:#4E6B56"></i><strong>Break</strong><code>#4E6B56</code></div><div><i style="--swatch:#84A08C"></i><strong>Dark break</strong><code>#84A08C</code></div></div><p>Soft lavender background and white cards in light mode. Black canvas and raised charcoal cards in dark mode. Colour reinforces labels; it never carries meaning alone.</p></article>
+          <article class="foundation-card"><h3>Type and spacing</h3><div class="type-sample">25:00 <span>Tabular timer</span></div><p>Android system type for interface text; monospace digits for time. Use a 20 dp page inset, 18 dp card corners, and controls at least 48 dp high. Larger text replaces the timer ring with a linear indicator.</p></article>
+          <article class="foundation-card"><h3>One navigation model</h3><div class="navigation-sample"><span>Focus</span><span>Thoughts</span><span>Stats</span></div><p>Three persistent destinations. Projects and Settings open from Focus. Android Back dismisses the top editor, returns from a project detail, then returns from Projects or Settings.</p></article>
+          <article class="foundation-card"><h3>Save without surprises</h3><p>Project settings save together. Each accepted plan task and thought saves immediately. Unsubmitted text stays a draft; dirty dismissal asks before discarding. A failed save retains the editor and text.</p><div class="behavior-sample"><span>Draft</span><b aria-hidden="true">→</b><span>Save succeeds</span><b aria-hidden="true">→</b><span>Update screen</span></div></article>
+        </div>
+      </section>
+
+      <section class="behavior-reference">
+        <div class="section-intro"><p class="eyebrow">Interaction reference</p><h2>Preserve the working rules.</h2></div>
+        <div class="reference-table-wrap"><table><thead><tr><th>Component</th><th>Android behavior</th><th>What stays familiar</th></tr></thead><tbody>
+          <tr><td>Focus & breaks</td><td>Timestamp countdown, exact alarm, system notification.</td><td>One-tap start; manual next phase; End saves elapsed focus; Discard keeps thoughts.</td></tr>
+          <tr><td>Plans & thoughts</td><td>Full-screen editors, keyboard-aware layout, Android Back protection.</td><td>Task list plans; fixed capture context; permanent thought history with checkboxes.</td></tr>
+          <tr><td>Projects & goals</td><td>One project editor for name, lifecycle, timer defaults, and goal revisions.</td><td>Daily schedules and rest days; independent weekly goals; destination goals survive a merge.</td></tr>
+          <tr><td>Stats & consistency</td><td>Day picker, week list, month grid, accessible chart details.</td><td>Saved focus only; time split across local days; 10 minutes qualifies a focused day.</td></tr>
+          <tr><td>Delete & Undo</td><td>Shared snackbar above the navigation bar, across all three tabs.</td><td>10-second Undo window; 30 seconds with touch exploration; restoration never restarts a timer.</td></tr>
+          <tr><td>Backups & shortcuts</td><td>Android document picker and pinned launcher shortcuts.</td><td>Portable iPhone JSON backups; restore requires idle state and replacement confirmation.</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <footer class="document-footer"><div><strong>Build & installation</strong><p>The Android port has local test and build coverage. Play account verification, upload signing, Play installation, and physical Samsung S26 checks remain pending. Home-screen widgets are deferred.</p></div><div><strong>Related design references</strong><a href="declutter.html">Navigation & settings</a><a href="stats-navigation.html">Stats date navigation</a><a href="focus-surfaces.html">iPhone focus surfaces</a></div></footer>
+    </main>
+  </div>
+</body>
+</html>
