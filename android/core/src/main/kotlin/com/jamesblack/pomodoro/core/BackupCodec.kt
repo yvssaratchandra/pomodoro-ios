@@ -1,5 +1,7 @@
 package com.jamesblack.pomodoro.core
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import java.time.ZoneId
@@ -16,7 +18,9 @@ object BackupCodec {
     fun decode(bytes: ByteArray, now: Double = Time.now(), zone: ZoneId = ZoneId.systemDefault(), forBackup: Boolean = true): AppSnapshot {
         require(bytes.size <= maximumBytes) { "The backup exceeds the 50 MB limit." }
         val source = json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
-        val version = source.getValue("schemaVersion").jsonPrimitive.int
+        val versionField = source.getValue("schemaVersion").jsonPrimitive
+        require(!versionField.isString) { "Invalid schema version." }
+        val version = versionField.int
         require(version in 1..AppSnapshot.currentSchemaVersion) { "This data version is not supported." }
         val doc = source.toMutableMap()
         fun settings() = doc.getValue("settings").jsonObject.toMutableMap()
@@ -45,6 +49,7 @@ object BackupCodec {
         }
         val upgraded = canonical(JsonObject(doc)).jsonObject
         checkRequired(upgraded)
+        checkScalarTypes(upgraded, AppSnapshot.serializer().descriptor)
         val state = json.decodeFromJsonElement<AppSnapshot>(upgraded)
         validate(state)
         require(!forBackup || state.activeTimer == null) { "Backups cannot contain a running timer." }
@@ -66,6 +71,18 @@ object BackupCodec {
         required(goal, "dailyRevisions weeklyProjectRevisions dailyProjectRevisions")
         listOf("dailyRevisions", "weeklyProjectRevisions", "dailyProjectRevisions").forEach { key -> goal.getValue(key).jsonArray.forEach { value -> val r = value.jsonObject; required(r, if (key == "dailyRevisions") "effectiveFrom minutes" else if (key == "weeklyProjectRevisions") "projectID effectiveFrom" else "projectID effectiveFrom minutes"); required(r.getValue("effectiveFrom").jsonObject, "year month day") } }
         (goal["legacyDailyGoalTransitionDay"] as? JsonObject)?.let { required(it, "year month day") }
+    }
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun checkScalarTypes(value: JsonElement, descriptor: SerialDescriptor) {
+        if (value == JsonNull) { require(descriptor.isNullable) { "Unexpected null for ${descriptor.serialName}." }; return }
+        when (descriptor.kind) {
+            PrimitiveKind.STRING, SerialKind.ENUM -> require(value is JsonPrimitive && value.isString) { "Expected a string for ${descriptor.serialName}." }
+            PrimitiveKind.BOOLEAN -> require(value is JsonPrimitive && !value.isString && value.booleanOrNull != null) { "Expected a boolean." }
+            is PrimitiveKind -> require(value is JsonPrimitive && !value.isString && value.doubleOrNull != null) { "Expected a number for ${descriptor.serialName}." }
+            StructureKind.LIST -> { require(value is JsonArray); value.forEach { checkScalarTypes(it, descriptor.getElementDescriptor(0)) } }
+            StructureKind.CLASS, StructureKind.OBJECT -> { require(value is JsonObject); for (i in 0 until descriptor.elementsCount) value[descriptor.getElementName(i)]?.let { checkScalarTypes(it, descriptor.getElementDescriptor(i)) } }
+            else -> Unit
+        }
     }
     fun validate(state: AppSnapshot) {
         require(state.schemaVersion == AppSnapshot.currentSchemaVersion) { "This data version is not supported." }

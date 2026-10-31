@@ -151,4 +151,32 @@ class CoreParityTest {
         listOf("pomodoro://timer/", "pomodoro://timer?", "pomodoro://user@timer", "pomodoro://timer#x", "pomodoro://timer:80", "https://timer", "pomodoro://thoughts/new?session=1-1-1-1-1", "pomodoro://focus?project=${project.id}&action=start&action=start", "pomodoro://plan/next?project=${project.id}&extra=1").forEach { assertNull(AppRouter.parse(it), it) }
     }
 
+    @Test fun dimFocusRevealsAcrossLifecycleAndRejectsStaleCallbacks() {
+        val enabled = DimFocusState().update(project.id, true, true, false, 0.0).enable(0.0)
+        assertTrue(enabled.shouldKeepAwake)
+        val revealed = enabled.reveal(1.0)
+        assertEquals(11.0, revealed.returnDeadline); assertFalse(revealed.shouldKeepAwake)
+        assertEquals(revealed, revealed.returnToDim(project.id, enabled.generation, 20.0))
+        val dimmed = revealed.returnToDim(project.id, revealed.generation, 11.0)
+        assertTrue(dimmed.isDimmed)
+        val blocked = dimmed.setBlocked("editor", true, 12.0)
+        assertFalse(blocked.canPresent); assertNull(blocked.returnDeadline)
+        val unblocked = blocked.setBlocked("editor", false, 13.0)
+        assertEquals(23.0, unblocked.returnDeadline)
+        val background = dimmed.update(project.id, true, false, false, 14.0)
+        assertFalse(background.shouldKeepAwake)
+        val foreground = background.update(project.id, true, true, false, 15.0)
+        assertFalse(foreground.isDimmed); assertEquals(25.0, foreground.returnDeadline)
+        val accessible = foreground.update(project.id, true, true, true, 16.0)
+        assertNull(accessible.returnDeadline)
+        assertFalse(accessible.update(null, true, true, true, 17.0).isEnabled)
+        assertFalse(DimFocusState().isEnabled)
+    }
+
+    @Test fun quotedNumericAndBooleanBackupFieldsAreRejected() {
+        val bytes = BackupCodec.encode(initial)
+        assertFails { BackupCodec.decode(change(bytes) { it["completedInCycle"] = JsonPrimitive("0") }) }
+        assertFails { BackupCodec.decode(change(bytes) { doc -> val settings = doc.getValue("settings").jsonObject.toMutableMap(); settings["haptics"] = JsonPrimitive("true"); doc["settings"] = JsonObject(settings) }) }
+    }
+
 }
