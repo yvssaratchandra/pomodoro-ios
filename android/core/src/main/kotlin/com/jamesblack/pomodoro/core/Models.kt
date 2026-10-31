@@ -41,7 +41,7 @@ fun newID(): String = UUID.randomUUID().toString().uppercase()
 data class ThoughtCaptureContext(val projectID: String? = null, val originSessionID: String? = null, val id: String = newID())
 @Serializable data class LocalDay(val year: Int, val month: Int, val day: Int): Comparable<LocalDay> {
     constructor(date: LocalDate): this(date.year, date.monthValue, date.dayOfMonth)
-    fun date(): LocalDate = LocalDate.of(year, month, day).also { require(year > 0) }
+    fun date(): LocalDate { require(year > 0) { "Invalid calendar date." }; return try { LocalDate.of(year, month, day) } catch (error: java.time.DateTimeException) { throw IllegalArgumentException("Invalid calendar date.", error) } }
     override fun compareTo(other: LocalDay): Int = compareValuesBy(this, other, { it.year }, { it.month }, { it.day })
     companion object { fun at(time: Double, zone: ZoneId = ZoneId.systemDefault()) = LocalDay(Time.date(time, zone)) }
 }

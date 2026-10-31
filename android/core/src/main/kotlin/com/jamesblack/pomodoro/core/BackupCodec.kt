@@ -6,6 +6,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import java.time.ZoneId
 import java.util.UUID
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 
 object BackupCodec {
     const val maximumBytes = 50_000_000
@@ -15,9 +17,10 @@ object BackupCodec {
         require(!forBackup || snapshot.activeTimer == null) { "End the timer before exporting a backup." }; validate(snapshot)
         return json.encodeToString(snapshot).toByteArray(Charsets.UTF_8)
     }
-    fun decode(bytes: ByteArray, now: Double = Time.now(), zone: ZoneId = ZoneId.systemDefault(), forBackup: Boolean = true): AppSnapshot {
+    fun decode(bytes: ByteArray, now: Double = Time.now(), zone: ZoneId = ZoneId.systemDefault(), forBackup: Boolean = true): AppSnapshot = try {
         require(bytes.size <= maximumBytes) { "The backup exceeds the 50 MB limit." }
-        val source = json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
+        val decoded = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
+        val source = json.parseToJsonElement(decoded).jsonObject
         val versionField = source.getValue("schemaVersion").jsonPrimitive
         require(!versionField.isString) { "Invalid schema version." }
         val version = versionField.int
@@ -53,7 +56,11 @@ object BackupCodec {
         val state = json.decodeFromJsonElement<AppSnapshot>(upgraded)
         validate(state)
         require(!forBackup || state.activeTimer == null) { "Backups cannot contain a running timer." }
-        return state
+        state
+    } catch (error: IllegalArgumentException) {
+        throw error
+    } catch (error: Exception) {
+        throw IllegalArgumentException("Invalid backup data.", error)
     }
     // Constructor defaults help callers create fresh state; they must never repair missing stored fields.
     private fun checkRequired(doc: JsonObject) {

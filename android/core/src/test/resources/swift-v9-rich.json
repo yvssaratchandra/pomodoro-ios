@@ -1,0 +1,157 @@
+{
+  "breakOffer" : {
+    "kind" : "longBreak",
+    "minutes" : 17,
+    "projectID" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+  },
+  "completedInCycle" : 2,
+  "goalPlan" : {
+    "dailyProjectRevisions" : [
+      {
+        "effectiveFrom" : {
+          "day" : 26,
+          "month" : 10,
+          "year" : 2026
+        },
+        "minutes" : [
+          20,
+          30,
+          40,
+          50,
+          60,
+          0,
+          0
+        ],
+        "projectID" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+      }
+    ],
+    "dailyRevisions" : [
+      {
+        "effectiveFrom" : {
+          "day" : 26,
+          "month" : 10,
+          "year" : 2026
+        },
+        "minutes" : [
+          60,
+          120,
+          180,
+          240,
+          0,
+          0,
+          60
+        ]
+      }
+    ],
+    "legacyDailyGoalTransitionDay" : {
+      "day" : 26,
+      "month" : 10,
+      "year" : 2026
+    },
+    "pendingLegacyDailySchedule" : [
+      60,
+      120,
+      180,
+      240,
+      0,
+      0,
+      60
+    ],
+    "weeklyProjectRevisions" : [
+      {
+        "effectiveFrom" : {
+          "day" : 26,
+          "month" : 10,
+          "year" : 2026
+        },
+        "minutes" : 600,
+        "projectID" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+      },
+      {
+        "effectiveFrom" : {
+          "day" : 2,
+          "month" : 11,
+          "year" : 2026
+        },
+        "projectID" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+      }
+    ]
+  },
+  "projects" : [
+    {
+      "breadcrumb" : {
+        "originSessionID" : "CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC",
+        "text" : "First task\nSecond task 🇸🇪",
+        "updatedAt" : 815000000.125
+      },
+      "createdAt" : 814990000.125,
+      "focusMinutes" : 25,
+      "id" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+      "lastFocusMinutes" : 40,
+      "longBreakMinutes" : 17,
+      "name" : "Writing 👨‍👩‍👧‍👦",
+      "shortBreakMinutes" : 7,
+      "status" : "ongoing"
+    },
+    {
+      "createdAt" : 814995000.125,
+      "focusMinutes" : 25,
+      "id" : "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB",
+      "longBreakMinutes" : 15,
+      "name" : "Archived",
+      "shortBreakMinutes" : 5,
+      "status" : "suspended"
+    }
+  ],
+  "schemaVersion" : 9,
+  "sessions" : [
+    {
+      "endedAt" : 814999949.75,
+      "id" : "CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC",
+      "intention" : "Review é",
+      "nextStep" : "Inspect notes",
+      "outcome" : "completed",
+      "plannedSeconds" : 600,
+      "projectID" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+      "startedAt" : 814999349.75
+    },
+    {
+      "endedAt" : 815000000.125,
+      "id" : "EEEEEEEE-EEEE-4EEE-8EEE-EEEEEEEEEEEE",
+      "outcome" : "interrupted",
+      "plannedSeconds" : 1500,
+      "projectID" : "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB",
+      "startedAt" : 814999950.375
+    }
+  ],
+  "settings" : {
+    "appearance" : "dark",
+    "breakCompletionSound" : "wood",
+    "consistencyTargetDays" : 5,
+    "dailyGoalMinutes" : 240,
+    "defaultFocusMinutes" : 25,
+    "defaultLongBreakMinutes" : 15,
+    "defaultShortBreakMinutes" : 5,
+    "focusCompletionSound" : "ripple",
+    "haptics" : true,
+    "longBreakInterval" : 4,
+    "notificationSound" : true,
+    "showIntentionOnLockScreen" : false,
+    "showProjectNameOnLockScreen" : true
+  },
+  "thoughts" : [
+    {
+      "completedAt" : 815000000.125,
+      "createdAt" : 814999980,
+      "id" : "DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD",
+      "originSessionID" : "CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC",
+      "projectID" : "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+      "text" : "Remember this"
+    },
+    {
+      "createdAt" : 815000000.125,
+      "id" : "FFFFFFFF-FFFF-4FFF-8FFF-FFFFFFFFFFFF",
+      "text" : "Standalone thought"
+    }
+  ]
+}
