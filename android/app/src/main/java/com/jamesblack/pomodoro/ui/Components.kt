@@ -78,11 +78,11 @@ internal val Sage = Color(0xFF4E6B56)
 }
 
 @Composable internal fun MinuteControl(label: String, value: Int, min: Int, max: Int, save: (suspend (Int) -> MutationResult)? = null, onChange: (Int) -> Unit) {
-    var editing by remember { mutableStateOf(false) }
+    var editing by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var draft by rememberSaveable(value) { mutableStateOf(value.toString()) }
     TextButton({ editing = true }, Modifier.fillMaxWidth()) { Text("$label · $value min") }
-    if (editing) AlertDialog(onDismissRequest = { editing = false }, title = { Text(label) }, text = { Column { OutlinedTextField(draft, { draft = it.filter(Char::isDigit).take(4) }, label = { Text("Minutes ($min–$max)") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)); if (min == 0) Hint("0 means a rest day."); error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, dismissButton = { TextButton({ editing = false }) { Text("Cancel") } }, confirmButton = { TextButton(enabled = !busy && draft.toIntOrNull()?.let { it in min..max } == true, onClick = { if (save == null) { onChange(draft.toInt()); editing = false } else scope.launch { busy = true; when (val result = save(draft.toInt())) { MutationResult.Success -> editing = false; is MutationResult.Failure -> error = result.message }; busy = false } }) { Text("Done") } })
+    if (editing) AlertDialog(onDismissRequest = { editing = false }, title = { Text(label) }, text = { Column { OutlinedTextField(draft, { draft = it.filter(Char::isDigit).take(max.toString().length) }, label = { Text("Minutes ($min–$max)") }, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)); if (min == 0) Hint("0 means a rest day."); error?.let { Text(it, color = MaterialTheme.colorScheme.error) } } }, dismissButton = { TextButton({ editing = false }) { Text("Cancel") } }, confirmButton = { TextButton(enabled = !busy && draft.toIntOrNull()?.let { it in min..max } == true, onClick = { if (save == null) { onChange(draft.toInt()); editing = false } else scope.launch { busy = true; when (val result = save(draft.toInt())) { MutationResult.Success -> editing = false; is MutationResult.Failure -> error = result.message }; busy = false } }) { Text("Done") } })
 }

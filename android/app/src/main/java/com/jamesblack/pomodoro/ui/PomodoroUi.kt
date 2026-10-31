@@ -62,6 +62,8 @@ internal class UiEditors : ViewModel() {
         }
     }
     PomodoroTheme(snapshot.settings.appearance) {
+        BackHandler(destination != null && !editorOpen) { destination = null }
+
         Scaffold(topBar = { TopAppBar(title = { Text(destination?.replaceFirstChar { it.uppercase() } ?: listOf("Focus", "Thoughts", "Stats")[tab]) }, navigationIcon = { if (destination != null) IconButton({ destination = null }) { Icon(Icons.Outlined.ArrowBack, "Back") } }, actions = { if (destination == null && tab == 0) { if (snapshot.activeTimer?.kind == TimerKind.focus) IconButton({ editors.dimEnabled = !editors.dimEnabled }) { Icon(Icons.Outlined.Brightness4, if (editors.dimEnabled) "Disable Dim Focus" else "Enable Dim Focus") }; IconButton({ destination = "settings" }) { Icon(Icons.Outlined.Settings, "Settings") }; IconButton({ destination = "projects" }) { Icon(Icons.Outlined.FolderOpen, "Projects") } } }) }, bottomBar = {
             Column {
                 if (undo != null) Snackbar(action = { TextButton({ run(AppCommand.UndoDeletion) }) { Text("Undo") } }, dismissAction = { IconButton({ run(AppCommand.DismissUndo) }) { Icon(Icons.Outlined.Close, "Dismiss Undo") } }) { Text("${undo.count} ${if (undo.count == 1) "item" else "items"} deleted") }
@@ -82,9 +84,8 @@ internal class UiEditors : ViewModel() {
               }
             }
         }
-        BackHandler(destination != null && !editorOpen) { destination = null }
         sessionID?.let { id -> SessionDetail(snapshot, id, { sessionID = null }, execute) { note = it } }
-        note?.let { request -> key(request) { if (request.title == "Session plan") PlanEditor(request.text, { note = null }) { execute(request.command(it)) } else TextEditor(request.title, request.text, request.limit, { note = null }) { execute(request.command(it)) } } }
+        note?.let { request -> key(request) { if (request.title in setOf("Session plan", "Next step")) PlanEditor(request.text, { note = null }, title = request.title) { execute(request.command(it)) } else TextEditor(request.title, request.text, request.limit, { note = null }) { execute(request.command(it)) } } }
         capture?.let { context -> key(context.id) { ThoughtComposer(snapshot, context, { capture = null }, execute) } }
         projectEditor?.let { draft -> key(draft.projectID) { ProjectEditor(draft, snapshot, now, { projectEditor = null }) { edited -> val result = execute(AppCommand.SaveProjectSettings(edited)); if (result == MutationResult.Success && edited.isNew) selectedProject = edited.projectID; result } } }
         (localError ?: error)?.let { message -> AlertDialog(onDismissRequest = { localError = null; onDismissError() }, title = { Text("Pomodoro") }, text = { Text(message) }, confirmButton = { TextButton({ localError = null; onDismissError() }) { Text("OK") } }) }

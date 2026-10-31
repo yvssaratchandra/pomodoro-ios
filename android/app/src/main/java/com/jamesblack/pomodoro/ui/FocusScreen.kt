@@ -69,7 +69,6 @@ import kotlinx.coroutines.delay
             Action("Start ${offer.kind.title}") { run(AppCommand.StartBreak) }
             TextButton({ run(AppCommand.SkipBreak) }, Modifier.fillMaxWidth()) { Text("Skip Break") }
             TextButton({ plan(offer.projectID) }, Modifier.fillMaxWidth()) { Text("Plan next session") }
-            state.sessions.filter { it.projectID == offer.projectID }.maxByOrNull { it.endedAt }?.let { session -> TextButton({ edit(NoteRequest("Next step", session.nextStep.orEmpty()) { AppCommand.SaveNextStep(session.id, it, true) }) }, Modifier.fillMaxWidth()) { Text("Add next step") } }
         } else if (project == null || ongoing.isEmpty()) {
             Spacer(Modifier.height(30.dp)); Text(if (state.projects.isEmpty()) "Make space for focused work" else "Choose a project to continue", style = MaterialTheme.typography.headlineSmall)
             Hint("Create a project, then begin a focus session.")
@@ -93,7 +92,7 @@ import kotlinx.coroutines.delay
 }
 @Composable private fun TimerFace(seconds: Double, progress: Float, kind: TimerKind, modifier: Modifier = Modifier) {
     val accent = if (kind == TimerKind.focus) Indigo else MaterialTheme.colorScheme.secondary
-    val largeType = LocalDensity.current.fontScale > 1.3f
+    val largeType = LocalDensity.current.fontScale > 1f
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (largeType) { Text(DurationText.countdown(seconds), style = MaterialTheme.typography.displayMedium, fontFamily = FontFamily.Monospace, color = accent); LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, Modifier.fillMaxWidth(), color = accent) } else Box(Modifier.size(200.dp), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, Modifier.fillMaxSize(), color = accent, strokeWidth = 8.dp, trackColor = accent.copy(alpha = .13f))

@@ -16,7 +16,7 @@ import com.jamesblack.pomodoro.core.store.*
 import kotlinx.coroutines.launch
 
 /** Every accepted task operation persists the entire plan before adopting its candidate. */
-@Composable internal fun PlanEditor(initial: String, dismiss: () -> Unit, save: suspend (String) -> MutationResult) {
+@Composable internal fun PlanEditor(initial: String, dismiss: () -> Unit, title: String = "Session plan", save: suspend (String) -> MutationResult) {
     var accepted by rememberSaveable { mutableStateOf(initial) }
     var plan by rememberSaveable(stateSaver = listSaver<SessionPlanDraft, String>(save = { it.rows.flatMap { row -> listOf(row.id, row.text) } }, restore = { values -> SessionPlanDraft(values.chunked(2).map { SessionPlanDraft.Row(it[0], it[1]) }) })) { mutableStateOf(SessionPlanDraft(accepted)) }
     var input by rememberSaveable { mutableStateOf("") }
@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
     Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.safeDrawingPadding().imePadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("Session plan", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); TextButton(close) { Text("Done") } }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); TextButton(close) { Text("Done") } }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (plan.rows.isEmpty()) Hint("Add a few tasks for this focus session.")
                     plan.rows.forEach { row -> Row(verticalAlignment = Alignment.CenterVertically) {

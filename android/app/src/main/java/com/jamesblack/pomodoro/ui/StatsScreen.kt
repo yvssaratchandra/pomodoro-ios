@@ -1,6 +1,7 @@
 package com.jamesblack.pomodoro.ui
 
 import android.app.DatePickerDialog
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -27,6 +28,8 @@ import kotlinx.coroutines.launch
     var consistency by rememberSaveable { mutableStateOf(false) }
     var fullHistory by rememberSaveable { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
+    BackHandler(fullHistory && !details && !consistency) { fullHistory = false; drillDay = null }
+    LaunchedEffect(state.projects, projectID) { if (projectID != null && state.projects.none { it.id == projectID }) projectID = null }
     val range = StatsDateRange.valueOf(rangeName)
     val selection = StatsDateSelection(range, anchor)
     val interval = selection.interval(now)
@@ -131,7 +134,7 @@ internal fun periodLabel(interval: DateInterval): String { val start = Time.date
                         Section("Next step") {
                             session.nextStep?.let { Text(it) } ?: Hint("No next step")
                             TextButton({ edit(NoteRequest("Next step", session.nextStep.orEmpty()) { AppCommand.SaveNextStep(id, it, false) }) }) { Text(if (session.nextStep == null) "Add next step" else "Edit next step") }
-                            if (session.nextStep != null) TextButton({ promote = true }) { Text("Use for next session") }
+                            if (session.nextStep != null) TextButton({ val existing = state.projects.find { it.id == session.projectID }?.breadcrumb?.text; if (existing != null && existing != session.nextStep) promote = true else scope.launch { when (val result = execute(AppCommand.SetPendingPlan(session.projectID, session.nextStep.orEmpty()))) { is MutationResult.Failure -> error = result.message; else -> {} } } }) { Text("Use for next session") }
                         }
                         TextButton({ deleting = true }) { Text("Delete Session", color = MaterialTheme.colorScheme.error) }
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -141,7 +144,7 @@ internal fun periodLabel(interval: DateInterval): String { val start = Time.date
         }
     }
     if (deleting) Confirm("Delete session?", "The saved focus time will be removed from your statistics. Thoughts remain saved.", "Delete", { deleting = false }) { scope.launch { when (val result = execute(AppCommand.DeleteSessions(setOf(id)))) { MutationResult.Success -> dismiss(); is MutationResult.Failure -> error = result.message }; deleting = false } }
-    if (promote && session != null) Confirm("Replace next-session plan?", "This next step becomes the project's plan for its next focus session.", "Replace plan", { promote = false }) { scope.launch { when (val result = execute(AppCommand.SaveNextStep(id, session.nextStep.orEmpty(), true))) { is MutationResult.Failure -> error = result.message; else -> {} }; promote = false } }
+    if (promote && session != null) Confirm("Replace next-session plan?", "This next step becomes the project's plan for its next focus session.", "Replace plan", { promote = false }) { scope.launch { when (val result = execute(AppCommand.SetPendingPlan(session.projectID, session.nextStep.orEmpty()))) { is MutationResult.Failure -> error = result.message; else -> {} }; promote = false } }
 }
 
 @Composable internal fun StatsPeriodPicker(range: StatsDateRange, selected: Double, earliest: Double?, now: Double, dismiss: () -> Unit, choose: (Double) -> Unit) {

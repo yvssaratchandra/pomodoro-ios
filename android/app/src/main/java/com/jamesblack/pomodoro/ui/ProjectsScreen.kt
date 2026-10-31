@@ -1,5 +1,6 @@
 package com.jamesblack.pomodoro.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -27,6 +28,7 @@ import kotlinx.coroutines.launch
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val project = state.projects.find { it.id == detailID }
+    BackHandler(detailID != null && merge == null && delete == null) { detailID = null }
     Page {
         if (project == null) {
             Action("Create Project", onClick = create)
