@@ -64,7 +64,7 @@ class LaunchJourneyTest {
     }
     private fun screenshot(name: String) {
         compose.waitForIdle()
-        val file = File("/tmp/pomodoro-android-$name.png")
+        val file = File("build/reports/screenshots/pomodoro-android-$name.png").apply { parentFile?.mkdirs() }
         compose.runOnIdle {
             val view = compose.activity.window.decorView
             val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)

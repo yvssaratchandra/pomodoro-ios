@@ -66,4 +66,12 @@ class EditorAcceptanceTest {
         compose.onNodeWithText("Restore backup").assertIsEnabled().performClick()
         assertEquals(1, platform.imports)
     }
+    @Test fun countdownNeverExceedsPlannedDurationBeforeNextClockTick() {
+        val startedAt = Time.now()
+        val project = Project(name = "Work")
+        val running = TimerEngine.startFocus(AppSnapshot(projects = listOf(project)), project.id, 25, startedAt)
+        compose.setContent { PomodoroUi(running, startedAt - 3, null, null, null, {}, { MutationResult.Success }, Platform()) }
+        compose.onNodeWithText("25:00").assertIsDisplayed()
+    }
+
 }

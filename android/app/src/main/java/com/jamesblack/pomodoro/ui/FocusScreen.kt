@@ -49,7 +49,7 @@ import kotlinx.coroutines.delay
     Page(Modifier.pointerInput(dimEnabled) { awaitPointerEventScope { while (true) { awaitPointerEvent(); if (dimEnabled) revealGeneration++ } } }) {
         if (active != null) {
             Text(state.projects.find { it.id == active.projectID }?.name ?: "Project", style = MaterialTheme.typography.titleLarge, modifier = Modifier.align(Alignment.CenterHorizontally))
-            TimerFace(active.deadline - now, active.elapsed(now).toFloat() / active.plannedSeconds.coerceAtLeast(1), active.kind, Modifier.align(Alignment.CenterHorizontally))
+            TimerFace((active.deadline - now).coerceIn(0.0, active.plannedSeconds.toDouble()), active.elapsed(now).toFloat() / active.plannedSeconds.coerceAtLeast(1), active.kind, Modifier.align(Alignment.CenterHorizontally))
             active.intention?.let { Text(it) }
             if (active.kind == TimerKind.focus) {
                 TextButton({ edit(NoteRequest("Session plan", active.intention.orEmpty()) { AppCommand.EditIntention(active.id, true, it) }) }, Modifier.fillMaxWidth()) { Text(if (active.intention == null) "Add session plan" else "Edit session plan") }
@@ -108,7 +108,7 @@ import kotlinx.coroutines.delay
         Surface(Modifier.fillMaxSize(), color = Color.Black) {
             Box(Modifier.fillMaxSize().clickable(onClickLabel = "Reveal Focus", onClick = reveal)) {
                 Row(Modifier.align(Alignment.Center).padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LinearProgressIndicator(progress = { (timer.elapsed(now) / timer.plannedSeconds.coerceAtLeast(1)).toFloat() }, color = Indigo.copy(alpha = .65f), trackColor = Indigo.copy(alpha = .12f), modifier = Modifier.weight(1f).height(3.dp).semantics { contentDescription = "Focus progress, ${DurationText.countdown(timer.deadline - now)} remaining" })
+                    LinearProgressIndicator(progress = { (timer.elapsed(now) / timer.plannedSeconds.coerceAtLeast(1)).toFloat() }, color = Indigo.copy(alpha = .65f), trackColor = Indigo.copy(alpha = .12f), modifier = Modifier.weight(1f).height(3.dp).semantics { contentDescription = "Focus progress, ${DurationText.countdown((timer.deadline - now).coerceIn(0.0, timer.plannedSeconds.toDouble()))} remaining" })
                     IconButton(capture) { Icon(Icons.Outlined.Add, "Capture thought", tint = Indigo.copy(alpha = .65f)) }
                 }
             }
