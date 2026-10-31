@@ -49,7 +49,7 @@ class EditorAcceptanceTest {
         var received: AppCommand.CaptureThought? = null
         compose.setContent { PomodoroTheme(Appearance.light) { ThoughtComposer(AppSnapshot(projects = listOf(project)), context, {}) { command -> received = command as AppCommand.CaptureThought; MutationResult.Failure("Cannot save") } } }
         compose.onNodeWithText("Add a thought…").performTextInput("Keep this draft")
-        compose.onNodeWithText("Add thought").performClick()
+        compose.onNodeWithText("Add thought").performScrollTo().performClick()
         compose.onNodeWithText("Cannot save").assertIsDisplayed()
         compose.onNodeWithText("Keep this draft").assertIsDisplayed()
         assertEquals(timer.id, received!!.context.originSessionID)
@@ -60,12 +60,24 @@ class EditorAcceptanceTest {
         val project = Project(name = "Work")
         val running = TimerEngine.startFocus(AppSnapshot(projects = listOf(project)), project.id, 10)
         var state by androidx.compose.runtime.mutableStateOf(running)
-        compose.setContent { PomodoroTheme(Appearance.light) { SettingsScreen(state, platform, {}, { MutationResult.Success }) } }
+        compose.setContent { PomodoroTheme(Appearance.light) { SettingsScreen(state, platform, {}, { MutationResult.Success }, onExit = {}, openProjects = {}) } }
+        compose.onNodeWithText("Backup & restore").performScrollTo().performClick()
         compose.onNodeWithText("Restore backup").performScrollTo().assertIsNotEnabled()
         compose.runOnIdle { state = state.copy(activeTimer = null) }
         compose.onNodeWithText("Restore backup").assertIsEnabled().performClick()
         assertEquals(1, platform.imports)
     }
+    @Test fun projectsOpenedFromSettingsReturnToSettings() {
+        val snapshot = AppSnapshot(projects = listOf(Project(name = "Work")))
+        compose.setContent { PomodoroUi(snapshot, Time.now(), null, null, null, {}, { MutationResult.Success }, Platform()) }
+        compose.onNodeWithContentDescription("Settings").performClick()
+        compose.onAllNodesWithText("Projects").filter(hasClickAction()).onFirst().performClick()
+        compose.onNodeWithText("Work").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Timer defaults").assertIsDisplayed()
+        compose.onNodeWithText("Backup & restore").assertExists()
+    }
+
     @Test fun countdownNeverExceedsPlannedDurationBeforeNextClockTick() {
         val startedAt = Time.now()
         val project = Project(name = "Work")

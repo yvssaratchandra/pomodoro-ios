@@ -4,12 +4,22 @@ import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -17,6 +27,8 @@ import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 @Composable internal fun StatsScreen(state: AppSnapshot, now: Double, openSession: (String) -> Unit, editProject: (String) -> Unit) {
@@ -33,80 +45,252 @@ import kotlinx.coroutines.launch
     val range = StatsDateRange.valueOf(rangeName)
     val selection = StatsDateSelection(range, anchor)
     val interval = selection.interval(now)
-    val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val sessions = state.sessions.filter { (projectID == null || it.projectID == projectID) && (interval == null || Statistics.overlap(it.startedAt, it.endedAt, interval) > 0 || (it.duration == 0.0 && it.startedAt >= interval.start && it.startedAt < interval.end)) }.sortedByDescending { it.startedAt }
-    Page {
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { StatsDateRange.entries.forEach { option -> FilterChip(selected = range == option, onClick = { rangeName = option.name; anchor = null; drillDay = null }, label = { Text(option.title) }) } }
-        SelectMenu("Project", listOf("" to "All projects") + state.projects.map { it.id to it.name }, projectID ?: "") { projectID = it.takeIf(String::isNotEmpty) }
-        if (interval != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton({ anchor = selection.move(-1, now).anchor; drillDay = null }) { Text("Previous") }
-            TextButton(modifier = Modifier.weight(1f), onClick = { picker = true }) { Text(if (selection.isCurrent(now)) when (range) { StatsDateRange.day -> "Today"; StatsDateRange.week -> "This week"; StatsDateRange.month -> "This month"; else -> "All" } else periodLabel(interval)) }
-            TextButton(enabled = selection.canMoveForward(now), onClick = { anchor = selection.move(1, now).anchor; drillDay = null }) { Text("Next") }
-        }
-        if (!selection.isCurrent(now) && range != StatsDateRange.all) TextButton({ anchor = null; drillDay = null }) { Text("Return to current ${range.title.lowercase()}") }
-        Section("Focus time") {
-            Text(DurationText.summary(Statistics.total(state, projectID, interval, now)), style = MaterialTheme.typography.headlineLarge)
-            if (Statistics.hasFocusInProgress(state, projectID, interval, now)) Hint("1 session in progress · not included yet")
 
-            if (projectID != null && range == StatsDateRange.day) {
-                val target = GoalEngine.dailyTarget(projectID!!, interval!!.start, state.goalPlan)
-                Hint(when (target) { null -> "No recorded goal"; 0 -> "Rest day"; else -> "Daily goal: $target min" })
-                TextButton({ editProject(projectID!!) }) { Text("Edit project goals") }
+    Page(header = {
+        ScreenHeader(
+            "Stats",
+            largeTitle = true,
+            leading = { StatsProjectFilter(projectID, state) { projectID = it } },
+            trailing = {
+                IconButton(onClick = { consistency = true }) {
+                    Icon(Icons.Outlined.CalendarMonth, "Consistency")
+                }
             }
-            if (projectID != null && range == StatsDateRange.week) GoalEngine.weeklyTarget(projectID!!, interval!!.start, state.goalPlan)?.let { Hint("Weekly goal: $it min") }
+        )
+    }) {
+        SegmentedSelector(
+            options = StatsDateRange.entries.map { it.name to it.title },
+            selected = range.name,
+            onSelect = { rangeName = it; anchor = null; drillDay = null; fullHistory = false }
+        )
+        if (interval != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { anchor = selection.move(-1, now).anchor; drillDay = null },
+                    modifier = Modifier.size(48.dp)
+                ) { Icon(Icons.Outlined.ChevronLeft, "Previous ${range.title.lowercase()}") }
+                TextButton(
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    onClick = { picker = true }
+                ) {
+                    Text(periodTitle(selection, interval, range, now), textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Outlined.ExpandMore, contentDescription = "Choose ${range.title.lowercase()}")
+                }
+                IconButton(
+                    enabled = selection.canMoveForward(now),
+                    onClick = { anchor = selection.move(1, now).anchor; drillDay = null },
+                    modifier = Modifier.size(48.dp)
+                ) { Icon(Icons.Outlined.ChevronRight, "Next ${range.title.lowercase()}") }
+            }
+            if (!selection.isCurrent(now) && range != StatsDateRange.all) {
+                TextButton(onClick = { anchor = null; drillDay = null; fullHistory = false }) {
+                    Text("Return to current ${range.title.lowercase()}")
+                }
+            }
+        }
+        Section("Focus time") {
+            Text("Saved focus", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                DurationText.summary(Statistics.total(state, projectID, interval, now)),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (Statistics.hasFocusInProgress(state, projectID, interval, now)) Hint("1 session in progress · not included yet")
+        }
+        if (projectID != null && range == StatsDateRange.day && interval != null) {
+            val target = GoalEngine.dailyTarget(projectID!!, interval.start, state.goalPlan)
+            GroupedRow(
+                label = when (target) { null -> "Daily goal"; 0 -> "Rest day"; else -> "Daily goal" },
+                value = when (target) { null -> "No recorded goal"; 0 -> null; else -> "$target min" },
+                onClick = { editProject(projectID!!) }
+            )
+        }
+        if (projectID != null && range == StatsDateRange.week && interval != null) {
+            GoalEngine.weeklyTarget(projectID!!, interval.start, state.goalPlan)?.let { target ->
+                GroupedRow(label = "Weekly goal", value = "$target min")
+            }
         }
         if (interval != null && range.period != null) {
-            val summary = remember(state.sessions, state.goalPlan, state.projects, interval, projectID, now.toLong() / 60) { Statistics.periodSummary(state, interval, projectID, now) }
+            val summary = remember(state.sessions, state.goalPlan, state.projects, interval, projectID, now.toLong() / 60) {
+                Statistics.periodSummary(state, interval, projectID, now)
+            }
             val comparison = Statistics.periodComparison(state, range.period!!, interval, projectID, now)
             Section("Daily focus") {
-                val maximum = summary.days.maxOfOrNull { it.focusSeconds }?.coerceAtLeast(60.0) ?: 60.0
-                Row(Modifier.fillMaxWidth().height(155.dp).semantics { contentDescription = "Daily focus chart. Open Details for values and sessions." }, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
-                    summary.days.forEach { day -> Box(Modifier.weight(1f).fillMaxHeight((day.focusSeconds / maximum).toFloat().coerceIn(.01f, 1f)).background(if (day.isFuture) MaterialTheme.colorScheme.outline.copy(alpha = .35f) else Indigo)) }
+                FocusChart(summary.days) { day -> drillDay = day.date; fullHistory = true }
+                val periodName = range.title.lowercase()
+                val comparisonText = when {
+                    comparison.delta == 0.0 -> "Same as last $periodName${if (interval.end > now) " so far" else ""}"
+                    else -> "${DurationText.summary(kotlin.math.abs(comparison.delta))} ${if (comparison.delta > 0) "more" else "less"} than last $periodName${if (interval.end > now) " so far" else ""}"
                 }
-                Hint("${DurationText.summary(kotlin.math.abs(comparison.delta))} ${if (comparison.delta >= 0) "more" else "less"} than last ${range.title.lowercase()}${if (interval.end > now) " so far" else ""}")
-                TextButton({ details = true }) { Text("Details") }
+                Hint(comparisonText)
+                Hint("${DurationText.summary(comparison.currentSeconds)} current · ${DurationText.summary(comparison.previousSeconds)} previous")
+                TextButton(onClick = { details = true }) { Text("Details") }
             }
-            if (details) Dialog(onDismissRequest = { details = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { Page(Modifier.safeDrawingPadding()) { Section("Period details") {
-                TextButton({ details = false }) { Text("Close Details") }
-                summary.days.filter { !it.isFuture }.forEach { day -> TextButton({ drillDay = day.date; fullHistory = true; details = false }) { Text("${Time.date(day.date)} · ${DurationText.summary(day.focusSeconds)}") } }
-                Text("Daily average: ${DurationText.summary(summary.averageSeconds)}")
-                Text("${summary.completedCount} completed · ${summary.interruptedCount} ended early")
-                Hint("This period: ${periodLabel(comparison.current)} · ${DurationText.summary(comparison.currentSeconds)}")
-                Hint("Previous period: ${periodLabel(comparison.previous)} · ${DurationText.summary(comparison.previousSeconds)}")
-                comparison.percentage?.let { Hint("Change: ${"%+.1f".format(it)}%") }
-                Hint(if (interval.end > now) "Compared with the same calendar days in the previous period, including the full matching day." else "Compared with the full previous period.")
-                if (projectID == null) summary.projects.forEach { project -> Row { Text(project.name, Modifier.weight(1f)); Text(DurationText.summary(project.seconds)) } }
-                if (summary.days.any { it.targetMinutes == null }) Hint("Older dates may not have a recorded goal.")
-            } } } }
+            if (details) Dialog(onDismissRequest = { details = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Page(
+                        modifier = Modifier.safeDrawingPadding(),
+                        header = { ScreenHeader("Period details", leading = { TextButton({ details = false }) { Text("Done") } }) }
+                    ) {
+                        Section("Daily breakdown") {
+                            summary.days.filter { !it.isFuture }.forEach { day ->
+                                GroupedRow(
+                                    label = Time.date(day.date).toString(),
+                                    value = DurationText.summary(day.focusSeconds),
+                                    onClick = { drillDay = day.date; fullHistory = true; details = false }
+                                )
+                            }
+                        }
+                        Section("Overview") {
+                            GroupedRow(label = "Daily average", value = DurationText.summary(summary.averageSeconds))
+                            GroupedRow(label = "Completed", value = "${summary.completedCount}")
+                            GroupedRow(label = "Ended early", value = "${summary.interruptedCount}")
+                        }
+                        Section("Comparison") {
+                            GroupedRow(label = "This period · ${periodLabel(comparison.current)}", value = DurationText.summary(comparison.currentSeconds))
+                            GroupedRow(label = "Previous period · ${periodLabel(comparison.previous)}", value = DurationText.summary(comparison.previousSeconds))
+                            comparison.percentage?.let { GroupedRow(label = "Change", value = "%+.1f%%".format(it)) }
+                            Hint(if (interval.end > now) "Compared with the same calendar days in the previous period, including the full matching day." else "Compared with the full previous period.")
+                        }
+                        if (projectID == null && summary.projects.isNotEmpty()) {
+                            Section("Projects") { summary.projects.forEach { GroupedRow(label = it.name, value = DurationText.summary(it.seconds)) } }
+                        }
+                        if (summary.days.any { it.targetMinutes == null }) Hint("Older dates may not have a recorded goal.")
+                    }
+                }
+            }
         }
-        TextButton({ consistency = !consistency }) { Text("Consistency") }
-        if (consistency) Dialog(onDismissRequest = { consistency = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { Page(Modifier.safeDrawingPadding()) { Section("Consistency") {
-            TextButton({ consistency = false }) { Text("Done") }
-            val current = Statistics.consistency(state, now, now)
-            Text("${current.focusedDays} of ${current.targetDays} days this week", style = MaterialTheme.typography.titleLarge)
-            Hint("A focused day has at least 10 minutes of saved focus. Active sessions are included after saving.")
-            (1..8).forEach { offset -> val date = Time.date(current.week.start).minusWeeks(offset.toLong()); val week = Statistics.consistency(state, Time.start(date, zone), now); Row { Text("Week of $date", Modifier.weight(1f)); Text("${week.focusedDays} focused days") } }
-        } } } }
+        if (consistency) Dialog(onDismissRequest = { consistency = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Page(
+                    modifier = Modifier.safeDrawingPadding(),
+                    header = { ScreenHeader("Consistency", leading = { TextButton({ consistency = false }) { Text("Done") } }) }
+                ) {
+                    val current = Statistics.consistency(state, now, now)
+                    Section("This week") {
+                        Text("${current.focusedDays} of ${current.targetDays} days this week", style = MaterialTheme.typography.titleLarge)
+                        Hint("A focused day has at least 10 minutes of saved focus. Active sessions count after saving.")
+                    }
+                    Section("Previous weeks") {
+                        (1..8).forEach { offset ->
+                            val date = Time.date(current.week.start).minusWeeks(offset.toLong())
+                            val week = Statistics.consistency(state, Time.start(date, zone), now)
+                            GroupedRow(label = "Week of $date", value = "${week.focusedDays} focused days")
+                        }
+                    }
+                }
+            }
+        }
         val historyInterval = drillDay?.let { Statistics.today(it) }
         val allSessions = if (historyInterval == null) sessions else sessions.filter { Statistics.overlap(it.startedAt, it.endedAt, historyInterval) > 0 || it.startedAt >= historyInterval.start && it.startedAt < historyInterval.end }
         val visibleSessions = if (fullHistory) allSessions else allSessions.take(5)
-        Section(if (drillDay == null) "Recent sessions" else "Sessions · ${Time.date(drillDay!!)}") {
-            if (drillDay != null) TextButton({ drillDay = null; fullHistory = false }) { Text("Show whole period") }
-            if (visibleSessions.isEmpty()) Hint("No saved sessions for this selection.")
-            if (!fullHistory && allSessions.size > 5) TextButton({ fullHistory = true }) { Text("View all sessions") }
-            visibleSessions.groupBy { Time.date(it.startedAt) }.forEach { (day, entries) ->
-                Text(day.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy")), style = MaterialTheme.typography.titleSmall)
-                entries.forEach { session -> SessionListRow(session, state.projects.find { it.id == session.projectID }?.name ?: "Project", historyInterval) { openSession(session.id) } }
-            }
+        GroupedSection(if (drillDay == null) "Recent sessions" else "Sessions · ${Time.date(drillDay!!)}") {
+            if (drillDay != null) TextButton(onClick = { drillDay = null; fullHistory = false }) { Text("Show whole period") }
+            if (visibleSessions.isEmpty()) Box(Modifier.padding(16.dp)) { Hint("No saved sessions for this selection.") }
+            if (!fullHistory && allSessions.size > 5) TextButton(onClick = { fullHistory = true }) { Text("View all sessions") }
+            SessionHistory(visibleSessions.groupBy { Time.date(it.startedAt) }, state, historyInterval, openSession)
         }
     }
     if (picker) StatsPeriodPicker(range, interval?.start ?: now, state.sessions.minOfOrNull { it.startedAt }, now, { picker = false }) { date -> anchor = selection.select(date, now).anchor; drillDay = null; fullHistory = false; picker = false }
-
 }
-internal fun periodLabel(interval: DateInterval): String { val start = Time.date(interval.start); val end = Time.date(interval.end - 1); return if (start == end) start.toString() else "$start – $end" }
+
+@Composable private fun StatsProjectFilter(projectID: String?, state: AppSnapshot, select: (String?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = projectID?.let { id -> state.projects.find { it.id == id }?.name } ?: "All projects"
+    Box {
+        TextButton(onClick = { expanded = true }, modifier = Modifier.widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
+            Icon(Icons.Outlined.FilterList, contentDescription = null)
+            Spacer(Modifier.width(4.dp))
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Outlined.ExpandMore, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("All projects") }, onClick = { expanded = false; select(null) })
+            state.projects.forEach { project -> DropdownMenuItem(text = { Text(project.name) }, onClick = { expanded = false; select(project.id) }) }
+        }
+    }
+}
+
+private fun periodTitle(selection: StatsDateSelection, interval: DateInterval, range: StatsDateRange, now: Double): String =
+    if (selection.isCurrent(now)) when (range) {
+        StatsDateRange.day -> "Today"
+        StatsDateRange.week -> "This week"
+        StatsDateRange.month -> "This month"
+        StatsDateRange.all -> "All"
+    } else periodLabel(interval)
+
+@Composable private fun FocusChart(days: List<DailySummary>, onSelect: (DailySummary) -> Unit) {
+    val maximum = days.maxOfOrNull { it.focusSeconds }?.coerceAtLeast(60.0) ?: 60.0
+    val zone = ZoneId.systemDefault()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(112.dp).semantics { contentDescription = "Daily focus chart. Tap a day to view its sessions." },
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            days.forEach { day ->
+                val fraction = (day.focusSeconds / maximum).toFloat().coerceIn(.025f, 1f)
+                val color = if (day.isFuture) MaterialTheme.colorScheme.outline.copy(alpha = .35f) else MaterialTheme.colorScheme.primary
+                Box(
+                    Modifier.weight(1f)
+                        .fillMaxHeight(fraction)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(color)
+                        .clickable(enabled = !day.isFuture, onClick = { onSelect(day) })
+                        .semantics {
+                            contentDescription = "${Time.date(day.date, zone)}: ${DurationText.summary(day.focusSeconds)}"
+                            role = Role.Button
+                        }
+                )
+            }
+        }
+        if (days.size == 7) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                days.forEach { day ->
+                    Text(
+                        Time.date(day.date, zone).dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                        Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+internal fun periodLabel(interval: DateInterval): String {
+    val start = Time.date(interval.start)
+    val end = Time.date(interval.end - 1)
+    return if (start == end) start.toString() else "$start – $end"
+}
+
+@Composable private fun SessionHistory(groups: Map<java.time.LocalDate, List<FocusSession>>, state: AppSnapshot, day: DateInterval?, openSession: (String) -> Unit) {
+    val orderedGroups = groups.entries.sortedByDescending { it.key }
+    orderedGroups.forEachIndexed { groupIndex, (date, sessions) ->
+        Text(
+            date.format(DateTimeFormatter.ofPattern("EEE d MMM yyyy")),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        val orderedSessions = sessions.sortedByDescending { it.startedAt }
+        orderedSessions.forEachIndexed { index, session ->
+            SessionListRow(session, state.projects.find { it.id == session.projectID }?.name ?: "Project", day) { openSession(session.id) }
+            if (index < orderedSessions.lastIndex || groupIndex < orderedGroups.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+        }
+    }
+}
+
 @Composable internal fun SessionListRow(session: FocusSession, project: String, day: DateInterval?, open: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = open).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        Modifier.fillMaxWidth().clickable(onClick = open, role = androidx.compose.ui.semantics.Role.Button).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Text(project, style = MaterialTheme.typography.titleMedium)
         SessionPlanText.items(session.intention).firstOrNull()?.let { Text(it, maxLines = 2) }
         Hint("${Time.toInstant(session.startedAt).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))} · ${DurationText.summary(session.duration)}${if (session.outcome == SessionOutcome.interrupted) " · Ended early" else ""}")
@@ -122,29 +306,69 @@ internal fun periodLabel(interval: DateInterval): String { val start = Time.date
     val scope = rememberCoroutineScope()
     Dialog(onDismissRequest = dismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) { Text("Session", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); TextButton(dismiss) { Text("Done") } }
-                Page {
-                    if (session == null) Hint("This session has been removed.") else {
-                        Text(state.projects.find { it.id == session.projectID }?.name ?: "Project", style = MaterialTheme.typography.headlineSmall)
-                        Text(DurationText.summary(session.duration), style = MaterialTheme.typography.headlineLarge)
-                        Hint("${Time.date(session.startedAt)} · ${session.outcome.name.replaceFirstChar { it.uppercase() }}")
-                        Hint("Planned ${DurationText.summary(session.plannedSeconds.toDouble())}")
-                        Section("Session plan") { session.intention?.let { Text(it) } ?: Hint("No session plan"); TextButton({ edit(NoteRequest("Session plan", session.intention.orEmpty()) { AppCommand.EditIntention(id, false, it) }) }) { Text(if (session.intention == null) "Add session plan" else "Edit session plan") } }
-                        Section("Next step") {
-                            session.nextStep?.let { Text(it) } ?: Hint("No next step")
-                            TextButton({ edit(NoteRequest("Next step", session.nextStep.orEmpty()) { AppCommand.SaveNextStep(id, it, false) }) }) { Text(if (session.nextStep == null) "Add next step" else "Edit next step") }
-                            if (session.nextStep != null) TextButton({ val existing = state.projects.find { it.id == session.projectID }?.breadcrumb?.text; if (existing != null && existing != session.nextStep) promote = true else scope.launch { when (val result = execute(AppCommand.SetPendingPlan(session.projectID, session.nextStep.orEmpty()))) { is MutationResult.Failure -> error = result.message; else -> {} } } }) { Text("Use for next session") }
-                        }
-                        TextButton({ deleting = true }) { Text("Delete Session", color = MaterialTheme.colorScheme.error) }
-                        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Page(
+                modifier = Modifier.safeDrawingPadding(),
+                header = { ScreenHeader("Session", leading = { TextButton(dismiss) { Text("Done") } }) }
+            ) {
+                if (session == null) Hint("This session has been removed.") else {
+                    Text(state.projects.find { it.id == session.projectID }?.name ?: "Project", style = MaterialTheme.typography.headlineSmall)
+                    Section("Session") {
+                        GroupedRow(label = "Focus time", value = DurationText.summary(session.duration))
+                        GroupedRow(label = "Date", value = Time.date(session.startedAt).toString())
+                        GroupedRow(label = "Outcome", value = session.outcome.name.replaceFirstChar { it.uppercase() })
+                        GroupedRow(label = "Planned", value = DurationText.summary(session.plannedSeconds.toDouble()))
                     }
+                    Section("Session plan") {
+                        session.intention?.let { Text(it) } ?: Hint("No session plan")
+                        GroupedRow(
+                            label = if (session.intention == null) "Add session plan" else "Edit session plan",
+                            onClick = { edit(NoteRequest("Session plan", session.intention.orEmpty()) { AppCommand.EditIntention(id, false, it) }) }
+                        )
+                    }
+                    Section("Next step") {
+                        session.nextStep?.let { Text(it) } ?: Hint("No next step")
+                        GroupedRow(
+                            label = if (session.nextStep == null) "Add next step" else "Edit next step",
+                            onClick = { edit(NoteRequest("Next step", session.nextStep.orEmpty()) { AppCommand.SaveNextStep(id, it, false) }) }
+                        )
+                        if (session.nextStep != null) GroupedRow(
+                            label = "Use for next session",
+                            onClick = {
+                                val existing = state.projects.find { it.id == session.projectID }?.breadcrumb?.text
+                                if (existing != null && existing != session.nextStep) promote = true
+                                else scope.launch {
+                                    when (val result = execute(AppCommand.SetPendingPlan(session.projectID, session.nextStep.orEmpty()))) {
+                                        is MutationResult.Failure -> error = result.message
+                                        else -> Unit
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    TextButton(onClick = { deleting = true }) { Text("Delete session", color = MaterialTheme.colorScheme.error) }
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
     }
-    if (deleting) Confirm("Delete session?", "The saved focus time will be removed from your statistics. Thoughts remain saved.", "Delete", { deleting = false }) { scope.launch { when (val result = execute(AppCommand.DeleteSessions(setOf(id)))) { MutationResult.Success -> dismiss(); is MutationResult.Failure -> error = result.message }; deleting = false } }
-    if (promote && session != null) Confirm("Replace next-session plan?", "This next step becomes the project's plan for its next focus session.", "Replace plan", { promote = false }) { scope.launch { when (val result = execute(AppCommand.SetPendingPlan(session.projectID, session.nextStep.orEmpty()))) { is MutationResult.Failure -> error = result.message; else -> {} }; promote = false } }
+    if (deleting) Confirm("Delete session?", "The saved focus time will be removed from your statistics. Thoughts remain saved.", "Delete", { deleting = false }) {
+        scope.launch {
+            when (val result = execute(AppCommand.DeleteSessions(setOf(id)))) {
+                MutationResult.Success -> dismiss()
+                is MutationResult.Failure -> error = result.message
+            }
+            deleting = false
+        }
+    }
+    if (promote && session != null) Confirm("Replace next-session plan?", "This next step becomes the project's plan for its next focus session.", "Replace plan", { promote = false }) {
+        scope.launch {
+            when (val result = execute(AppCommand.SetPendingPlan(session.projectID, session.nextStep.orEmpty()))) {
+                is MutationResult.Failure -> error = result.message
+                else -> Unit
+            }
+            promote = false
+        }
+    }
 }
 
 @Composable internal fun StatsPeriodPicker(range: StatsDateRange, selected: Double, earliest: Double?, now: Double, dismiss: () -> Unit, choose: (Double) -> Unit) {
@@ -160,13 +384,30 @@ internal fun periodLabel(interval: DateInterval): String { val start = Time.date
         }
     } else Dialog(onDismissRequest = dismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text("Choose a ${range.title.lowercase()}", Modifier.weight(1f).padding(20.dp), style = MaterialTheme.typography.titleLarge); TextButton(dismiss) { Text("Done") } }
-                Page {
-                    val years = StatsPeriodOptions.years(range, selected, earliest, now)
-                    SelectMenu("Year", years.reversed().map { it.toString() to it.toString() }, year.toString()) { year = it.toInt() }
-                    if (range == StatsDateRange.week) StatsPeriodOptions.weeks(year, now).reversed().forEach { week -> TextButton({ choose(week.start) }, Modifier.fillMaxWidth()) { Text(periodLabel(week)) } }
-                    else StatsPeriodOptions.months(year, now).chunked(3).forEach { row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { row.forEach { month -> OutlinedButton({ choose(month) }, Modifier.weight(1f).heightIn(min = 64.dp)) { Text(Time.date(month).month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.getDefault())) } }; repeat(3 - row.size) { Spacer(Modifier.weight(1f)) } } }
+            Page(
+                modifier = Modifier.safeDrawingPadding(),
+                header = { ScreenHeader("Choose a ${range.title.lowercase()}", leading = { TextButton(dismiss) { Text("Done") } }) }
+            ) {
+                SelectMenu("Year", StatsPeriodOptions.years(range, selected, earliest, now).reversed().map { it.toString() to it.toString() }, year.toString()) { year = it.toInt() }
+                if (range == StatsDateRange.week) {
+                    Section("Weeks") {
+                        StatsPeriodOptions.weeks(year, now).reversed().forEach { week ->
+                            GroupedRow(label = periodLabel(week), onClick = { choose(week.start) })
+                        }
+                    }
+                } else {
+                    Section("Months") {
+                        StatsPeriodOptions.months(year, now).chunked(3).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { month ->
+                                    OutlinedButton({ choose(month) }, Modifier.weight(1f).heightIn(min = 56.dp)) {
+                                        Text(Time.date(month).month.getDisplayName(TextStyle.SHORT, Locale.getDefault()))
+                                    }
+                                }
+                                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
                 }
             }
         }

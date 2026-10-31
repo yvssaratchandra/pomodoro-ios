@@ -43,9 +43,9 @@ class LaunchJourneyTest {
         compose.waitUntil(15000) { (RuntimeEnvironment.getApplication() as PomodoroApplication).store.snapshot.thoughts.isNotEmpty() }
         compose.onNodeWithText("Ask about the design").assertIsDisplayed()
         compose.onNodeWithText("Done").performClick()
-        compose.onNodeWithText("Thoughts").performClick()
+        compose.onNodeWithTag("tab-thoughts").performClick()
         screenshot("thoughts")
-        compose.onNodeWithText("Stats").performClick()
+        compose.onNodeWithTag("tab-stats").performClick()
         screenshot("stats")
         val snapshot = (RuntimeEnvironment.getApplication() as PomodoroApplication).store.snapshot
         assertEquals("Work project", snapshot.projects.single().name)

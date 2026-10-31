@@ -4,18 +4,28 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 internal const val unassignedThoughts = "__unassigned__"
@@ -27,43 +37,208 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
     var query by rememberSaveable { mutableStateOf("") }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selected by remember { mutableStateOf(emptySet<String>()) }
-    var deleting by remember { mutableStateOf(false) }
-    BackHandler(selecting && !deleting) { selecting = false; selected = emptySet() }
+    var actionsExpanded by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<Set<String>?>(null) }
+    BackHandler(selecting && deleting == null) { selecting = false; selected = emptySet() }
     LaunchedEffect(state.projects, projectID) { if (projectID != null && projectID != unassignedThoughts && state.projects.none { it.id == projectID }) selectProject(null) }
     val visible = remember(state.thoughts, projectID, filter, query) { filteredThoughts(state, projectID, filter, query) }
     LaunchedEffect(state.thoughts) { selected = selected.intersect(state.thoughts.map { it.id }.toSet()) }
-    Page {
-        Action("Add a thought") { capture(ThoughtCaptureContext(projectID?.takeUnless { it == unassignedThoughts })) }
-        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Search thoughts") })
-        SelectMenu("Project", listOf("" to "All projects", unassignedThoughts to "Unassigned") + state.projects.map { it.id to it.name }, projectID ?: "") { selectProject(it.takeIf(String::isNotEmpty)) }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("All", "Open", "Done").forEach { option -> FilterChip(selected = option == filter, onClick = { filter = option }, label = { Text(option) }) } }
-        TextButton({ selecting = !selecting; selected = emptySet() }) { Text(if (selecting) "Done selecting" else "Select thoughts") }
+    val projectThoughts = state.thoughts.filter { projectID == null || if (projectID == unassignedThoughts) it.projectID == null else it.projectID == projectID }
+    val caughtUp = filter == "Open" && query.isBlank() && projectThoughts.any { it.completedAt != null }
+    val activeFilterSummary = buildList {
+        if (projectID != null) add(if (projectID == unassignedThoughts) "Unassigned" else state.projects.find { it.id == projectID }?.name ?: "Project")
+        if (query.isNotBlank()) add("Search: $query")
+        if (filter != "All") add(filter)
+    }.joinToString(" · ")
+    val emptyMessage = when {
+        caughtUp -> "All caught up."
+        query.isNotBlank() || projectID != null -> "No matching thoughts."
+        filter == "Done" -> "No completed thoughts."
+        else -> "No thoughts yet."
+    }
+    Page(header = {
+        ScreenHeader(
+            "Thoughts",
+            largeTitle = true,
+            leading = { ThoughtProjectFilter(projectID, state, selectProject) },
+            trailing = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box {
+                        IconButton(onClick = { actionsExpanded = true }) {
+                            Icon(Icons.Outlined.MoreVert, if (selecting) "Selection actions" else "Thought actions")
+                        }
+                        DropdownMenu(expanded = actionsExpanded, onDismissRequest = { actionsExpanded = false }) {
+                            if (!selecting) {
+                                DropdownMenuItem(
+                                    text = { Text("Select thoughts") },
+                                    enabled = visible.isNotEmpty(),
+                                    onClick = { actionsExpanded = false; selecting = true; selected = emptySet() }
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Select all visible") },
+                                    enabled = visible.isNotEmpty(),
+                                    onClick = { actionsExpanded = false; selected = visible.map { it.id }.toSet() }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Mark done") },
+                                    enabled = selected.isNotEmpty(),
+                                    onClick = { actionsExpanded = false; run(AppCommand.SetThoughtsCompleted(selected, true)) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Mark open") },
+                                    enabled = selected.isNotEmpty(),
+                                    onClick = { actionsExpanded = false; run(AppCommand.SetThoughtsCompleted(selected, false)) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Delete selected") },
+                                    enabled = selected.isNotEmpty(),
+                                    onClick = { actionsExpanded = false; deleting = selected }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Done selecting") },
+                                    onClick = { actionsExpanded = false; selecting = false; selected = emptySet() }
+                                )
+                            }
+                        }
+                    }
+                    IconButton(onClick = { capture(ThoughtCaptureContext(projectID?.takeUnless { it == unassignedThoughts })) }) {
+                        Icon(Icons.Outlined.Add, "Add a thought")
+                    }
+                }
+            }
+        )
+    }) {
         if (selecting) {
-            Text("${selected.size} selected")
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                TextButton({ selected = visible.map { it.id }.toSet() }) { Text("Select all visible") }
-                TextButton(enabled = selected.isNotEmpty(), onClick = { run(AppCommand.SetThoughtsCompleted(selected, true)); selected = emptySet() }) { Text("Mark done") }
-                TextButton(enabled = selected.isNotEmpty(), onClick = { run(AppCommand.SetThoughtsCompleted(selected, false)); selected = emptySet() }) { Text("Mark open") }
-                TextButton(enabled = selected.isNotEmpty(), onClick = { deleting = true }) { Text("Delete") }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("${selected.size} selected", Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { selecting = false; selected = emptySet() }) { Text("Done") }
             }
         }
-        if (visible.isEmpty()) Hint(if (query.isBlank()) "No thoughts here yet." else "No matching thoughts.")
-        visible.forEach { thought ->
-            ThoughtRow(thought, state.projects.find { it.id == thought.projectID }?.name, selecting, thought.id in selected, { if (selecting) selected = if (thought.id in selected) selected - thought.id else selected + thought.id else run(AppCommand.SetThoughtsCompleted(setOf(thought.id), thought.completedAt == null)) }, { if (selecting) selected = if (thought.id in selected) selected - thought.id else selected + thought.id else edit(thought) }, { selected = setOf(thought.id); deleting = true })
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("Search thoughts") },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) }
+        )
+        SegmentedSelector(
+            options = listOf("All" to "All", "Open" to "Open", "Done" to "Done"),
+            selected = filter,
+            onSelect = { filter = it }
+        )
+        if (activeFilterSummary.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(activeFilterSummary, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { selectProject(null); query = ""; filter = "All"; selecting = false; selected = emptySet() }) { Text("Reset") }
+            }
+        }
+        if (visible.isEmpty()) {
+            Section("Thoughts") {
+                Hint(emptyMessage)
+                if (caughtUp) TextButton(onClick = { filter = "Done" }) { Text("View completed") }
+                else if (state.thoughts.isEmpty() && query.isBlank()) TextButton(onClick = { capture(ThoughtCaptureContext(projectID?.takeUnless { it == unassignedThoughts })) }) { Text("Add your first thought") }
+            }
+        } else {
+            GroupedSection("Thoughts") {
+                visible.forEachIndexed { index, thought ->
+                    ThoughtRow(
+                        thought = thought,
+                        project = thoughtProjectName(thought, state),
+                        selecting = selecting,
+                        selected = thought.id in selected,
+                        check = {
+                            if (selecting) selected = if (thought.id in selected) selected - thought.id else selected + thought.id
+                            else run(AppCommand.SetThoughtsCompleted(setOf(thought.id), thought.completedAt == null))
+                        },
+                        edit = {
+                            if (selecting) selected = if (thought.id in selected) selected - thought.id else selected + thought.id
+                            else edit(thought)
+                        },
+                        delete = { deleting = setOf(thought.id) }
+                    )
+                    if (index < visible.lastIndex) HorizontalDivider(Modifier.padding(start = 64.dp, end = 16.dp))
+                }
+            }
         }
     }
-    if (deleting) Confirm("Delete thoughts?", "These thoughts will be removed. You can Undo briefly after deleting.", "Delete", { deleting = false }) { run(AppCommand.DeleteThoughts(selected)); selected = emptySet(); deleting = false }
+    deleting?.let { ids ->
+        Confirm(
+            title = if (ids.size == 1) "Delete thought?" else "Delete ${ids.size} thoughts?",
+            message = "These thoughts will be removed. You can Undo briefly after deleting.",
+            action = "Delete",
+            onDismiss = { deleting = null },
+            onConfirm = { run(AppCommand.DeleteThoughts(ids)); deleting = null }
+        )
+    }
+}
+
+@Composable private fun ThoughtProjectFilter(projectID: String?, state: AppSnapshot, selectProject: (String?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val label = when (projectID) {
+        null -> "All projects"
+        unassignedThoughts -> "Unassigned"
+        else -> state.projects.find { it.id == projectID }?.name ?: "All projects"
+    }
+    Box {
+        TextButton(onClick = { expanded = true }, modifier = Modifier.widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
+            Icon(Icons.Outlined.FilterList, contentDescription = null)
+            Spacer(Modifier.width(4.dp))
+            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Outlined.ExpandMore, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("All projects") }, onClick = { expanded = false; selectProject(null) })
+            DropdownMenuItem(text = { Text("Unassigned") }, onClick = { expanded = false; selectProject(unassignedThoughts) })
+            state.projects.forEach { project ->
+                DropdownMenuItem(text = { Text(project.name) }, onClick = { expanded = false; selectProject(project.id) })
+            }
+        }
+    }
 }
 
 @Composable private fun ThoughtRow(thought: CapturedThought, project: String?, selecting: Boolean = false, selected: Boolean = false, check: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
-    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = if (selecting) selected else thought.completedAt != null, onCheckedChange = { check() }, modifier = Modifier.semantics { contentDescription = thought.text; stateDescription = if (selecting) { if (selected) "Selected" else "Not selected" } else { if (thought.completedAt != null) "Done" else "Open" } })
-            Column(Modifier.weight(1f).clickable(onClick = edit).padding(vertical = 10.dp)) { Text(thought.text, textDecoration = if (thought.completedAt != null) TextDecoration.LineThrough else null); project?.let { Hint(it) } }
-            if (!selecting) IconButton(delete) { Icon(Icons.Outlined.Delete, "Delete thought") }
+    val toggled = if (selecting) selected else thought.completedAt != null
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconToggleButton(
+            checked = toggled,
+            onCheckedChange = { check() },
+            modifier = Modifier.size(48.dp).semantics {
+                contentDescription = if (selecting) "Select thought" else if (thought.completedAt != null) "Mark thought open" else "Mark thought done"
+                stateDescription = if (selecting) { if (selected) "Selected" else "Not selected" } else { if (thought.completedAt != null) "Done" else "Open" }
+            }
+        ) {
+            Icon(
+                imageVector = if (toggled) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                contentDescription = null,
+                tint = if (toggled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Column(
+            Modifier.weight(1f).clickable(onClick = edit).padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(thought.text, textDecoration = if (thought.completedAt != null) TextDecoration.LineThrough else null)
+            Text(
+                listOfNotNull(project, thoughtDate(thought.createdAt)).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (!selecting) IconButton(onClick = delete, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Outlined.Delete, "Delete thought", tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
+
+private fun thoughtProjectName(thought: CapturedThought, state: AppSnapshot): String {
+    val id = thought.projectID ?: return "Unassigned"
+    return state.projects.find { it.id == id }?.name ?: "Project removed"
+}
+
+private fun thoughtDate(seconds: Double): String =
+    Time.toInstant(seconds).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("d MMM · HH:mm"))
 
 @Composable internal fun ThoughtComposer(state: AppSnapshot, context: ThoughtCaptureContext, dismiss: () -> Unit, execute: suspend (AppCommand) -> MutationResult) {
     var text by rememberSaveable(context.id) { mutableStateOf("") }
@@ -81,22 +256,85 @@ internal fun filteredThoughts(state: AppSnapshot, projectID: String?, filter: St
     val run: (AppCommand) -> Unit = { command -> scope.launch { when (val result = execute(command)) { is MutationResult.Failure -> error = result.message; else -> {} } } }
     Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.safeDrawingPadding().imePadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Text(if (context.originSessionID == null) "New thoughts" else "Session thoughts", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge); TextButton(close) { Text("Done") } }
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    saved.forEach { thought -> ThoughtRow(thought, state.projects.find { it.id == thought.projectID }?.name, check = { run(AppCommand.SetThoughtsCompleted(setOf(thought.id), thought.completedAt == null)) }, edit = { editingID = thought.id }, delete = { deleting = thought }) }
-                    if (saved.isEmpty()) Hint("Capture a thought and return to your focus. Saved thoughts remain even if you discard the session.")
+            Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+                ScreenHeader(
+                    title = if (context.originSessionID == null) "Capture thought" else "Session thoughts",
+                    leading = { TextButton(onClick = close) { Text("Done") } }
+                )
+                error?.let {
+                    Text(
+                        it,
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
-                if (context.originSessionID == null) SelectMenu("Project", listOf("" to "Unassigned") + state.projects.map { it.id to it.name }, projectID ?: "") { projectID = it.takeIf(String::isNotEmpty) }
-                else Hint(state.projects.find { it.id == context.projectID }?.name ?: "Session thoughts")
-                OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), label = { Text("Add a thought…") }, maxLines = 4, enabled = !busy)
-                if (SessionText.count(text) >= 450) Text("${SessionText.count(text)} / 500")
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Action("Add thought", !busy && text.isNotBlank() && SessionText.count(text) <= 500) { scope.launch { busy = true; val captured = if (context.originSessionID == null) context.copy(projectID = projectID) else context; when (val result = execute(AppCommand.CaptureThought(captured, text))) { MutationResult.Success -> { text = ""; error = null }; is MutationResult.Failure -> error = result.message }; busy = false } }
+                Column(
+                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (context.originSessionID == null) {
+                        ThoughtComposerProject(projectID, state) { projectID = it }
+                    } else {
+                        Section("Capture context") {
+                            GroupedRow(label = "Project", value = state.projects.find { it.id == context.projectID }?.name ?: "Project unavailable")
+                            if (state.sessions.none { it.id == context.originSessionID } && state.activeTimer?.id != context.originSessionID) Hint("Session removed")
+                            else Hint("This thought stays with the focus session where capture began.")
+                        }
+                    }
+                    GroupedSection(if (context.originSessionID == null) "Saved thoughts" else "Session thoughts") {
+                        if (saved.isEmpty()) Box(Modifier.padding(16.dp)) { Hint("Capture a thought and return to your focus. Saved thoughts remain even if you discard the session.") }
+                        saved.forEachIndexed { index, thought ->
+                            ThoughtRow(
+                                thought,
+                                thoughtProjectName(thought, state),
+                                check = { run(AppCommand.SetThoughtsCompleted(setOf(thought.id), thought.completedAt == null)) },
+                                edit = { editingID = thought.id },
+                                delete = { deleting = thought }
+                            )
+                            if (index < saved.lastIndex) HorizontalDivider(Modifier.padding(start = 64.dp))
+                        }
+                    }
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Add a thought…") },
+                        maxLines = 4,
+                        enabled = !busy
+                    )
+                    if (SessionText.count(text) >= 450) Text("${SessionText.count(text)} / 500", color = if (SessionText.count(text) > 500) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Action("Add thought", !busy && text.isNotBlank() && SessionText.count(text) <= 500) {
+                        scope.launch {
+                            busy = true
+                            val captured = if (context.originSessionID == null) context.copy(projectID = projectID) else context
+                            when (val result = execute(AppCommand.CaptureThought(captured, text))) {
+                                MutationResult.Success -> { text = ""; error = null }
+                                is MutationResult.Failure -> error = result.message
+                            }
+                            busy = false
+                        }
+                    }
+                }
             }
         }
     }
     if (confirming) AlertDialog(onDismissRequest = { confirming = false }, title = { Text("Discard this draft?") }, text = { Text("Thoughts you've already added remain saved.") }, dismissButton = { TextButton({ confirming = false }) { Text("Keep editing") } }, confirmButton = { TextButton(dismiss) { Text("Discard draft") } })
     editing?.let { thought -> key(thought.id) { TextEditor("Edit thought", thought.text, 500, { editingID = null }) { execute(AppCommand.EditThought(thought.id, it)) } } }
     deleting?.let { thought -> Confirm("Delete thought?", "You can Undo briefly after deleting.", "Delete", { deleting = null }) { run(AppCommand.DeleteThoughts(setOf(thought.id))); deleting = null } }
+}
+
+@Composable private fun ThoughtComposerProject(projectID: String?, state: AppSnapshot, onSelect: (String?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val current = when (projectID) {
+        null -> "Unassigned"
+        else -> state.projects.find { it.id == projectID }?.name ?: "Project unavailable"
+    }
+    Box {
+        GroupedRow(label = "Project", value = current, onClick = { expanded = true })
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("Unassigned") }, onClick = { expanded = false; onSelect(null) })
+            state.projects.forEach { project -> DropdownMenuItem(text = { Text(project.name) }, onClick = { expanded = false; onSelect(project.id) }) }
+        }
+    }
 }

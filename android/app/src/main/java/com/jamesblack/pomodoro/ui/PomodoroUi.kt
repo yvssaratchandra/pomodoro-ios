@@ -1,7 +1,9 @@
 package com.jamesblack.pomodoro.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -11,6 +13,11 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
@@ -26,6 +33,7 @@ internal class UiEditors : ViewModel() {
 @Composable fun PomodoroUi(snapshot: AppSnapshot, now: Double, undo: PendingDeletion?, error: String?, route: AppRoute?, onRouteHandled: () -> Unit, execute: suspend (AppCommand) -> MutationResult, platform: PlatformActions, onDismissError: () -> Unit = {}) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var destination by rememberSaveable { mutableStateOf<String?>(null) }
+    var projectsFromSettings by rememberSaveable { mutableStateOf(false) }
     var selectedProject by rememberSaveable { mutableStateOf<String?>(null) }
     var thoughtsProject by rememberSaveable { mutableStateOf<String?>(null) }
     val editors: UiEditors = viewModel()
@@ -44,10 +52,11 @@ internal class UiEditors : ViewModel() {
     LaunchedEffect(snapshot.projects) { if (snapshot.projects.none { it.id == selectedProject && it.status == ProjectStatus.ongoing }) selectedProject = snapshot.projects.firstOrNull { it.status == ProjectStatus.ongoing }?.id }
     LaunchedEffect(route, editorOpen) {
         if (route != null && !editorOpen) {
+            projectsFromSettings = false
             when (route) {
-                AppRoute.Timer -> { tab = 0; destination = null }
-                AppRoute.NewProject -> { tab = 0; destination = null; create() }
-                is AppRoute.StartFocus -> { tab = 0; destination = null; val project = snapshot.projects.find { it.id == route.projectID }; execute(AppCommand.Reconcile); if ((snapshot.activeTimer == null || snapshot.activeTimer!!.deadline <= now) && project?.status == ProjectStatus.ongoing) { selectedProject = project.id; execute(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) } else if (project == null || project.status != ProjectStatus.ongoing) localError = "This project is no longer available for Focus." else localError = "A timer is already running." }
+                AppRoute.Timer -> { tab = 0; destination = null; projectsFromSettings = false }
+                AppRoute.NewProject -> { tab = 0; destination = null; projectsFromSettings = false; create() }
+                is AppRoute.StartFocus -> { tab = 0; destination = null; projectsFromSettings = false; val project = snapshot.projects.find { it.id == route.projectID }; execute(AppCommand.Reconcile); if ((snapshot.activeTimer == null || snapshot.activeTimer!!.deadline <= now) && project?.status == ProjectStatus.ongoing) { selectedProject = project.id; execute(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) } else if (project == null || project.status != ProjectStatus.ongoing) localError = "This project is no longer available for Focus." else localError = "A timer is already running." }
                 is AppRoute.CaptureThought -> {
                     val active = snapshot.activeTimer?.takeIf { it.kind == TimerKind.focus && now < it.deadline && (route.sessionID == null || it.id == route.sessionID) }
                     val saved = snapshot.sessions.find { it.id == route.sessionID }
@@ -62,21 +71,99 @@ internal class UiEditors : ViewModel() {
         }
     }
     PomodoroTheme(snapshot.settings.appearance) {
-        BackHandler(destination != null && !editorOpen) { destination = null }
+        BackHandler(destination != null && !editorOpen) {
+            if (destination == "projects" && projectsFromSettings) {
+                destination = "settings"
+                projectsFromSettings = false
+            } else {
+                destination = null
+                projectsFromSettings = false
+            }
+        }
 
-        Scaffold(topBar = { TopAppBar(title = { Text(destination?.replaceFirstChar { it.uppercase() } ?: listOf("Focus", "Thoughts", "Stats")[tab]) }, navigationIcon = { if (destination != null) IconButton({ destination = null }) { Icon(Icons.Outlined.ArrowBack, "Back") } }, actions = { if (destination == null && tab == 0) { if (snapshot.activeTimer?.kind == TimerKind.focus) IconButton({ editors.dimEnabled = !editors.dimEnabled }) { Icon(Icons.Outlined.Brightness4, if (editors.dimEnabled) "Disable Dim Focus" else "Enable Dim Focus") }; IconButton({ destination = "settings" }) { Icon(Icons.Outlined.Settings, "Settings") }; IconButton({ destination = "projects" }) { Icon(Icons.Outlined.FolderOpen, "Projects") } } }) }, bottomBar = {
+        Scaffold(bottomBar = {
             Column {
                 if (undo != null) Snackbar(action = { TextButton({ run(AppCommand.UndoDeletion) }) { Text("Undo") } }, dismissAction = { IconButton({ run(AppCommand.DismissUndo) }) { Icon(Icons.Outlined.Close, "Dismiss Undo") } }) { Text("${undo.count} ${if (undo.count == 1) "item" else "items"} deleted") }
-                NavigationBar { listOf(Icons.Outlined.Timer, Icons.Outlined.CheckBox, Icons.Outlined.BarChart).forEachIndexed { index, icon -> NavigationBarItem(selected = tab == index && destination == null, onClick = { tab = index; destination = null }, icon = { Icon(icon, null) }, label = { Text(listOf("Focus", "Thoughts", "Stats")[index]) }) } }
+                val labels = listOf("Focus", "Thoughts", "Stats")
+                val icons = listOf(Icons.Outlined.Timer, Icons.Outlined.CheckBox, Icons.Outlined.BarChart)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    labels.forEachIndexed { index, label ->
+                        val selected = tab == index
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .heightIn(min = 64.dp)
+                                .selectable(
+                                    selected = selected,
+                                    role = Role.Tab,
+                                    onClick = { tab = index; destination = null; projectsFromSettings = false }
+                                )
+                                .testTag("tab-${label.lowercase()}"),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                icons[index],
+                                contentDescription = null,
+                                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                label,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 14.sp),
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
             }
         }) { padding ->
             Box(Modifier.padding(padding)) {
               pageState.SaveableStateProvider(destination ?: "tab$tab") {
                 when (destination) {
-                    "projects" -> ProjectsScreen(snapshot, now, run, { projectEditor = ProjectDraft.from(snapshot, it, now) }, create, { selectedProject = it; destination = null; tab = 0 }, { thoughtsProject = it; destination = null; tab = 1 }, { sessionID = it }, platform, execute)
-                    "settings" -> SettingsScreen(snapshot, platform, run, execute)
+                    "projects" -> ProjectsScreen(
+                        snapshot, now, run,
+                        { projectEditor = ProjectDraft.from(snapshot, it, now) },
+                        create,
+                        { selectedProject = it; destination = null; projectsFromSettings = false; tab = 0 },
+                        { thoughtsProject = it; destination = null; projectsFromSettings = false; tab = 1 },
+                        { sessionID = it }, platform, execute,
+                        onExit = { destination = if (projectsFromSettings) "settings" else null; projectsFromSettings = false },
+                        openPlan = plan
+                    )
+                    "settings" -> SettingsScreen(
+                        snapshot, platform, run, execute,
+                        onExit = { destination = null; projectsFromSettings = false },
+                        openProjects = { projectsFromSettings = true; destination = "projects" }
+                    )
                     else -> when (tab) {
-                        0 -> FocusScreen(snapshot, now, selectedProject, { selectedProject = it }, run, create, { destination = "projects" }, plan, openCapture, { thoughtsProject = it; tab = 1 }, { note = it }, platform, editorOpen, editors.dimEnabled, { editors.dimEnabled = it }, execute)
+                        0 -> FocusScreen(
+                            state = snapshot,
+                            now = now,
+                            selectedID = selectedProject,
+                            select = { selectedProject = it },
+                            run = run,
+                            create = create,
+                            projects = { projectsFromSettings = false; destination = "projects" },
+                            settings = { projectsFromSettings = false; destination = "settings" },
+                            plan = plan,
+                            capture = openCapture,
+                            thoughts = { thoughtsProject = it; tab = 1; destination = null },
+                            edit = { note = it },
+                            platform = platform,
+                            editorOpen = editorOpen,
+                            dimEnabled = editors.dimEnabled,
+                            setDimEnabled = { editors.dimEnabled = it },
+                            execute = execute
+                        )
                         1 -> ThoughtsScreen(snapshot, thoughtsProject, { thoughtsProject = it }, run, openCapture, { thought -> note = NoteRequest("Edit thought", thought.text, 500) { AppCommand.EditThought(thought.id, it) } })
                         else -> StatsScreen(snapshot, now, { sessionID = it }, { projectEditor = ProjectDraft.from(snapshot, it, now) })
                     }
