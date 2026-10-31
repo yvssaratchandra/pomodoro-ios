@@ -37,7 +37,7 @@ class LaunchJourneyTest {
         screenshot("focus-active")
         compose.onNodeWithText("Add a thought").performScrollTo().performClick()
         compose.onNodeWithText("Add a thought…").performTextInput("Ask about the design")
-        compose.onNodeWithText("Add thought").performClick()
+        compose.onNodeWithContentDescription("Add thought").performClick()
         compose.waitForIdle()
         assertNull((RuntimeEnvironment.getApplication() as PomodoroApplication).store.errorMessage.value)
         compose.waitUntil(15000) { (RuntimeEnvironment.getApplication() as PomodoroApplication).store.snapshot.thoughts.isNotEmpty() }

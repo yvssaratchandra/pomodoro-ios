@@ -20,7 +20,7 @@ private fun bundledFamily(resource: Int, weights: List<FontWeight>) = FontFamily
 private val InterfaceFontFamily = bundledFamily(
     R.font.inter, listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold)
 )
-internal val TimerFontFamily = bundledFamily(R.font.nunito, listOf(FontWeight.SemiBold))
+internal val TimerFontFamily = bundledFamily(R.font.nunito, listOf(FontWeight.ExtraBold))
 
 private fun textStyle(size: Int, lineHeight: Int, weight: FontWeight = FontWeight.Normal) = TextStyle(
     fontFamily = InterfaceFontFamily, fontWeight = weight, fontSize = size.sp, lineHeight = lineHeight.sp,

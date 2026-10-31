@@ -84,11 +84,11 @@ class ProjectsSettingsAcceptanceTest {
         }
 
         compose.onNodeWithText("Sounds & haptics").performScrollTo().performClick()
-        compose.onNodeWithText("Completion alerts").assertIsDisplayed()
+        compose.onNodeWithText("COMPLETION ALERTS").assertIsDisplayed()
         compose.onNodeWithText("Notifications are enabled for Pomodoro.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Test focus completion alert").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Settings").performClick()
-        compose.onNodeWithText("Preferences").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("PREFERENCES").assertIsDisplayed()
         compose.onNodeWithText("Backup & restore").performScrollTo().assertIsDisplayed()
     }
 }

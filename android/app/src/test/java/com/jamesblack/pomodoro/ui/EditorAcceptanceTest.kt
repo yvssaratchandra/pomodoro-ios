@@ -49,7 +49,7 @@ class EditorAcceptanceTest {
         var received: AppCommand.CaptureThought? = null
         compose.setContent { PomodoroTheme(Appearance.light) { ThoughtComposer(AppSnapshot(projects = listOf(project)), context, {}) { command -> received = command as AppCommand.CaptureThought; MutationResult.Failure("Cannot save") } } }
         compose.onNodeWithText("Add a thought…").performTextInput("Keep this draft")
-        compose.onNodeWithText("Add thought").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Add thought").performClick()
         compose.onNodeWithText("Cannot save").assertIsDisplayed()
         compose.onNodeWithText("Keep this draft").assertIsDisplayed()
         assertEquals(timer.id, received!!.context.originSessionID)

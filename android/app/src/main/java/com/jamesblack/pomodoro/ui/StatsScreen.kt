@@ -10,6 +10,10 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,76 +53,83 @@ import kotlinx.coroutines.launch
     val zone = ZoneId.systemDefault()
     val sessions = state.sessions.filter { (projectID == null || it.projectID == projectID) && (interval == null || Statistics.overlap(it.startedAt, it.endedAt, interval) > 0 || (it.duration == 0.0 && it.startedAt >= interval.start && it.startedAt < interval.end)) }.sortedByDescending { it.startedAt }
 
-    Page(header = {
+    Page(horizontalPadding = 16.dp, verticalSpacing = 32.dp, header = {
         ScreenHeader(
             "Stats",
             largeTitle = true,
             leading = { StatsProjectFilter(projectID, state) { projectID = it } },
             trailing = {
                 IconButton(onClick = { consistency = true }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Outlined.CalendarMonth, "Consistency", modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.CalendarMonth, "Consistency", modifier = Modifier.size(24.dp))
                 }
             }
         )
     }) {
-        SegmentedSelector(
-            options = StatsDateRange.entries.map { it.name to it.title },
-            selected = range.name,
-            onSelect = { rangeName = it; anchor = null; drillDay = null; fullHistory = false }
-        )
-        if (interval != null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { anchor = selection.move(-1, now).anchor; drillDay = null },
-                    modifier = Modifier.size(48.dp)
-                ) { Icon(Icons.Outlined.ChevronLeft, "Previous ${range.title.lowercase()}", modifier = Modifier.size(18.dp)) }
-                TextButton(
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                    onClick = { picker = true }
-                ) {
-                    Text(
-                        periodTitle(selection, interval, range, now),
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        if (range == StatsDateRange.day) Icons.Outlined.CalendarMonth else Icons.Outlined.ExpandMore,
-                        contentDescription = "Choose ${range.title.lowercase()}",
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-                IconButton(
-                    enabled = selection.canMoveForward(now),
-                    onClick = { anchor = selection.move(1, now).anchor; drillDay = null },
-                    modifier = Modifier.size(48.dp)
-                ) { Icon(Icons.Outlined.ChevronRight, "Next ${range.title.lowercase()}", modifier = Modifier.size(18.dp)) }
-            }
-            if (!selection.isCurrent(now) && range != StatsDateRange.all) {
-                TextButton(onClick = { anchor = null; drillDay = null; fullHistory = false }) {
-                    Text("Return to current ${range.title.lowercase()}")
+        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                SegmentedSelector(
+                    options = StatsDateRange.entries.map { it.name to it.title },
+                    selected = range.name,
+                    onSelect = { rangeName = it; anchor = null; drillDay = null; fullHistory = false }
+                )
+                if (interval != null) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { anchor = selection.move(-1, now).anchor; drillDay = null },
+                            modifier = Modifier.size(48.dp)
+                        ) { Icon(Icons.Outlined.ChevronLeft, "Previous ${range.title.lowercase()}", modifier = Modifier.size(24.dp)) }
+                        TextButton(
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                            onClick = { picker = true }
+                        ) {
+                            Text(
+                                periodTitle(selection, interval, range, now),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                Icons.Outlined.CalendarMonth,
+                                contentDescription = "Choose ${range.title.lowercase()}",
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                        IconButton(
+                            enabled = selection.canMoveForward(now),
+                            onClick = { anchor = selection.move(1, now).anchor; drillDay = null },
+                            modifier = Modifier.size(48.dp)
+                        ) { Icon(Icons.Outlined.ChevronRight, "Next ${range.title.lowercase()}", modifier = Modifier.size(24.dp)) }
+                    }
+                    if (!selection.isCurrent(now) && range != StatsDateRange.all) {
+                        TextButton(onClick = { anchor = null; drillDay = null; fullHistory = false }) {
+                            Text("Return to current ${range.title.lowercase()}")
+                        }
+                    }
                 }
             }
         }
-        Section("Focus time") {
-            Text(
-                "Saved focus",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                DurationText.summary(Statistics.total(state, projectID, interval, now)),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            if (Statistics.hasFocusInProgress(state, projectID, interval, now)) {
+        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "1 session in progress · not included yet",
+                    "Focus time",
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    DurationText.summary(Statistics.total(state, projectID, interval, now)),
+                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 34.sp, lineHeight = 40.sp),
+                    fontWeight = FontWeight.Bold
+                )
+                if (Statistics.hasFocusInProgress(state, projectID, interval, now)) {
+                    Text(
+                        "1 session in progress · not included yet",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         if (projectID != null && range == StatsDateRange.day && interval != null) {
@@ -143,24 +154,24 @@ import kotlinx.coroutines.launch
                 Statistics.periodSummary(state, interval, projectID, now)
             }
             val comparison = Statistics.periodComparison(state, range.period!!, interval, projectID, now)
-            Section("Daily focus") {
-                FocusChart(summary.days) { day -> drillDay = day.date; fullHistory = true }
-                val periodName = range.title.lowercase()
-                val comparisonText = when {
-                    comparison.delta == 0.0 -> "Same as last $periodName${if (interval.end > now) " so far" else ""}"
-                    else -> "${DurationText.summary(kotlin.math.abs(comparison.delta))} ${if (comparison.delta > 0) "more" else "less"} than last $periodName${if (interval.end > now) " so far" else ""}"
+            Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                    FocusChart(summary.days) { day -> drillDay = day.date; fullHistory = true }
+                    val periodName = range.title.lowercase()
+                    val comparisonText = when {
+                        comparison.delta == 0.0 -> "Same as last $periodName${if (interval.end > now) " so far" else ""}"
+                        else -> "${DurationText.summary(kotlin.math.abs(comparison.delta))} ${if (comparison.delta > 0) "more" else "less"} than last $periodName${if (interval.end > now) " so far" else ""}"
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                    Text(
+                        comparisonText,
+                        modifier = Modifier.padding(vertical = 16.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                    GroupedRow("Details", onClick = { details = true })
                 }
-                Text(
-                    comparisonText,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "${DurationText.summary(comparison.currentSeconds)} current · ${DurationText.summary(comparison.previousSeconds)} previous",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                TextButton(onClick = { details = true }) { Text("Details") }
             }
             if (details) Dialog(onDismissRequest = { details = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -204,18 +215,29 @@ import kotlinx.coroutines.launch
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Page(
                     modifier = Modifier.safeDrawingPadding(),
-                    header = { ScreenHeader("Consistency", leading = { TextButton({ consistency = false }) { Text("Done") } }) }
+                    header = { ScreenHeader("Consistency", largeTitle = true, leading = { TextButton({ consistency = false }) { Icon(Icons.Outlined.ChevronLeft, null); Text("Stats") } }) }
                 ) {
                     val current = Statistics.consistency(state, now, now)
-                    Section("This week") {
-                        Text("${current.focusedDays} of ${current.targetDays} days this week", style = MaterialTheme.typography.titleLarge)
-                        Hint("A focused day has at least 10 minutes of saved focus. Active sessions count after saving.")
+                    Section("This week · All projects") {
+                        Text("${current.focusedDays} of ${current.targetDays} focused days", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
+                        val days = Statistics.dailySummaries(state, current.week, now = now)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                            days.forEach { day ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(if (day.focusSeconds >= 600) "●" else "○", color = if (day.focusSeconds >= 600) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 24.sp)
+                                    Text(Time.date(day.date).dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                     }
+                    Hint("A focused day has at least 10 minutes of saved focus. Active sessions count after saving. Change your weekly target in Settings → Consistency.")
                     Section("Previous weeks") {
                         (1..8).forEach { offset ->
                             val date = Time.date(current.week.start).minusWeeks(offset.toLong())
                             val week = Statistics.consistency(state, Time.start(date, zone), now)
-                            GroupedRow(label = "Week of $date", value = "${week.focusedDays} focused days")
+                            GroupedRow(label = date.format(DateTimeFormatter.ofPattern("d MMM yyyy")), value = "${week.focusedDays} days")
+                            if (offset < 8) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))
                         }
                     }
                 }
@@ -226,7 +248,10 @@ import kotlinx.coroutines.launch
         val visibleSessions = if (fullHistory) allSessions else allSessions.take(5)
         GroupedSection(if (drillDay == null) "Recent sessions" else "Sessions · ${Time.date(drillDay!!)}") {
             if (drillDay != null) TextButton(onClick = { drillDay = null; fullHistory = false }) { Text("Show whole period") }
-            if (visibleSessions.isEmpty()) Box(Modifier.padding(16.dp)) { Hint("No saved sessions for this selection.") }
+            if (visibleSessions.isEmpty()) Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("No saved sessions", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            }
             if (!fullHistory && allSessions.size > 5) TextButton(onClick = { fullHistory = true }) { Text("View all sessions") }
             SessionHistory(visibleSessions.groupBy { Time.date(it.startedAt) }, state, historyInterval, openSession)
         }
@@ -238,11 +263,8 @@ import kotlinx.coroutines.launch
     var expanded by remember { mutableStateOf(false) }
     val label = projectID?.let { id -> state.projects.find { it.id == id }?.name } ?: "All projects"
     Box {
-        TextButton(onClick = { expanded = true }, modifier = Modifier.heightIn(min = 48.dp).widthIn(max = 148.dp), contentPadding = PaddingValues(horizontal = 0.dp)) {
-            Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 20.sp))
-            Icon(Icons.Outlined.ExpandMore, contentDescription = null, modifier = Modifier.size(18.dp))
+        IconButton(onClick = { expanded = true }, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Outlined.FilterList, contentDescription = "Filter projects: $label", modifier = Modifier.size(24.dp))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("All projects") }, onClick = { expanded = false; select(null) })
@@ -251,50 +273,53 @@ import kotlinx.coroutines.launch
     }
 }
 
-private fun periodTitle(selection: StatsDateSelection, interval: DateInterval, range: StatsDateRange, now: Double): String =
-    if (selection.isCurrent(now)) when (range) {
-        StatsDateRange.day -> "Today"
-        StatsDateRange.week -> "This week"
-        StatsDateRange.month -> "This month"
-        StatsDateRange.all -> "All"
-    } else periodLabel(interval)
+private fun periodTitle(selection: StatsDateSelection, interval: DateInterval, range: StatsDateRange, now: Double): String {
+    val start = Time.date(interval.start)
+    val end = Time.date(interval.end - 1)
+    val date = DateTimeFormatter.ofPattern("d MMM yyyy")
+    return when (range) {
+        StatsDateRange.day -> "${if (selection.isCurrent(now)) "Today · " else ""}${start.format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy"))}"
+        StatsDateRange.week -> "${start.format(date)} – ${end.format(date)}"
+        StatsDateRange.month -> start.format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+        StatsDateRange.all -> "All time"
+    }
+}
 
 @Composable private fun FocusChart(days: List<DailySummary>, onSelect: (DailySummary) -> Unit) {
-    val maximum = days.maxOfOrNull { it.focusSeconds }?.coerceAtLeast(60.0) ?: 60.0
-    val zone = ZoneId.systemDefault()
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            Modifier.fillMaxWidth().height(112.dp).semantics { contentDescription = "Daily focus chart. Tap a day to view its sessions." },
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            days.forEach { day ->
-                val fraction = (day.focusSeconds / maximum).toFloat().coerceIn(.025f, 1f)
-                val color = if (day.isFuture) MaterialTheme.colorScheme.outline.copy(alpha = .35f) else MaterialTheme.colorScheme.primary
-                Box(
-                    Modifier.weight(1f)
-                        .fillMaxHeight(fraction)
-                        .clip(MaterialTheme.shapes.small)
-                        .background(color)
-                        .clickable(enabled = !day.isFuture, onClick = { onSelect(day) })
-                        .semantics {
-                            contentDescription = "${Time.date(day.date, zone)}: ${DurationText.summary(day.focusSeconds)}"
-                            role = Role.Button
+    val maximumMinutes = days.maxOfOrNull { it.focusSeconds / 60 } ?: 0.0
+    val step = when { maximumMinutes <= 60 -> 20.0; maximumMinutes <= 150 -> 50.0; else -> kotlin.math.ceil(maximumMinutes / 180) * 60 }
+    val maximum = (kotlin.math.ceil(maximumMinutes / step).coerceAtLeast(3.0) * step)
+    val grid = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .7f)
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp)) {
+        Row(Modifier.fillMaxWidth().height(160.dp)) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                Canvas(Modifier.fillMaxSize()) {
+                    repeat(4) { index ->
+                        val y = size.height * index / 3
+                        drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+                    }
+                    repeat(4) { index ->
+                        val x = size.width * index / 3
+                        drawLine(grid, Offset(x, 0f), Offset(x, size.height), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
+                    }
+                }
+                Row(Modifier.fillMaxSize().semantics { contentDescription = "Daily focus chart. Tap a day to view its sessions." }, horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.Bottom) {
+                    days.forEach { day ->
+                        Box(Modifier.weight(1f).fillMaxHeight().clickable(enabled = !day.isFuture, onClick = { onSelect(day) }).semantics {
+                            contentDescription = "${Time.date(day.date)}: ${DurationText.summary(day.focusSeconds)}"; role = Role.Button
+                        }, contentAlignment = Alignment.BottomCenter) {
+                            if (day.focusSeconds > 0) Box(Modifier.fillMaxWidth(.75f).fillMaxHeight((day.focusSeconds / 60 / maximum).toFloat().coerceIn(0f, 1f)).clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)).background(MaterialTheme.colorScheme.tertiary))
                         }
-                )
+                    }
+                }
+            }
+            Column(Modifier.width(32.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.End) {
+                (3 downTo 0).forEach { Text((maximum * it / 3).toInt().toString(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
-        if (days.size == 7) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                days.forEach { day ->
-                    Text(
-                        Time.date(day.date, zone).dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
-                        Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+        Row(Modifier.fillMaxWidth().padding(end = 32.dp, top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            days.filterIndexed { index, _ -> index == 0 || index == days.lastIndex || index == days.size / 3 || index == days.size * 2 / 3 }.forEach { day ->
+                Text(Time.date(day.date).format(DateTimeFormatter.ofPattern("d MMM")), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

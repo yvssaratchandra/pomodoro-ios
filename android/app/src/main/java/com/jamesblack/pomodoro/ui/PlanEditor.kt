@@ -1,6 +1,8 @@
 package com.jamesblack.pomodoro.ui
 
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.semantics.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,6 +17,7 @@ import com.jamesblack.pomodoro.core.store.*
 import kotlinx.coroutines.launch
 
 /** Every accepted task operation persists the entire plan before adopting its candidate. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun PlanEditor(
     initial: String,
@@ -76,59 +79,39 @@ internal fun PlanEditor(
 
     Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Page(
-                modifier = Modifier.safeDrawingPadding().imePadding(),
-                header = {
-                    ScreenHeader(
-                        title = title,
-                        leading = { TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") } },
-                        trailing = { TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp)) { Text("Done") } }
-                    )
+            Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+                Box(Modifier.padding(horizontal = 4.dp)) {
+                    ScreenHeader(title = title, largeTitle = true,
+                        trailing = { TextButton(onClick = close, modifier = Modifier.heightIn(min = 48.dp)) { Text("Done") } })
                 }
-            ) {
-                GroupedSection("Tasks") {
-                    if (plan.rows.isEmpty()) {
-                        Box(Modifier.padding(16.dp)) { Hint("Add a few tasks for this focus session.") }
-                    }
-                    plan.rows.forEachIndexed { index, row ->
-                        Row(
-                            Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("• ${row.text}", Modifier.weight(1f))
-                            TextButton(
-                                enabled = !busy && !dirty,
-                                onClick = { editingID = row.id; original = row.text; input = row.text },
-                                modifier = Modifier.heightIn(min = 48.dp)
-                            ) { Text("Edit") }
-                            TextButton(
-                                enabled = !busy && !dirty,
-                                onClick = { deleteID = row.id; error = null },
-                                modifier = Modifier.heightIn(min = 48.dp)
-                            ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    GroupedSection("") {
+                        if (plan.rows.isEmpty()) Box(Modifier.padding(16.dp)) { Hint("Add a few tasks for this focus session.") }
+                        plan.rows.forEachIndexed { index, row ->
+                            var menu by remember { mutableStateOf(false) }
+                            val edit = { if (!busy && !dirty) { editingID = row.id; original = row.text; input = row.text } }
+                            val delete = { if (!busy && !dirty) { deleteID = row.id; error = null } }
+                            Box {
+                                Text("•  ${row.text}", Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                                    .combinedClickable(onClick = edit, onLongClick = { menu = true })
+                                    .semantics { customActions = listOf(CustomAccessibilityAction("Edit task") { edit(); true }, CustomAccessibilityAction("Delete task") { delete(); true }) }
+                                    .padding(horizontal = 16.dp, vertical = 20.dp))
+                                DropdownMenu(menu, { menu = false }) {
+                                    DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; edit() }, enabled = !busy && !dirty)
+                                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete() }, enabled = !busy && !dirty)
+                                }
+                            }
+                            if (index != plan.rows.lastIndex) HorizontalDivider(Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
                         }
-                        if (index != plan.rows.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
+                    if (editingID != null) TextButton(enabled = !busy, onClick = { editingID = null; input = ""; original = "" }) { Text("Cancel task edit") }
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    if (plan.characterCount >= 230) Hint("${plan.characterCount} / 280 characters saved")
                 }
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if (editingID == null) "Add a task" else "Edit task") },
-                    maxLines = 4,
-                    enabled = !busy
-                )
-                Hint("${plan.characterCount} / 280 characters saved · one task per line")
-                if (editingID != null) {
-                    TextButton(
-                        onClick = { editingID = null; input = ""; original = "" },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    ) { Text("Cancel task edit") }
-                }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Action(if (editingID == null) "Add task" else "Save task", !busy && input.isNotBlank()) {
-                    mutate(editingID?.let { SessionPlanDraft.Mutation.Edit(it, input) } ?: SessionPlanDraft.Mutation.Add(input))
-                }
+                ComposerInput(value = input, onValueChange = { if (!busy) input = it },
+                    placeholder = if (editingID == null) "Add a task" else "Edit task",
+                    actionLabel = if (editingID == null) "Add task" else "Save task", enabled = !busy && input.isNotBlank(),
+                    onSend = { mutate(editingID?.let { SessionPlanDraft.Mutation.Edit(it, input) } ?: SessionPlanDraft.Mutation.Add(input)) })
             }
         }
     }

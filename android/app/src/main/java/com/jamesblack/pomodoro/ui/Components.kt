@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -30,21 +31,22 @@ internal val Indigo = Color(0xFF5856D6)
 internal val Sage = Color(0xFF4E6B56)
 internal val PomodoroBlue = Color(0xFF007AFF)
 private val LightMuted = Color(0xFF636366)
-private val DarkMuted = Color(0xFFAEAEB2)
+private val DarkMuted = Color(0xFF8E8E93)
 
 @Composable internal fun PomodoroTheme(appearance: Appearance, content: @Composable () -> Unit) {
     val dark = appearance == Appearance.dark || (appearance == Appearance.system && isSystemInDarkTheme())
     val scheme = if (dark) {
         darkColorScheme(
-            primary = Color(0xFF0A84FF),
-            onPrimary = Color.Black,
-            onSurface = Color(0xFFF2F2F7),
-            onBackground = Color(0xFFF2F2F7),
+            primary = PomodoroBlue,
+            onPrimary = Color.White,
+            onSurface = Color.White,
+            onBackground = Color.White,
             secondary = Color(0xFF84A08C),
             tertiary = Color(0xFF5E5CE6),
             background = Color.Black,
             surface = Color.Black,
-            surfaceContainer = Color.Black,
+            surfaceContainer = Color(0xFF1C1C1E),
+            outlineVariant = Color(0xFF38383A),
             onSurfaceVariant = DarkMuted,
             error = Color(0xFFFF453A)
         )
@@ -67,9 +69,9 @@ private val DarkMuted = Color(0xFFAEAEB2)
         colorScheme = scheme,
         typography = AppTypography,
         shapes = Shapes(
-            small = RoundedCornerShape(10.dp),
-            medium = RoundedCornerShape(10.dp),
-            large = RoundedCornerShape(10.dp)
+            small = RoundedCornerShape(12.dp),
+            medium = RoundedCornerShape(12.dp),
+            large = RoundedCornerShape(12.dp)
         ),
         content = content
     )
@@ -77,8 +79,8 @@ private val DarkMuted = Color(0xFFAEAEB2)
 
 @Composable internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Text(
-            title,
+        if (title.isNotBlank()) Text(
+            title.uppercase(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 16.dp)
@@ -91,8 +93,8 @@ private val DarkMuted = Color(0xFFAEAEB2)
 
 @Composable internal fun GroupedSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Text(
-            title,
+        if (title.isNotBlank()) Text(
+            title.uppercase(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 16.dp)
@@ -106,11 +108,13 @@ private val DarkMuted = Color(0xFFAEAEB2)
 @Composable internal fun Page(
     modifier: Modifier = Modifier,
     header: (@Composable () -> Unit)? = null,
+    horizontalPadding: Dp = 20.dp,
+    verticalSpacing: Dp = 18.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (header != null) {
-            Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(horizontal = 20.dp)) {
+            Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().padding(horizontal = 4.dp)) {
                 header()
             }
         }
@@ -120,8 +124,8 @@ private val DarkMuted = Color(0xFFAEAEB2)
                 .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .padding(horizontal = horizontalPadding, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(verticalSpacing),
             content = content
         )
     }
@@ -155,6 +159,7 @@ private val DarkMuted = Color(0xFFAEAEB2)
         if (largeTitle) {
             Text(
                 title,
+                modifier = Modifier.padding(horizontal = 12.dp),
                 style = MaterialTheme.typography.headlineLarge.copy(fontSize = 34.sp, lineHeight = 40.sp, fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
@@ -209,8 +214,8 @@ private val DarkMuted = Color(0xFFAEAEB2)
     selected: String,
     onSelect: (String) -> Unit
 ) {
-    val trackColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF1C1C1E) else Color(0xFFE5E5EA)
-    val selectedColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF3A3A3C) else Color.White
+    val trackColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF313136) else Color(0xFFE5E5EA)
+    val selectedColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF69696F) else Color.White
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.matchParentSize().padding(vertical = 8.dp).background(trackColor, RoundedCornerShape(8.dp)))
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {

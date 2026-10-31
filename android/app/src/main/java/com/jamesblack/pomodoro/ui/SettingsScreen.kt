@@ -11,6 +11,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import com.jamesblack.pomodoro.core.*
 import com.jamesblack.pomodoro.core.store.*
 
@@ -37,34 +39,40 @@ internal fun SettingsScreen(
     BackHandler(enabled = page != null) { page = null }
 
     key(page ?: "settings") {
-        Page(header = {
+        Page(horizontalPadding = 16.dp, verticalSpacing = 32.dp, header = {
             ScreenHeader(
                 title = page?.let { pageTitles[it] ?: "Settings" } ?: "Settings",
-                largeTitle = page == null,
+                largeTitle = false,
                 leading = {
-                    IconButton(onClick = { if (page == null) onExit() else page = null }) {
-                        Icon(Icons.Outlined.ChevronLeft, contentDescription = if (page == null) "Back to Focus" else "Settings", modifier = Modifier.size(18.dp))
+                    TextButton(modifier = Modifier.semantics { contentDescription = "Back" }, onClick = { if (page == null) onExit() else page = null }, contentPadding = PaddingValues(0.dp)) {
+                        Icon(Icons.Outlined.ChevronLeft, contentDescription = null, modifier = Modifier.size(24.dp))
+                        Text(if (page == null) "Focus" else "Settings")
                     }
                 }
             )
         }) {
             when (page) {
                 null -> {
-                    GroupedSection("Projects & goals") {
+                    GroupedSection("") {
                         InsetGroupedRow("Projects", leadingIcon = Icons.Outlined.Folder, onClick = openProjects)
                     }
-                    GroupedSection("Preferences") {
+                    GroupedSection("PREFERENCES") {
                         InsetGroupedRow("Timer defaults", leadingIcon = Icons.Outlined.Timer, onClick = { page = "timer" })
+                        SettingsSeparator()
                         InsetGroupedRow("Sounds & haptics", leadingIcon = Icons.Outlined.NotificationsNone, onClick = { page = "sounds" })
-                        InsetGroupedRow("Appearance", state.settings.appearance.title(), leadingIcon = Icons.Outlined.Palette, onClick = { page = "appearance" })
+                        SettingsSeparator()
+                        InsetGroupedRow("Appearance", leadingIcon = Icons.Outlined.Palette, onClick = { page = "appearance" })
+                        SettingsSeparator()
                         InsetGroupedRow("Consistency", "${state.settings.consistencyTargetDays} days", leadingIcon = Icons.Outlined.CalendarMonth, onClick = { page = "consistency" })
                     }
-                    GroupedSection("Access") {
+                    GroupedSection("ACCESS") {
                         InsetGroupedRow("Shortcuts", leadingIcon = Icons.Outlined.GridView, onClick = { page = "shortcuts" })
+                        SettingsSeparator()
                         InsetGroupedRow("Lock Screen privacy", leadingIcon = Icons.Outlined.Shield, onClick = { page = "privacy" })
                     }
-                    GroupedSection("Data & support") {
+                    GroupedSection("DATA & SUPPORT") {
                         InsetGroupedRow("Backup & restore", leadingIcon = Icons.Outlined.Storage, onClick = { page = "backup" })
+                        SettingsSeparator()
                         InsetGroupedRow("Help", leadingIcon = Icons.AutoMirrored.Outlined.HelpOutline, onClick = { page = "help" })
                     }
                     Hint("All app data stays on this phone.")
@@ -257,3 +265,8 @@ private fun SettingsToggle(label: String, value: Boolean, onChange: (Boolean) ->
 }
 
 private fun Appearance.title(): String = name.replaceFirstChar(Char::uppercase)
+
+@Composable
+private fun SettingsSeparator() {
+    HorizontalDivider(Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f))
+}

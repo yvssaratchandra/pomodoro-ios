@@ -20,6 +20,12 @@ import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -124,19 +130,19 @@ import kotlinx.coroutines.delay
                                 Icon(
                                     Icons.Outlined.Contrast,
                                     contentDescription = if (dimEnabled) "Disable Dim Focus" else "Enable Dim Focus",
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(24.dp),
                                     tint = if (dimEnabled) Indigo else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                         IconButton(onClick = settings, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Outlined.Settings, contentDescription = "Settings", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings", modifier = Modifier.size(24.dp))
                         }
                     }
                 },
                 trailing = {
                     IconButton(onClick = projects, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Outlined.Folder, contentDescription = "Projects", modifier = Modifier.size(18.dp))
+                        Icon(Icons.Outlined.Folder, contentDescription = "Projects", modifier = Modifier.size(24.dp))
                     }
                 }
             )
@@ -166,7 +172,7 @@ import kotlinx.coroutines.delay
                     onClick = { capture(ThoughtCaptureContext(active.projectID, active.id)) },
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) {
-                    Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Add a thought")
                 }
@@ -174,11 +180,11 @@ import kotlinx.coroutines.delay
             } else {
                 OutlinedButton(
                     onClick = { run(AppCommand.EndTimer) },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
                     shape = MaterialTheme.shapes.small,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("End Break")
                 }
@@ -252,11 +258,12 @@ import kotlinx.coroutines.delay
             )
             Button(
                 onClick = { run(AppCommand.StartFocus(project.id, project.preferredFocusMinutes)) },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
                 shape = MaterialTheme.shapes.small,
+                colors = ButtonDefaults.buttonColors(contentColor = Color.White),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Start Focus", style = MaterialTheme.typography.bodyMedium)
             }
@@ -315,11 +322,11 @@ import kotlinx.coroutines.delay
     val danger = MaterialTheme.colorScheme.error
     Button(
         onClick,
-        Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        Modifier.fillMaxWidth().heightIn(min = 64.dp),
         shape = MaterialTheme.shapes.small,
-        colors = ButtonDefaults.buttonColors(containerColor = danger.copy(alpha = .1f), contentColor = danger)
+        colors = ButtonDefaults.buttonColors(containerColor = if (MaterialTheme.colorScheme.background == Color.Black) Color(0xFF262628) else Color(0xFFE5E5EA), contentColor = danger)
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
@@ -328,14 +335,14 @@ import kotlinx.coroutines.delay
 @Composable private fun SageAction(label: String, icon: ImageVector, onClick: () -> Unit) {
     Button(
         onClick,
-        Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        Modifier.fillMaxWidth().heightIn(min = 64.dp),
         shape = MaterialTheme.shapes.small,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.secondary,
             contentColor = if (MaterialTheme.colorScheme.background == Color.Black) Color.Black else Color.White
         )
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
@@ -374,7 +381,7 @@ import kotlinx.coroutines.delay
                         DurationText.countdown(seconds),
                         style = MaterialTheme.typography.displayMedium.copy(
                             fontFamily = TimerFontFamily,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.ExtraBold,
                             fontFeatureSettings = "tnum"
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
@@ -406,20 +413,29 @@ import kotlinx.coroutines.delay
                     Box(
                         Modifier.size(200.dp).clip(CircleShape).background(fill)
                     )
-                    CircularProgressIndicator(
-                        progress = { progress.coerceIn(0f, 1f) },
-                        modifier = Modifier.size(208.dp),
-                        color = accent,
-                        strokeWidth = 8.dp,
-                        trackColor = accent.copy(alpha = .12f)
-                    )
+                    Canvas(Modifier.size(208.dp)) {
+                        val stroke = 8.dp.toPx()
+                        val inset = stroke / 2
+                        val arcSize = Size(size.width - stroke, size.height - stroke)
+                        drawArc(
+                            color = accent.copy(alpha = .12f), startAngle = -90f, sweepAngle = 360f,
+                            useCenter = false, topLeft = Offset(inset, inset), size = arcSize,
+                            style = Stroke(stroke)
+                        )
+                        drawArc(
+                            brush = Brush.linearGradient(listOf(lerp(accent, Color.White, .18f), accent)),
+                            startAngle = -90f, sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                            useCenter = false, topLeft = Offset(inset, inset), size = arcSize,
+                            style = Stroke(stroke, cap = StrokeCap.Round)
+                        )
+                    }
                     Text(
                         DurationText.countdown(seconds),
                         style = MaterialTheme.typography.displayMedium.copy(
                             fontFamily = TimerFontFamily,
                             fontSize = 58.sp,
                             lineHeight = 64.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.ExtraBold,
                             fontFeatureSettings = "tnum"
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
@@ -466,9 +482,9 @@ import kotlinx.coroutines.delay
                 .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Icon(Icons.Outlined.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(12.dp))
-            Text(selected.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+            Text(selected.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary, maxLines = 1)
             Icon(Icons.Outlined.UnfoldMore, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded, onDismissRequest = { expanded = false }) {

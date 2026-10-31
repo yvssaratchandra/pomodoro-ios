@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,6 +14,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.jamesblack.pomodoro.core.*
@@ -64,24 +67,25 @@ internal fun ProjectsScreen(
     }
 
     key(detailID ?: "projects") {
-        Page(header = {
+        Page(horizontalPadding = 16.dp, verticalSpacing = 32.dp, header = {
             ScreenHeader(
                 title = project?.name ?: "Projects",
-                largeTitle = project == null,
+                largeTitle = false,
                 leading = {
-                    IconButton(onClick = { if (project == null) onExit() else { detailID = null; error = null } }) {
-                        Icon(Icons.Outlined.ChevronLeft, contentDescription = if (project == null) "Back" else "All projects", modifier = Modifier.size(18.dp))
+                    TextButton(modifier = Modifier.semantics { contentDescription = "Back" }, onClick = { if (project == null) onExit() else { detailID = null; error = null } }, contentPadding = PaddingValues(0.dp)) {
+                        Icon(Icons.Outlined.ChevronLeft, contentDescription = null, modifier = Modifier.size(24.dp))
+                        Text(if (project == null) "Focus" else "Projects")
                     }
                 },
                 trailing = {
                     if (project == null) {
                         IconButton(onClick = create) {
-                            Icon(Icons.Outlined.Add, contentDescription = "Create project", modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.Add, contentDescription = "Create project", modifier = Modifier.size(24.dp))
                         }
                     } else {
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
-                                Icon(Icons.Outlined.MoreHoriz, contentDescription = "Project actions", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Outlined.MoreHoriz, contentDescription = "Project actions", modifier = Modifier.size(24.dp))
                             }
                             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                                 DropdownMenuItem(
@@ -134,9 +138,15 @@ internal fun ProjectsScreen(
                 }
 
                 if (ongoing.isNotEmpty()) {
-                    GroupedSection("Active") {
-                        ongoing.forEach { candidate ->
-                            InsetGroupedRow(candidate.name, onClick = { detailID = candidate.id; showAllSessions = false; error = null })
+                    Column(Modifier.fillMaxWidth()) {
+                        Text("ACTIVE", Modifier.padding(start = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ongoing.forEachIndexed { index, candidate ->
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.FolderOpen, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.width(16.dp))
+                                GroupedRow(candidate.name, onClick = { detailID = candidate.id; showAllSessions = false; error = null })
+                            }
+                            if (index < ongoing.lastIndex) HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .55f))
                         }
                     }
                 }

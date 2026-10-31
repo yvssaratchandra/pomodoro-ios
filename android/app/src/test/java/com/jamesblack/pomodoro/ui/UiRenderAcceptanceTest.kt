@@ -23,7 +23,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /** Real Compose renders supplement interaction tests; HTML previews are not app screenshots. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33], application = Application::class, qualifiers = "w412dp-h915dp-mdpi")
+@Config(sdk = [33], application = Application::class, qualifiers = "w393dp-h852dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class UiRenderAcceptanceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -76,6 +76,10 @@ class UiRenderAcceptanceTest {
             screenshot("${appearance.name}-thoughts")
             compose.onNodeWithTag("tab-stats").performClick()
             screenshot("${appearance.name}-stats")
+            compose.onNodeWithText("Week").performClick()
+            screenshot("${appearance.name}-stats-week")
+            compose.onNodeWithText("Month").performClick()
+            screenshot("${appearance.name}-stats-month")
             compose.onNodeWithTag("tab-focus").performClick()
             compose.onNodeWithContentDescription("Projects").performClick()
             screenshot("${appearance.name}-projects")

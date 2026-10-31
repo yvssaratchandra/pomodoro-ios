@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,11 +87,12 @@ internal class UiEditors : ViewModel() {
             Column {
                 if (undo != null) Snackbar(action = { TextButton({ run(AppCommand.UndoDeletion) }) { Text("Undo") } }, dismissAction = { IconButton({ run(AppCommand.DismissUndo) }) { Icon(Icons.Outlined.Close, "Dismiss Undo") } }) { Text("${undo.count} ${if (undo.count == 1) "item" else "items"} deleted") }
                 val labels = listOf("Focus", "Thoughts", "Stats")
-                val icons = listOf(Icons.Outlined.Timer, Icons.Outlined.ChatBubbleOutline, Icons.Outlined.BarChart)
+                val icons = listOf(Icons.Outlined.Timer, Icons.AutoMirrored.Filled.Chat, Icons.Filled.BarChart)
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f))
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surface)
+                        .background(MaterialTheme.colorScheme.background)
                         .navigationBarsPadding()
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -99,7 +102,7 @@ internal class UiEditors : ViewModel() {
                         Column(
                             Modifier
                                 .weight(1f)
-                                .heightIn(min = 64.dp)
+                                .heightIn(min = 56.dp)
                                 .selectable(
                                     selected = selected,
                                     role = Role.Tab,
@@ -113,7 +116,7 @@ internal class UiEditors : ViewModel() {
                                 icons[index],
                                 contentDescription = null,
                                 tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                             Text(
                                 label,

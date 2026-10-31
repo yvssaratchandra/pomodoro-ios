@@ -40,6 +40,9 @@ class ThoughtsStatsAcceptanceTest {
         compose.onNodeWithText("Done").performClick()
         compose.onNodeWithText("Send the agenda").assertIsDisplayed()
         compose.onNodeWithText("Prepare the review").assertDoesNotExist()
+        compose.onNodeWithText("All").performClick()
+        compose.onNodeWithContentDescription("Search thoughts").performTextInput("Prepare")
+        compose.onNodeWithText("Send the agenda").assertDoesNotExist()
         compose.onNodeWithText("Reset").performClick()
         compose.onNodeWithText("Prepare the review").assertIsDisplayed()
         compose.onNodeWithText("Send the agenda").assertIsDisplayed()
@@ -57,6 +60,25 @@ class ThoughtsStatsAcceptanceTest {
         assertEquals(true, markDone.completed)
     }
 
+    @Test fun swipeDeletionRequiresConfirmationAndTargetsOnlyThatThought() {
+        val thought = CapturedThought(projectID = project.id, createdAt = now, text = "Review notes")
+        var command: AppCommand? = null
+        compose.setContent {
+            PomodoroTheme(Appearance.dark) {
+                ThoughtsScreen(AppSnapshot(projects = listOf(project), thoughts = listOf(thought)), null, {}, { command = it }, {}, {})
+            }
+        }
+        compose.onNodeWithText("Review notes").performTouchInput { swipeLeft() }
+        compose.onNodeWithText("Delete thought?").assertIsDisplayed()
+        assertEquals(null, command)
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Review notes").assertIsDisplayed()
+        compose.onNodeWithText("Review notes").performTouchInput { longClick() }
+        compose.onNodeWithText("Delete").performClick()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(setOf(thought.id), (command as AppCommand.DeleteThoughts).ids)
+    }
+
     @Test fun statsWeekShowsComparisonAndSessionHistoryAction() {
         val session = FocusSession(newID(), project.id, now - 1800, now - 900, 900, SessionOutcome.completed)
         val snapshot = AppSnapshot(projects = listOf(project), sessions = listOf(session))
@@ -67,9 +89,12 @@ class ThoughtsStatsAcceptanceTest {
         }
 
         compose.onNodeWithText("Week").performClick()
-        compose.onNodeWithText("This week").assertIsDisplayed()
+        val week = GoalEngine.week(now)
+        val dateFormat = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")
+        val dateRange = "${Time.date(week.start).format(dateFormat)} – ${Time.date(week.end - 1).format(dateFormat)}"
+        compose.onNodeWithText(dateRange).assertIsDisplayed()
         compose.onNodeWithText("Details").performClick()
-        compose.onNodeWithText("Comparison").assertIsDisplayed()
+        compose.onNodeWithText("COMPARISON").assertIsDisplayed()
         compose.onNode(hasText("This period", substring = true)).assertIsDisplayed()
         compose.onNodeWithText("Done").performClick()
         compose.onNodeWithContentDescription("Previous week").performClick()
