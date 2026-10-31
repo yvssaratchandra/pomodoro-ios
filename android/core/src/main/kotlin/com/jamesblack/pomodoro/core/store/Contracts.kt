@@ -7,7 +7,10 @@ import kotlinx.serialization.Serializable
 @Serializable data class AlarmTicket(val timerID: String, val deadline: Double, val sound: CompletionSound, val disposition: AlarmDisposition = AlarmDisposition.pending)
 @Serializable data class LocalDocument(val version: Int = 1, val snapshot: AppSnapshot = AppSnapshot(), val alarmTickets: List<AlarmTicket> = emptyList())
 interface SnapshotPersistence { suspend fun load(): LocalDocument?; suspend fun save(document: LocalDocument) }
-fun interface StoreEffects { suspend fun synchronize(document: LocalDocument) }
+fun interface StoreEffects {
+    suspend fun synchronize(document: LocalDocument)
+    suspend fun deliverCompletion(ticket: AlarmTicket, snapshot: AppSnapshot) {}
+}
 sealed interface LoadState {
     data object Loading : LoadState
     data class Ready(val snapshot: AppSnapshot) : LoadState
@@ -27,6 +30,7 @@ sealed interface AppCommand {
     data object EndTimer : AppCommand
     data class DiscardFocus(val timerID: String) : AppCommand
     data object Reconcile : AppCommand
+    data object Recover : AppCommand
     data class AlarmFired(val timerID: String, val deadline: Double) : AppCommand
     data class SaveProjectSettings(val draft: ProjectDraft) : AppCommand
     data class SetPendingPlan(val projectID: String, val text: String) : AppCommand
