@@ -29,7 +29,7 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
             require(loaded.version == 1) { "This app data requires a newer app version." }
             BackupCodec.validate(loaded.snapshot)
             val candidate = synchronizeTickets(loaded)
-            if (candidate != loaded) persistence.save(candidate)
+            persistence.save(candidate)
             publish(candidate)
             synchronize(candidate)
         } catch (e: Exception) {
@@ -74,7 +74,7 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
                     // but a receiver retry cannot play it twice.
                     completion = ticket.copy(disposition = AlarmDisposition.claimed)
                     tickets = tickets.map { if (it == ticket) it.copy(disposition = AlarmDisposition.claimed) else it }
-                    TimerEngine.finish(original, time)
+                    if (original.activeTimer?.id == ticket.timerID) TimerEngine.finish(original, time) else original
                 }
                 is AppCommand.SaveProjectSettings -> saveProjectDraft(original, command.draft, time, zone())
                 is AppCommand.SetPendingPlan -> {
@@ -129,7 +129,13 @@ class AppStore(private val persistence: SnapshotPersistence, private val now: ()
                     require(canDeleteProject(command.id)) { "This project still has content. Put it on hold or merge it with another project." }
                     original.copy(projects = original.projects.filterNot { it.id == command.id }, goalPlan = original.goalPlan.copy(dailyProjectRevisions = original.goalPlan.dailyProjectRevisions.filterNot { it.projectID == command.id }, weeklyProjectRevisions = original.goalPlan.weeklyProjectRevisions.filterNot { it.projectID == command.id }))
                 }
-                is AppCommand.UpdateSettings -> original.copy(settings = command.settings)
+                is AppCommand.UpdateSettings -> {
+                    val intervalChanged = command.settings.longBreakInterval != original.settings.longBreakInterval
+                    require(!intervalChanged || original.activeTimer == null) { "End the timer before changing the break cycle." }
+                    val timer = original.activeTimer?.copy(completionSound = command.settings.completionSound(original.activeTimer.kind))
+                    if (timer != null) tickets = tickets.map { if (it.timerID == timer.id && it.disposition == AlarmDisposition.pending) it.copy(sound = timer.completionSound) else it }
+                    original.copy(settings = command.settings, activeTimer = timer, completedInCycle = if (intervalChanged) 0 else original.completedInCycle)
+                }
                 is AppCommand.SaveDailyGoals -> { project(original, command.projectID); original.copy(goalPlan = GoalEngine.setDaily(original.goalPlan, command.projectID, command.minutes, time, zone())) }
                 is AppCommand.SaveWeeklyGoal -> { project(original, command.projectID); original.copy(goalPlan = GoalEngine.setWeekly(original.goalPlan, command.projectID, command.minutes, time, zone(), command.effectiveWeek)) }
                 is AppCommand.CancelScheduledWeeklyGoal -> {

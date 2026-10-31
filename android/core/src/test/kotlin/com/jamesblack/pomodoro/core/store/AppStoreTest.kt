@@ -101,4 +101,40 @@ class AppStoreTest {
         store.execute(AppCommand.AlarmFired(timer.id, timer.deadline)); assertEquals(1, attempts)
         assertEquals(AlarmDisposition.claimed, disk.document!!.alarmTickets.single().disposition)
     }
+    @Test fun initialPersistenceFailureShowsRecoveryWithoutPublishing() = runTest {
+        val disk = Disk(); disk.fail = true
+        var effects = 0
+        val store = AppStore(disk, effects = StoreEffects { effects++ })
+        store.initialize()
+        assertIs<LoadState.Failed>(store.state.value); assertEquals(0, effects); assertNull(disk.document)
+    }
+    @Test fun oldAlarmNeverFinishesNewTimer() = runTest {
+        var now = timestamp
+        val disk = Disk(LocalDocument(snapshot = AppSnapshot(projects = listOf(project))))
+        val store = AppStore(disk, now = { now })
+        store.initialize(); store.execute(AppCommand.StartFocus(project.id, 10))
+        val old = store.snapshot.activeTimer!!; now = old.deadline
+        store.execute(AppCommand.Reconcile); store.execute(AppCommand.StartFocus(project.id, 10))
+        val current = store.snapshot.activeTimer!!; now = current.deadline
+        store.execute(AppCommand.AlarmFired(old.id, old.deadline))
+        assertEquals(current, store.snapshot.activeTimer); assertEquals(1, store.snapshot.sessions.size)
+    }
+    @Test fun cycleEditsRequireIdleAndResetCounter() = runTest {
+        val disk = Disk(LocalDocument(snapshot = AppSnapshot(projects = listOf(project), completedInCycle = 2)))
+        val store = AppStore(disk, now = { timestamp })
+        store.initialize(); store.execute(AppCommand.StartFocus(project.id, 10))
+        assertIs<MutationResult.Failure>(store.execute(AppCommand.UpdateSettings(store.snapshot.settings.copy(longBreakInterval = 3))))
+        store.execute(AppCommand.EndTimer)
+        assertEquals(MutationResult.Success, store.execute(AppCommand.UpdateSettings(store.snapshot.settings.copy(longBreakInterval = 3))))
+        assertEquals(0, store.snapshot.completedInCycle)
+    }
+    @Test fun soundEditUpdatesActiveTimerAndDeliveryTicketAtomically() = runTest {
+        val disk = Disk(LocalDocument(snapshot = AppSnapshot(projects = listOf(project))))
+        val store = AppStore(disk, now = { timestamp })
+        store.initialize(); store.execute(AppCommand.StartFocus(project.id, 10))
+        store.execute(AppCommand.UpdateSettings(store.snapshot.settings.copy(focusCompletionSound = CompletionSound.bell)))
+        assertEquals(CompletionSound.bell, store.snapshot.activeTimer!!.completionSound)
+        assertEquals(CompletionSound.bell, disk.document!!.alarmTickets.single().sound)
+    }
+
 }
