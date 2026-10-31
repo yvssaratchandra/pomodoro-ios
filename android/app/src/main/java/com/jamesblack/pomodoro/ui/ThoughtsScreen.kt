@@ -279,7 +279,7 @@ private fun thoughtProjectName(thought: CapturedThought, state: AppSnapshot): St
     val close = { if (!busy) { if (text.isNotBlank()) confirming = true else dismiss() } }
     val saved = state.thoughts.filter { if (context.originSessionID != null) it.originSessionID == context.originSessionID else it.id !in initialIDs }.sortedBy { it.createdAt }
     val run: (AppCommand) -> Unit = { command -> scope.launch { when (val result = execute(command)) { is MutationResult.Failure -> error = result.message; else -> {} } } }
-    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    Dialog(onDismissRequest = close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 Box(Modifier.padding(horizontal = 4.dp)) {

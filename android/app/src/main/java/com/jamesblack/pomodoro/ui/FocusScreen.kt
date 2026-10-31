@@ -273,20 +273,7 @@ import kotlinx.coroutines.delay
     }
 
     if (confirmEnd && active?.kind == TimerKind.focus) {
-        AlertDialog(
-            onDismissRequest = { confirmEnd = false },
-            title = { Text("End this focus session?") },
-            text = { Text("Save the time you've focused, or discard this session. Your thoughts remain saved.") },
-            confirmButton = {
-                TextButton(onClick = { confirmEnd = false; run(AppCommand.EndTimer) }) { Text("Save Session") }
-            },
-            dismissButton = {
-                Column {
-                    TextButton(onClick = { confirmEnd = false }) { Text("Keep Focusing") }
-                    TextButton(onClick = { confirmEnd = false; run(AppCommand.DiscardFocus(active.id)) }) { Text("Discard Session") }
-                }
-            }
-        )
+        EndFocusDialog(active.id, dismiss = { confirmEnd = false }, run = run)
     }
     if (dimVisible && active?.kind == TimerKind.focus) {
         DimSurface(
@@ -295,6 +282,42 @@ import kotlinx.coroutines.delay
             { dimVisible = false; revealGeneration++ },
             { dimVisible = false; revealGeneration++; capture(ThoughtCaptureContext(active.projectID, active.id)) }
         )
+    }
+}
+
+@Composable internal fun EndFocusDialog(timerID: String, dismiss: () -> Unit, run: (AppCommand) -> Unit) {
+    Dialog(onDismissRequest = dismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp
+        ) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp)) {
+                Text("End this focus session?", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Save the time you've focused, or discard this session. Your thoughts remain saved.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { dismiss(); run(AppCommand.EndTimer) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) { Text("Save Session", textAlign = TextAlign.Center) }
+                    TextButton(
+                        onClick = dismiss,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    ) { Text("Keep Focusing", textAlign = TextAlign.Center) }
+                    TextButton(
+                        onClick = { dismiss(); run(AppCommand.DiscardFocus(timerID)) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Discard Session", textAlign = TextAlign.Center) }
+                }
+            }
+        }
     }
 }
 

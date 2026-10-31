@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -438,9 +439,14 @@ internal fun periodLabel(interval: DateInterval): String {
     val zone = ZoneId.systemDefault()
     var year by rememberSaveable { mutableIntStateOf(Time.date(selected).year) }
     if (range == StatsDateRange.day) {
+        val dialogTheme = if (MaterialTheme.colorScheme.background.luminance() < .5f) {
+            android.R.style.Theme_Material_Dialog_Alert
+        } else {
+            android.R.style.Theme_Material_Light_Dialog_Alert
+        }
         DisposableEffect(Unit) {
             val date = Time.date(selected)
-            val dialog = DatePickerDialog(context, { _, y, m, d -> choose(Time.start(java.time.LocalDate.of(y, m + 1, d), zone)) }, date.year, date.monthValue - 1, date.dayOfMonth)
+            val dialog = DatePickerDialog(context, dialogTheme, { _, y, m, d -> choose(Time.start(java.time.LocalDate.of(y, m + 1, d), zone)) }, date.year, date.monthValue - 1, date.dayOfMonth)
             dialog.datePicker.maxDate = Time.toInstant(now).toEpochMilli(); dialog.setOnDismissListener { dismiss() }; dialog.show()
             onDispose { dialog.dismiss() }
         }
